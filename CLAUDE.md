@@ -112,4 +112,4 @@ Trabaja con un sistema legacy basado en Oracle (~6000 tablas, Oracle Forms, SQL/
 
 ### Documentación complementaria del TFG
 
-Memoria, plantilla y documento de experimentos: `../tfg-memoria/`
+Memoria, plantilla y documento de experimentos: (preguntar ubicacion o contenido necesario para tomar decisiones y acceder al contenido)
