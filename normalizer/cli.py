@@ -4,6 +4,7 @@ import click
 from dotenv import load_dotenv
 
 from normalizer.pipeline import run_pipeline
+from normalizer.providers import available_providers, build_provider
 
 
 @click.command()
@@ -17,10 +18,17 @@ from normalizer.pipeline import run_pipeline
     help="Ruta del DDL Oracle generado.",
 )
 @click.option(
-    "--model",
-    default="gemma-3-27b-it",
+    "--provider",
+    "provider_name",
+    type=click.Choice(available_providers()),
+    default="google",
     show_default=True,
-    help="Modelo de Google Generative AI a usar.",
+    help="Proveedor de LLM.",
+)
+@click.option(
+    "--model",
+    default=None,
+    help="Modelo concreto del proveedor. Si no se indica se usa el por defecto.",
 )
 @click.option(
     "--out-dir",
@@ -29,17 +37,29 @@ from normalizer.pipeline import run_pipeline
     show_default=True,
     help="Directorio donde se guardan los artefactos intermedios del pipeline.",
 )
-def main(input_path: Path, output: Path, model: str, out_dir: Path) -> None:
-    """Normaliza schemas MongoDB a DDL Oracle vía LLM.
+def main(
+    input_path: Path,
+    output: Path,
+    provider_name: str,
+    model: str | None,
+    out_dir: Path,
+) -> None:
+    """Normaliza un modelo documental MongoDB a DDL Oracle vía LLM.
 
-    INPUT_PATH puede ser un archivo único o un directorio (en cuyo caso se
-    procesan todos los .js que contenga).
+    INPUT_PATH puede ser:
+
+    - un archivo único con fragmentos relevantes (schemas, consultas, ejemplos
+      de documentos, accesos a campos, etc.) recopilados manualmente, o
+
+    - un directorio que contenga esos fragmentos en varios archivos (no
+      recursivo: se asume que el directorio ya está curado).
     """
     load_dotenv()
     out_dir.mkdir(parents=True, exist_ok=True)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    ddl = run_pipeline(input_path=input_path, model=model, out_dir=out_dir)
+    provider = build_provider(name=provider_name, model=model)
+    ddl = run_pipeline(input_path=input_path, provider=provider, out_dir=out_dir)
     output.write_text(ddl, encoding="utf-8")
     click.echo(f"DDL generado en {output}")
     click.echo(f"Artefactos intermedios en {out_dir}/")

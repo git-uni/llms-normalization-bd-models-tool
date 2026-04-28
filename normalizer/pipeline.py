@@ -1,48 +1,72 @@
 from pathlib import Path
 
-from normalizer.llm import generate
+from normalizer.providers import LLMProvider
 
 PROMPT_ANALYZE = """\
-Eres un experto en modelado de bases de datos. A continuación tienes los schemas
-de MongoDB (Mongoose) de una aplicación. Tu tarea es analizarlos y producir un
-inventario detallado.
+Eres un experto en bases de datos NoSQL orientadas a documentos. Recibes un
+conjunto de fragmentos de código y datos procedentes de una aplicación que usa
+una base de datos documental (típicamente MongoDB). El contenido es
+**heterogéneo**: puede incluir, en cualquier combinación, los siguientes tipos
+de evidencia:
 
-Para cada schema describe:
-1. Todos sus atributos con su tipo declarado.
-2. Para cada atributo cuyo tipo declarado sea `Array` o cuyo contenido no sea un
-   tipo primitivo, infiere su estructura interna a partir de los **comentarios
-   de ejemplo** que aparecen al lado del campo en el código fuente. Esos
-   comentarios son la fuente principal para detectar arrays anidados de objetos
-   y deben tratarse como parte del schema, no como ruido.
-3. Posibles relaciones con otras entidades (referencias por id, listas de ids,
-   denormalizaciones, etc.).
+- Definiciones explícitas de schemas (Mongoose, JSON Schema, dataclasses, etc.).
+- Consultas a la base de datos (`find`, `aggregate`, `$project`, `$group`,
+  `$lookup`...) que revelan implícitamente la forma de los documentos.
+- Operaciones de escritura (`insertOne`, `updateOne` con `$set` / `$push`,
+  `bulkWrite`...) que muestran qué campos se almacenan.
+- Ejemplos de documentos en JSON o BSON.
+- Accesos a campos desde código de aplicación (p. ej. `user.profile.email`,
+  `doc["items"][0]["price"]`).
+- Comentarios o documentación en lenguaje natural sobre la estructura.
 
-Devuelve el resultado en Markdown estructurado: una sección por entidad con una
-tabla de atributos que distinga nombre, tipo declarado, tipo real inferido,
-ejemplo y observaciones, seguida de una lista de relaciones detectadas.
+Tu tarea: a partir de toda esa evidencia, **reconstruir el modelo documental
+implícito**. No asumas que existen schemas explícitos: en muchos casos la
+estructura solo se deduce cruzando consultas y accesos en código.
 
-SCHEMAS:
+Para cada colección/entidad documental que detectes, produce:
+
+1. Nombre de la colección.
+2. Tabla de atributos: nombre, tipo inferido, si es opcional, ejemplo
+   representativo (si lo hay) y la **fuente de evidencia** (qué fragmento
+   permitió deducirlo).
+3. Para cualquier atributo cuyo valor sea un objeto anidado o un array de
+   objetos, describe la sub-estructura recursivamente con el mismo formato. **No
+   te limites a marcar `Array` u `Object`**: profundiza hasta los campos hoja.
+4. Relaciones detectadas con otras colecciones: referencias por id, listas de
+   ids, denormalizaciones (mismo dato copiado en varias colecciones).
+
+Si hay fragmentos que no aportan información sobre el modelo (utilidades,
+imports, configuración, lógica ajena...), ignóralos en silencio. Si una pieza
+de evidencia es ambigua o contradictoria, indícalo en una columna de
+observaciones en lugar de inventar.
+
+Devuelve el resultado en Markdown, una sección por colección.
+
+EVIDENCIA:
 ---
-{schemas}
+{evidence}
 ---
 """
 
 PROMPT_DESIGN = """\
-Tienes el siguiente análisis de un modelo documental MongoDB:
+Tienes este análisis de un modelo documental:
 
 ---
 {analysis}
 ---
 
-Diseña un modelo relacional **normalizado** (al menos en 3FN) equivalente.
+Diseña el modelo relacional **normalizado** (al menos en 3FN) equivalente.
 Reglas:
-- Cada array de objetos debe convertirse en una tabla separada con clave foránea
-  hacia su entidad propietaria.
-- Listas de identificadores (followers, chat_rooms, miembros de sala, etc.) se
-  modelan como tablas de relación N:M.
+- Cada array de objetos del modelo documental se convierte en una tabla
+  separada con clave foránea hacia su entidad propietaria.
+- Listas de identificadores (followers, miembros de una sala, etiquetas, etc.)
+  se modelan como tablas de relación N:M.
 - Para cada tabla define: nombre, columnas (nombre, tipo lógico, nullable),
   clave primaria, claves foráneas y restricciones de unicidad cuando apliquen.
-- No introduzcas redundancias innecesarias.
+- Resuelve denormalizaciones: si el mismo dato aparece duplicado en varias
+  colecciones documentales, decide cuál es la fuente canónica y deja el resto
+  como FKs.
+- No introduzcas tablas que no se justifiquen con el análisis previo.
 
 Devuelve el modelo en Markdown, una sección por tabla. **No** generes DDL en
 este paso.
@@ -66,30 +90,52 @@ Genera el DDL **compatible con Oracle**. Requisitos:
 
 
 def _read_input(input_path: Path) -> str:
+    """Concatena los archivos del input en un único bundle de texto.
+
+    Acepta archivo único o directorio (no recursivo). Los archivos que no se
+    puedan decodificar como UTF-8 se saltan.
+    """
     if input_path.is_file():
         files = [input_path]
     else:
-        files = sorted(input_path.glob("*.js"))
+        files = sorted(p for p in input_path.iterdir() if p.is_file())
     if not files:
-        raise RuntimeError(f"No se encontraron schemas en {input_path}")
+        raise RuntimeError(f"No se encontraron archivos en {input_path}")
+
     parts: list[str] = []
+    skipped: list[str] = []
     for f in files:
+        try:
+            text = f.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            skipped.append(f.name)
+            continue
         parts.append(f"// === {f.name} ===")
-        parts.append(f.read_text(encoding="utf-8"))
+        parts.append(text)
+
+    if not parts:
+        raise RuntimeError(f"Ningún archivo legible como texto en {input_path}")
+    if skipped:
+        parts.append(f"// (archivos saltados por no ser texto: {', '.join(skipped)})")
+
     return "\n\n".join(parts)
 
 
-def run_pipeline(input_path: Path, model: str, out_dir: Path) -> str:
-    schemas_text = _read_input(input_path)
-    (out_dir / "01_input.txt").write_text(schemas_text, encoding="utf-8")
+def run_pipeline(
+    input_path: Path,
+    provider: LLMProvider,
+    out_dir: Path,
+) -> str:
+    evidence = _read_input(input_path)
+    (out_dir / "01_input.txt").write_text(evidence, encoding="utf-8")
 
-    analysis = generate(model, PROMPT_ANALYZE.format(schemas=schemas_text))
+    analysis = provider.generate(PROMPT_ANALYZE.format(evidence=evidence))
     (out_dir / "02_analysis.md").write_text(analysis, encoding="utf-8")
 
-    design = generate(model, PROMPT_DESIGN.format(analysis=analysis))
+    design = provider.generate(PROMPT_DESIGN.format(analysis=analysis))
     (out_dir / "03_design.md").write_text(design, encoding="utf-8")
 
-    ddl = generate(model, PROMPT_DDL.format(design=design))
+    ddl = provider.generate(PROMPT_DDL.format(design=design))
     (out_dir / "04_ddl.sql").write_text(ddl, encoding="utf-8")
 
     return ddl
