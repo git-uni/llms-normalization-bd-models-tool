@@ -6,25 +6,31 @@
 
 ## 1. Objetivo inmediato
 
-Construir un **pipeline programático** que, dado un conjunto de schemas MongoDB, produzca automáticamente un modelo relacional normalizado en DDL — replicando mediante código el proceso que hasta ahora se realizaba manualmente en interfaces de chat.
+Construir un **programa que, dado un archivo con schemas MongoDB, llame a la API de Gemini/Gemma y produzca automáticamente un modelo relacional normalizado en DDL** — replicando mediante código y APIs el proceso que hasta ahora se realizaba manualmente en interfaces de chat.
 
 **Hito:** prototipo funcional listo para mostrar en la siguiente reunión con tutores.
 
 **Decisiones ya tomadas:**
+
 - API principal: **Google Generative AI (Gemini / Gemma)**
-- Input de prueba: schemas del repositorio [Spruce](https://github.com/dan-divy/spruce)
-- Output esperado: DDL Oracle equivalente al obtenido manualmente en la fase experimental
+- Formato de entrada del prototipo: **archivo con schemas MongoDB** (el usuario le pasa un archivo al programa)
+- Output esperado: DDL Oracle
 
 **Decisiones pendientes (a discutir al arrancar):**
+
 - Lenguaje y stack — se valoran Python (ecosistema LLM) y Java (experiencia previa del autor)
 - Estrategia: prompt único vs. pipeline multi-paso (la fase experimental sugiere que multi-paso da mejores resultados)
 - Forma de invocación: script CLI, función importable, API mínima
 
 **Fuera del alcance de esta fase:**
+
 - UI o frontend
 - Soporte multi-proveedor (vendrá después)
+- Análisis automático de repositorios (requiere agentes, demasiado complejo para el tiempo disponible)
 - Soporte de todos los formatos de entrada de la visión completa
-- Análisis automático de repositorios completos
+
+**Datos de prueba disponibles:**
+Los schemas del repositorio [Spruce](https://github.com/dan-divy/spruce) se usaron en la fase experimental y sirven como input de referencia para probar el prototipo. Existe un modelo relacional manual (baseline) para comparar los resultados.
 
 ---
 
@@ -35,10 +41,11 @@ Cuando se arranque una sesión nueva sin código existente, el orden recomendado
 1. Decidir lenguaje y stack con el autor
 2. Inicializar el proyecto (gestor de paquetes, dependencias mínimas, gitignore)
 3. Crear estructura de carpetas básica
-4. Cargar los schemas de Spruce como input de referencia
-5. Implementar el primer paso del pipeline (lectura y parseo de schemas)
+4. Preparar los schemas de Spruce como archivo de input de prueba
+5. Implementar la lectura y parseo del archivo de schemas
 6. Integrar la API de Gemini/Gemma
-7. Iterar sobre los pasos del pipeline hasta producir DDL
+7. Iterar sobre el pipeline hasta producir DDL válido
+8. Comparar el DDL generado con el baseline manual
 
 ---
 
@@ -57,24 +64,26 @@ Cuando se arranque una sesión nueva sin código existente, el orden recomendado
 
 Las bases de datos NoSQL orientadas a documentos (MongoDB) almacenan datos desnormalizados. Migrarlos a un modelo relacional requiere identificar entidades, detectar relaciones implícitas, eliminar redundancia y diseñar claves primarias y foráneas. Es un proceso manual, complejo y propenso a errores. El TFG explora hasta qué punto los LLMs pueden automatizarlo.
 
-### Dataset de referencia: Spruce
+### Spruce como dataset de prueba
 
-[Spruce](https://github.com/dan-divy/spruce) es una aplicación real con MongoDB y schemas definidos explícitamente en el código. Es el caso de estudio principal del TFG.
+[Spruce](https://github.com/dan-divy/spruce) es una aplicación real con MongoDB y schemas definidos explícitamente en el código. Se eligió como caso de estudio por su complejidad moderada y la claridad de sus definiciones de esquema.
 
-Entidades del modelo relacional manual (baseline de comparación):
+Entidades del modelo relacional manual (baseline):
 `USERS`, `USER_FOLLOWERS`, `POSTS`, `USER_NOTIFICATIONS`, `CHAT_ROOMS`, `CHAT_ROOM_MEMBERS`, `CHAT_MESSAGES`, `API_KEYS`, `API_KEY_STATS`, `ANALYTICS`, `ANALYTICS_STATS`.
+
+El prototipo debería funcionar con cualquier archivo de schemas MongoDB, no solo con Spruce.
 
 ### Fase experimental previa (completada, vía chat)
 
 Se evaluaron varios LLMs con el mismo input (schemas de Spruce):
 
-| Modelo | Modo | Output |
-|---|---|---|
-| GPT-3.5 | Prompt directo | DDL Oracle + UML |
-| GPT-5 | Prompt directo | DDL Oracle + UML |
-| Claude Opus 4.6 | Prompt directo | DDL Oracle + UML + índices |
-| Claude Opus 4.6 | Agente (4 tareas) | DDL Oracle completo |
-| GPT-5.3-Codex | Agente | DDL Oracle completo |
+| Modelo          | Modo              | Output                     |
+| --------------- | ----------------- | -------------------------- |
+| GPT-3.5         | Prompt directo    | DDL Oracle + UML           |
+| GPT-5           | Prompt directo    | DDL Oracle + UML           |
+| Claude Opus 4.6 | Prompt directo    | DDL Oracle + UML + índices |
+| Claude Opus 4.6 | Agente (4 tareas) | DDL Oracle completo        |
+| GPT-5.3-Codex   | Agente            | DDL Oracle completo        |
 
 El pipeline multi-paso que mejores resultados produjo (Claude Opus 4.6 como agente):
 
@@ -83,11 +92,11 @@ El pipeline multi-paso que mejores resultados produjo (Claude Opus 4.6 como agen
 3. Design normalized relational model
 4. Generate Oracle DDL statements
 
-**El prototipo reimplementa esta lógica de forma programática.**
+Esta secuencia de pasos es una referencia para diseñar el pipeline del prototipo.
 
 ### Visión completa de la herramienta (futuro, no este prototipo)
 
-Requisitos de usuario que tendrá la herramienta final:
+Requisitos de usuario de la herramienta final:
 
 - **RU-1** — Formatos de entrada: archivo de schemas (RU-1.1), URL de repositorio (RU-1.2), texto directo (RU-1.3)
 - **RU-2** — Análisis automático del modelo documental (entidades, atributos, relaciones)
