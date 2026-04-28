@@ -1,0 +1,20 @@
+[project]
+name = "normalizer"
+version = "0.1.0"
+description = "Prototipo TFG: normalización de schemas MongoDB a DDL Oracle vía LLM"
+requires-python = ">=3.11"
+dependencies = [
+    "google-genai>=1.0.0",
+    "click>=8.1.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.scripts]
+normalizer = "normalizer.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["normalizer*"]

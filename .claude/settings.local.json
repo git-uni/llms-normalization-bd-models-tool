@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p data/spruce out src/normalizer/steps)",
+      "Bash(cp /tmp/spruce/utils/models/analytics.js /tmp/spruce/utils/models/keys.js /tmp/spruce/utils/models/room.js /tmp/spruce/utils/models/user.js data/spruce/)",
+      "Bash(rm -rf src)",
+      "Bash(mkdir -p normalizer)",
+      "Bash(python -m py_compile normalizer/__init__.py normalizer/__main__.py normalizer/cli.py normalizer/llm.py normalizer/pipeline.py)"
+    ]
+  }
+}
