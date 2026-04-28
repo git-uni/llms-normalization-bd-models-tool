@@ -86,11 +86,8 @@ Principios que conviene preservar:
 ### Datos del proyecto
 
 - **Título:** "Uso de LLMs para la transformación de modelos desnormalizados en bases de datos NoSQL orientadas a documentos en modelos normalizados"
-- **Autor:** Daniel Uría Edroso (UO282813)
-- **Universidad:** Universidad de Oviedo — Grado en Ingeniería Informática del Software
-- **Curso:** 2025 / 2026
+- **Autor:** Dani
 - **Tipo:** TFG de investigación con desarrollo de herramienta
-- **Tutores:** María José Suárez Cabal / Pablo Suárez-Otero González
 
 ### Problema que aborda
 
