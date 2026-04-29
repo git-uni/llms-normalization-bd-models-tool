@@ -66,6 +66,11 @@ Reglas:
 - Resuelve denormalizaciones: si el mismo dato aparece duplicado en varias
   colecciones documentales, decide cuál es la fuente canónica y deja el resto
   como FKs.
+- **Reconcilia atributos redundantes dentro de una misma entidad**: si dos
+  atributos diferentes apuntan al mismo registro de otra colección (por ejemplo
+  uno guarda el `username` y otro el `_id` del mismo usuario), conserva una
+  sola FK canónica al PK de la tabla destino y elimina la otra. No emitas dos
+  columnas que referencien el mismo registro.
 - No introduzcas tablas que no se justifiquen con el análisis previo.
 
 Devuelve el modelo en Markdown, una sección por tabla. **No** generes DDL en

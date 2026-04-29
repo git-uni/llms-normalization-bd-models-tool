@@ -1,0 +1,1060 @@
+// === handler_counter.js ===
+
+const Analytics = require("../models/analytics");
+const idCreation = require("apikeygen").apikey;
+module.exports = function(req, res, next) {
+  const date = new Date().toISOString().split("T")[0];
+  if (req.session.today && req.session.today == date) {
+    return next();
+  }
+  Analytics.findOne({ name: "visitors" }, function(err, res) {
+    if (err || !res) {
+      res = new Analytics({ name: "visitors", stats: [] });
+    }
+    let stats = res.stats;
+    let today = stats.find(x => x && x.date == date);
+    let index = stats.indexOf(today);
+    if (today) {
+      today.amount++;
+    } else {
+      today = {
+        amount: 1,
+        date
+      };
+      stats.push(today);
+      index = stats.indexOf(today);
+    }
+    stats[index >= 0 ? index : 0] = today;
+    res.stats = stats;
+    res = new Analytics(res);
+    req.session.today = date;
+    res.save(function() {
+      next();
+    });
+  });
+};
+
+
+// === handler_socket.js ===
+
+const io = require("socket.io");
+const express = require("express");
+var User = require("../models/user");
+var Room = require("../models/room");
+const sio = require("../../bin/www").sio;
+const sessionMiddleware = require("../../app").sessionMiddleware;
+
+sio.use(function(socket, next) {
+  sessionMiddleware(socket.request, socket.request.res, next);
+});
+
+function type(socket) {
+  User.findOne({ _id: socket.session._id }).exec(function(err, u) {
+    socket
+      .to(socket.session.socket.room)
+      .emit("typing", { username: u.username });
+  });
+}
+
+function sendMsg(socket, chat) {
+  var time = new Date();
+  var room = socket.room;
+  if (!room.chats) {
+    room.chats = [];
+  }
+  User.findOne({ _id: socket.session._id }).exec(function(err, u) {
+    const user = {
+      username: u.username,
+      profile_pic: u.profile_pic,
+      _id: u._id
+    }; //hide stuff like password
+    room.chats.push({ txt: chat.txt, by: user, time });
+    console.log({ txt: chat.txt, by: user, time });
+    room.save((err, obj) => {
+      sio.to(socket.session.socket.room).emit("new msg", {
+        txt: chat.txt,
+        by: user,
+        time
+      });
+    });
+  });
+}
+
+sio.on("connection", function(socket) {
+  const session = socket.request.session;
+  socket.session = session;
+  if (!session.socket) return;
+  socket.join(session.socket.room);
+  Room.findOne({ _id: session.socket.room }, function(err, room) {
+    if (!room) {
+      return socket.disconnect("unauthorized");
+    }
+    socket.room = room;
+  });
+  socket.on("msg", function(data) {
+    sendMsg(socket, data);
+  });
+  socket.on("typing", function(data) {
+    type(socket);
+  });
+});
+
+module.exports = sio;
+
+
+// === handler_user.js ===
+
+// utils/handlers/user.js
+var mongoose = require("mongoose");
+var User = require("../models/user");
+var bcrypt = require("bcrypt-nodejs");
+const a = require("array-tools");
+const _ = require("lodash/_arrayIncludes");
+
+mongoose.connect(require("../../config/app").db.connectionUri, {
+  useUnifiedTopology: true,
+  useNewUrlParser: true
+});
+
+function checkSpace(name) {
+  var charSplit = name.split("");
+  //console.log(charSplit)
+  return _(charSplit, " ");
+}
+/*****
+usage:
+	var opt = {
+		username:'my_name',
+		password:'P@sSW0rD',
+		fn:'Divy',
+		ln:'Srivastava',
+		day:23,
+		month:'July',
+		year:2004
+	}
+	createNew(opt, (error, result)=> {
+		if(!result) return false;
+		// Do some post-save stuff here
+	})
+*****/
+function createNew(obj, cb) {
+  if (checkSpace(obj.username)) {
+    return cb(null, false);
+  } else {
+    User.findOne({ username: obj.username }).exec((err, user) => {
+      if (user) {
+        return cb(null, false);
+      } else {
+        var bio = `Hey there! I'm ${obj.fn} ;)! Wish me on ${obj.day} ${obj.month}`;
+        var dob = obj.day + " " + obj.month + " " + obj.year;
+        var newUser = new User({
+          username: obj.username,
+          firstname: obj.fn,
+          lastname: obj.ln,
+          dob: dob,
+          bio: bio,
+          profile_pic: "/images/logo/logo.png",
+          posts: [],
+          followers: [],
+          lastLogin: new Date()
+        });
+        newUser.password = newUser.generateHash(obj.password);
+        newUser.save((err, res) => {
+          return cb(err, res);
+        });
+      }
+    });
+  }
+}
+
+/*****
+usage:
+	var opt = {
+		username:'my_name',
+		password:'P@sSW0rD'
+	}
+	checkUser(opt, (error, result) => {
+		if (!result) return false;
+		// Do something after log in...
+	})
+*****/
+
+function checkUser(obj, cb) {
+  User.findOne({ username: obj.username }).exec((err, user) => {
+    console.log(user);
+    if (err) return cb(err, false);
+    if (user) {
+      bcrypt.compare(obj.password, user.password, (err, bool) => {
+        if (bool) {
+          return cb(null, user);
+        } else {
+          return cb(null, false);
+        }
+      });
+    } else {
+      return cb(null, false);
+    }
+  });
+}
+
+/*****
+usage:
+    var opt = {
+        username:'my_name'
+    }
+    findOne(opt, (error, result) => {
+        if (!result) return false;
+        // Do something after finding...
+    })
+*****/
+
+function findOne(obj, cb) {
+  User.findOne(obj).exec((err, user) => {
+    if (err) return cb(err, false);
+    if (user) {
+      return cb(err, user);
+    } else {
+      return cb(null, false);
+    }
+  });
+}
+
+function search(opt, cb) {
+  User.find({ username: { $gt: opt } }).exec((err, results) => {
+    if (err) return cb(err, false);
+    if (results) {
+      return cb(err, results);
+    } else {
+      return cb(null, false);
+    }
+  });
+}
+
+/*****
+usage:
+   getAll((error, result) => {
+        if (!result) return false;
+        // Do something after...
+    })
+*****/
+
+function getAll(cb) {
+  User.find({}).exec((err, users) => {
+    if (err) return cb(err, false);
+    if (users) {
+      return cb(null, users);
+    } else {
+      return cb(null, false);
+    }
+  });
+}
+
+function deleteOne(opt, cb) {
+  //if(typeof opt !== Object) cb("Must be a javascript object.");
+  User.deleteOne(opt).exec((err, res) => {
+    if (err) return cb(err, null);
+    else if (res.n == 0) {
+      return cb(null, true);
+    }
+  });
+}
+function comment(user, comment, _id, cb) {
+  User.findOne(user).exec((err, obj) => {
+    if (!obj) return cb("Does not exist.", null);
+    console.log(obj);
+    for (var i = 0; i < obj.posts.length; i++) {
+      if (obj.posts[i]._id == _id) {
+        obj.posts[i].comments.push(comment);
+        obj.notifications.push({
+          msg: `@${comment.by} reacted to your post.`,
+          link: `/u/${comment.by}`,
+          time: new Date()
+        });
+        obj = new User(obj);
+        obj.save((err, res) => {
+          return cb(err, res);
+        });
+      }
+    }
+  });
+}
+function like(user, like, _id, cb) {
+  console.log(user);
+  User.findOne(user).exec((err, obj) => {
+    if (!obj) return cb("Does not exist.", null);
+    //console.log(obj);
+    for (var i = 0; i < obj.posts.length; i++) {
+      if (obj.posts[i]._id == _id) {
+        obj.posts[i].likes.push(like.by);
+        obj.notifications.push({
+          msg: `@${like.by} liked your post.`,
+          link: `/u/${like.by}`,
+          time: new Date()
+        });
+        obj = new User(obj);
+        obj.save(err => {
+          cb(err, true);
+        });
+      }
+    }
+  });
+}
+
+// Expose all the api...
+module.exports = {
+  createNew: createNew,
+  checkUser: checkUser,
+  findOne: findOne,
+  getAll: getAll,
+  comment: comment,
+  like: like,
+  search: search
+};
+
+
+// === route_api_v1.js ===
+
+var express = require("express");
+var router = express.Router();
+var path = require("path");
+var tool = require("array-tools");
+var db = require("../../../utils/handlers/user");
+var User = require("../../../utils/models/user");
+var formParser = require("../../../utils/form-parser.js");
+var ig = require("../../../config/instagram");
+var g = require("../../../config/google");
+var formidable = require("formidable");
+var fs = require("file-system");
+const {cloudinary, isSetup} = require('../../../config/cloudinary.js');
+
+router.post("/v1/comment", function(req, res, next) {
+  db.comment(
+    { username: req.body.author },
+    { by: req.session.user, text: req.body.text },
+    req.body._id,
+    (err, result) => {
+      if (result) {
+        res.send(true);
+      } else {
+        res.send(false);
+      }
+    }
+  );
+});
+
+router.post("/v1/like", function(req, res, next) {
+  //console.log(req.body);
+  db.like(
+    { username: req.body.author },
+    { by: req.session.user },
+    req.body._id,
+    (err, result) => {
+      if (result) {
+        res.send({ event: true, msg: "Liked!" });
+        //	console.log(result)
+      } else {
+        res.send({ event: false, msg: "Already liked." });
+      }
+    }
+  );
+});
+
+router.post("/v1/follow", function(req, res, next) {
+  db.findOne(req.body, (err, user) => {
+    var disabled = false;
+    for (var i = 0; i < user.followers.length; i++) {
+      if (user.followers[i] == req.session._id) {
+        console.log(i);
+        return (disabled = true);
+      }
+    }
+    if (disabled) {
+      res.status(200).send("disabled");
+    } else {
+      user.followers.push(req.session._id);
+      user.notifications.push({
+        msg: `${req.session.user} started following you.`,
+        link: `/u/${req.session.user}`,
+        time: new Date()
+      });
+      user = User(user);
+      user.save(err => {
+        res.status(200).send("done");
+      });
+    }
+  });
+});
+
+router.post("/v1/user/:mode", function(req, res, next) {
+  if (!req.session.user) return res.sendStatus(404);
+  if (req.params.mode == "picture") {
+    db.findOne({ _id: req.query.id }, (err, user) => {
+      if (!user) return res.sendStatus(404);
+      var image_types = ["png", "jpeg", "gif", "jpg"];
+      var form = new formidable.IncomingForm();
+
+      form.parse(req);
+
+      form.on("fileBegin", function(name, file) {
+        if (!image_types.includes(file.name.split(".")[1].toLowerCase())) {
+          return res.status(404).send("Unsupported file type!");
+        }
+        if (
+          fs.existsSync(
+            __dirname.split("/routes")[0] +
+              "/public/images/profile_pictures/" +
+              user.username +
+              "." +
+              file.name.split(".")[1]
+          )
+        ) {
+          fs.unlinkSync(
+            __dirname.split("/routes")[0] +
+              "/public/images/profile_pictures/" +
+              user.username +
+              "." +
+              file.name.split(".")[1]
+          );
+        }
+        file.path =
+          __dirname.split("/routes")[0] +
+          "/public/images/profile_pictures/" +
+          user.username +
+          "." +
+          file.name.split(".")[1];
+      });
+			form.on('file', function (name, file){
+				if(!image_types.includes(file.name.split('.')[1].toLowerCase())) {
+					return;
+				}
+				if(file.name && isSetup) {
+		      cloudinary.v2.uploader.upload(file.path,
+		        function(error, result) {
+		          console.log(result, error);
+		          if (!error) {
+								user['profile_pic'] = result.url;
+								user.save((err, profile) => {
+									delete req.session.user;
+									req.session.user = profile.username;
+									req.session._id = profile._id;
+									res.status(200).send(result.url)
+								})
+							}
+					});
+					return;
+				} else {
+					user["profile_pic"] =
+	          "/images/profile_pictures/" +
+	          user.username +
+	          "." +
+	          file.name.split(".")[1];
+	        user.save((err, profile) => {
+	          delete req.session.user;
+	          req.session.user = profile.username;
+	          req.session._id = profile._id;
+	          res
+	            .status(200)
+	            .send(
+	              "/images/profile_pictures/" +
+	                user.username +
+	                "." +
+	                file.name.split(".")[1]
+	            );
+	        });
+				}
+			});
+			return;
+		});
+		return;
+	} else {
+		db.findOne({ _id: req.body._id }, (err, user) => {
+	    if (err) return res.end(err);
+	    if (!user) return res.sendStatus(404);
+
+	    user[req.body.key] = req.body.value;
+	    /*user.save(function(err) {
+				if(err) console.error(err);
+				return res.sendStatus(200);
+			})*/
+	    user.save((err, profile) => {
+	      delete req.session.user;
+	      req.session.user = profile.username;
+	      req.session._id = profile._id;
+	      res.status(200).send("done");
+	    });
+	  });
+	}
+});
+
+router.get("/v1/search", function(req, res, next) {
+  var regx = "^" + req.query.q + ".*";
+  User.find({
+    $or: [
+      { username: { $regex: regx } },
+      { firstname: { $regex: regx } },
+      { lastname: { $regex: regx } }
+    ]
+  }).exec((err, all) => {
+    return res.send(all);
+  });
+});
+
+router.get("/v1/oauth/:service", function(req, res, next) {
+  if (req.params.service == "instagram") res.redirect(ig.auth_url);
+  if (req.params.service == "google") res.redirect(g.auth_url);
+});
+
+router.get("/v1/notifications", function(req, res, next) {
+  User.findOne({ _id: req.session._id }).exec((err, userData) => {
+    res.send(new String(userData.notifications.length));
+  });
+});
+
+router.post("/v1/notifications/markAsRead", function(req, res, next) {
+  User.findOne({ _id: req.session._id }).exec((err, userData) => {
+    userData.notifications = [];
+    userData.save((err, response) => {
+      res.redirect("/me/activity");
+    });
+  });
+});
+
+module.exports = router;
+
+
+// === route_auth.js ===
+
+var express = require("express");
+var router = express.Router();
+var db = require("../utils/handlers/user");
+var formParser = require("../utils/form-parser.js");
+var instagramConf = require("../config/instagram");
+var googleConf = require("../config/google");
+const { google } = require("googleapis");
+const oauth2Client = new google.auth.OAuth2(
+  googleConf.client_id,
+  googleConf.client_secret,
+  googleConf.redirect_uri
+);
+
+var httpRequest = require("request");
+var User = require("../utils/models/user");
+/* GET signup page. */
+router.get("/new", function(req, res, next) {
+  res.render("auth/signup", {
+    title: req.app.conf.name,
+    error: false
+  });
+});
+
+/* GET login page. */
+router.get("/getin", function(req, res, next) {
+  res.render("auth/login", {
+    title: req.app.conf.name,
+    error: false
+  });
+});
+
+router.post("/new", formParser, function(req, res, next) {
+  db.createNew(req.body, (error, result) => {
+    if (!result) {
+      res.render("auth/signup", {
+        title: req.app.conf.name,
+        error: "Bad user details."
+      });
+    } else {
+      req.session._id = result._id;
+      req.session.user = result.username;
+      res.redirect(req.query.redirect_uri || "/");
+    }
+  });
+});
+
+router.post("/getin", formParser, function(req, res, next) {
+  db.checkUser(req.body, (error, result) => {
+    if (!result) {
+      res.render("auth/login", {
+        title: req.app.conf.name,
+        error: "Bad username or password."
+      });
+    } else {
+      req.session._id = result._id;
+      req.session.user = result.username;
+      result.lastLogin = new Date();
+      result.save(() => {
+        res.redirect(req.query.redirect_uri || "/");
+      });
+    }
+  });
+});
+router.get("/out", function(req, res, next) {
+  req.session.destroy(() => {
+    res.redirect("/?action=logout");
+  });
+});
+router.get("/oauth/:service", async function(req, res, next) {
+  if (req.params.service == "instagram") {
+    var ig_code = req.query.code;
+    console.log(ig_code);
+    var options = {
+      url: "https://api.instagram.com/oauth/access_token",
+      method: "POST",
+      form: {
+        client_id: instagramConf.client_id,
+        client_secret: instagramConf.client_secret,
+        grant_type: "authorization_code",
+        redirect_uri: instagramConf.redirect_uri,
+        code: ig_code
+      }
+    };
+
+    httpRequest(options, function(error, response, body) {
+      //if (!error && response.statusCode == 200) {
+      if (error) res.redirect("/?err=instagram");
+      var r = JSON.parse(body);
+      console.log(r);
+      db.findOne({ username: r.user.username }, (err, exists) => {
+        console.log(r);
+        if (exists) {
+          req.session._id = exists._id;
+          req.session.user = exists.username;
+          res.redirect("/");
+        } else {
+          var r = JSON.parse(body);
+          var newUser = new User({
+            id: r.user.id,
+            username: r.user.username,
+            fistname: r.user.full_name.split(" ")[0],
+            lastname: r.user.full_name.split(" ")[
+              r.user.full_name.split(" ").length - 1
+            ],
+            bio: r.user.bio,
+            dob: "not set",
+            //website: r.user.website,
+            profile_pic: r.user.profile_picture,
+            password: r.access_token,
+            posts: [],
+            followers: []
+          });
+          console.log(newUser);
+
+          newUser.save((err, cb) => {
+            req.session._id = cb._id;
+            req.session.user = cb.username;
+            res.redirect("/");
+          });
+        }
+      });
+    });
+  }
+
+  if (req.params.service == "google") {
+    const { tokens } = await oauth2Client.getToken(req.query.code);
+    httpRequest(
+      "https://www.googleapis.com/oauth2/v3/userinfo?access_token=" +
+        tokens.access_token,
+      function(error, response, body) {
+        let user = JSON.parse(response.body);
+        console.log(user);
+        db.findOne({ username: user.name }, (err, exists) => {
+          if (exists) {
+            req.session._id = exists._id;
+            req.session.user = exists.username;
+            res.redirect("/");
+          } else {
+            console.log(user);
+            var newUser = new User({
+              id: user.sub,
+              username: user.name,
+              fistname: user.given_name,
+              lastname: user.family_name,
+              bio: "Hey!", //Is this correct?
+              dob: "not set",
+              //website: r.user.website,
+              profile_pic: user.picture,
+              password: tokens.access_token,
+              posts: [],
+              followers: []
+            });
+            console.log(newUser);
+
+            newUser.save((err, cb) => {
+              req.session._id = cb._id;
+              req.session.user = cb.username;
+              res.redirect("/");
+            });
+          }
+        });
+      }
+    );
+  }
+});
+
+module.exports = router;
+
+
+// === route_chat.js ===
+
+var express = require("express");
+var router = express.Router();
+var db = require("../utils/handlers/user");
+var formParser = require("../utils/form-parser");
+var mongoose = require("mongoose");
+var User = require("../utils/models/user");
+var Room = require("../utils/models/room");
+
+router.get("/", function(req, res, next) {
+  User.find({}).exec((error, users) => {
+    res.render("chat/index", {
+      title: req.app.conf.name,
+      users: users
+    });
+  });
+});
+
+router.get("/:userid", function(req, res, next) {
+  if (req.session._id == req.params.userid)
+    return res.render("error", {
+      message: "Can't chat with yourself...",
+      error: {
+        status: 400,
+        stack: "Can't chat with yourself."
+      }
+    });
+  User.findOne({ _id: req.params.userid }).exec((error, user) => {
+    if (!user) return res.status(404).send("No user found!");
+    req.session.socket = {};
+    Room.find({}).exec((err, chatRooms) => {
+      var chatRoom = chatRooms.find(
+        r =>
+          r.users[0] &&
+          r.users[1] &&
+          ((r.users[0].toString() == user._id.toString() &&
+            r.users[1].toString() == req.session._id) ||
+            (r.users[1].toString() == user._id.toString() &&
+              r.users[0].toString() == req.session._id))
+      );
+      if (chatRoom) {
+        req.session.socket.room = chatRoom._id;
+        res.render("chat/room", {
+          title: req.app.conf.name,
+          room: chatRoom,
+          session: req.session,
+          reciever: user
+        });
+      } else {
+        var possibleRoomId = user._id + req.session._id;
+        req.session.socket.room = possibleRoomId;
+        var newChatRoom = new Room({
+          id: possibleRoomId,
+          users: [user._id, req.session._id],
+          chats: []
+        });
+        newChatRoom.save((err, done) => {
+          res.render("chat/room", {
+            title: req.app.conf.name,
+            room: done,
+            session: req.session,
+            reciever: user
+          });
+        });
+      }
+    });
+  });
+});
+
+module.exports = router;
+
+
+// === route_developer_api.js ===
+
+var express = require('express');
+var router = express.Router();
+var httpRequest = require('request');
+var apiKeyGen = require("apikeygen").apikey;
+
+var db = require('../../utils/handlers/user');
+var formParser = require('../../utils/form-parser.js');
+var User = require('../../utils/models/user');
+var Keys = require('../../utils/models/keys');
+
+var verified = false;
+var secure_dev_key;
+genAPIKey(function(key) {
+    console.log("Developer key: " + key.apiKey + '\nVerify your account in /me with this key');
+    secure_dev_key = key.apiKey;
+})
+
+router.get('/verify/:key', function(req, res, next) {
+    if(req.params.key == secure_dev_key) {
+        User
+        .findOne({_id:req.session._id})
+        .exec((err, userSchema) => {
+            userSchema.developer = true;
+            userSchema.save((err, result) => {
+                Keys
+                .findOne({apiKey: req.params.key})
+                .exec((err, success) => {
+                    if(success) return res.send({error:"Invalid API KEY"});
+                    var newKeySchema = new Keys({
+                        apiKey:req.params.key,
+                        invokes:0,
+                        stats:[]
+                    })
+                    newKeySchema.save((err, keySaveResult) => {
+                        verified = true;
+                        res.redirect('/developer');
+                    });
+                })
+            });
+        })
+    } else {
+        res.status(405).send('Incorrect key! Check the console on startup!');
+     }
+    });
+
+router.use(function(req, res, next) {
+    console.log(req.query)
+    if(req.url == '/') {
+        if(verified) return next();
+        else return res.redirect('/');
+    }
+    if(!req.query.apiKey) return res.status(405).send({error:"API KEY not provided."});
+    if(req.query.apiKey == secure_dev_key) {
+        Keys
+        .findOne({apiKey:req.query.apiKey})
+        .exec((err, key) => {
+            if(!key) return res.status(405).send({error:"Invalid API KEY provided."});
+            key.invokes++;
+            key.stats.push({
+                time:new Date(),
+                request:req
+            });
+            key.save((err, done) => {
+                req.apiKey = key;
+                next();
+            })
+        })
+    }
+
+});
+router.get('/', function(req, res, next) {
+	res.render('dev/index', {
+		title: req.app.conf.name,
+        error:false,
+        key:secure_dev_key
+	});
+})
+
+router.get('/userInfo', function(req, res, next) {
+    if(req.query.username) {
+        User
+        .findOne({username:req.query.username})
+        .exec((err, userDetails) => {
+            if(!userDetails) return res.status(404)
+            var profile_picture = "https://spruce.divy.work"+userDetails.profile_picture
+            var toBeSent = {
+                username:userDetails.username,
+                profile_picture:profile_picture,
+                dob:userDetails.dob,
+                bio:userDetails.bio,
+                firstname:userDetails.firstname,
+                lastname:userDetails.lastname
+            }
+            res.status(200).send(JSON.stringify(toBeSent, null, 2));
+        })
+    }
+});
+
+router.post('/generate', function(req, res, next) {
+    genAPIKey((status) => {
+        if(!status) return res.send({error:"Some internal error. Please try again."});
+        res.send({apikey:status.apiKey});
+    })
+});
+
+
+function genAPIKey(cb) {
+    var key = apiKeyGen();
+    cb({
+        apiKey:key
+    });
+   /** Keys.findOne({apiKey:key}).exec((err, dbKey) => {
+        if(dbKey) return cb(false);
+        var newKey = new Keys({
+            apiKey:key,
+            stats:[],
+            invokes:0
+        });
+        newKey.save((err, done) => {
+            cb(done);
+        })
+    })  */
+}
+module.exports = router;
+module.exports.dev_key = secure_dev_key;
+
+
+// === route_settings.js ===
+
+var express = require("express");
+var router = express.Router();
+var path = require('path');
+var guid = require('guid');
+var mv = require('mv');
+const mime = require('mime-types')
+var db = require('../utils/handlers/user');
+var formParser = require('../utils/form-parser.js');
+const fs = require('file-system');
+const {cloudinary, isSetup} = require('../config/cloudinary.js');
+
+var image_types = ["png", "jpeg", "gif"];
+
+/* GET users listing. */
+router.get("/", function(req, res, next) {
+  db.findOne({ _id: req.session._id }, (err, user) => {
+    res.render("me/index", {
+      title: req.app.conf.name,
+      user: user
+    });
+  });
+});
+
+router.get("/settings", function(req, res, next) {
+  db.findOne({ _id: req.session._id }, (err, user) => {
+    res.render("me/settings", {
+      title: req.app.conf.name,
+      user: user
+    });
+  });
+});
+
+router.get("/activity", function(req, res, next) {
+  db.findOne({ _id: req.session._id }, (err, user) => {
+    res.render("me/activity", {
+      title: req.app.conf.name,
+      activity: user.notifications
+    });
+  });
+});
+
+router.get("/post/:action/:query", function(req, res, next) {
+  switch (req.params.action) {
+    case "edit":
+      res.render("index");
+      break;
+    case "delete":
+      {
+        db.findOne({ username: req.session.user }, (err, u) => {
+          let id = req.params.query;
+          console.log(u);
+          if (
+            u.posts[u.posts.indexOf(u.posts.find(x => x._id == id))].static_url
+          )
+            fs.unlinkSync(
+              "./public" +
+                u.posts[u.posts.indexOf(u.posts.find(x => x._id == id))]
+                  .static_url
+            );
+          u.posts.splice(u.posts.indexOf(u.posts.find(x => x._id == id)), 1);
+          u.save(err => {
+            if (err) throw err;
+            console.log("Post deleted");
+            res.redirect("/");
+          });
+        });
+      }
+      break;
+    default:
+      res.send("hi");
+  }
+});
+
+router.post('/upload', formParser,function(req, res, next) {
+			// Generate a random id
+			var random_id = guid.raw();
+      var final_location, type;
+			if(req.files.filetoupload.name && isSetup) {
+      cloudinary.v2.uploader.upload(req.files.filetoupload.path,
+        function(error, result) {
+          console.log(result, error);
+          if (!error) {
+            final_location = result.url;
+            type = mime.lookup(req.files.filetoupload.name).split("/")[1]
+            db.findOne({username:req.session.user}, (err, u) => {
+      				console.log(u)
+                if(u!=undefined) {
+      				u.posts.push({
+      					_id:random_id,
+      					author:req.session.user,
+      					authorID: req.session._id,
+      					static_url:final_location,
+      					caption:req.body.caption,
+      					category:req.body.type,
+      					comments:[],
+      					likes:[],
+      					type:type,
+      					createdAt:new Date(),
+      					lastEditedAt:new Date()
+      				})
+      				u.save(err => {
+      					if (err) throw err;
+      					console.log('Post saved')
+      					// Redirect back after the job is done.
+      					res.redirect('/')
+      				})
+      			} else {
+              res.redirect('/')
+            }
+      		})
+          }
+        });
+		} else if (req.files.filetoupload.name) {
+      // Assign static_url path
+      var oldpath = req.files.filetoupload.path;
+      var newpath = path.join(
+        __dirname,
+        `../public/feeds/${req.session.user}_${random_id}${req.files.filetoupload.name}`
+      );
+      var final_location = `/feeds/${req.session.user}_${random_id}${req.files.filetoupload.name}`;
+
+      console.log(
+        `${oldpath} - OldPath\n ${newpath} - Newpath\n ${final_location} - DiskLocation\n`
+      );
+      // Finally upload the file to disk and save the feed to users profile.
+      var type = mime.lookup(req.files.filetoupload.name).split("/")[1];
+      mv(oldpath, newpath, function(err) {
+        console.log("moving files");
+      });
+      db.findOne({ username: req.session.user }, (err, u) => {
+        console.log(u);
+        u.posts.push({
+          _id: random_id,
+          author: req.session.user,
+          authorID: req.session._id,
+          static_url: final_location,
+          caption: req.body.caption,
+          category: req.body.type,
+          comments: [],
+          likes: [],
+          type: type,
+          createdAt: new Date(),
+          lastEditedAt: new Date()
+        });
+        u.save(err => {
+          if (err) throw err;
+          console.log("Post saved");
+          // Redirect back after the job is done.
+          res.redirect("/");
+        });
+      });
+    }
+})
+router.get("/upload", function(req, res, next) {
+  res.render("upload/file-upload", {
+    title: req.app.conf.name,
+    user: req.session.user
+  });
+});
+
+module.exports = router;

@@ -49,14 +49,15 @@ Dos datasets, ambos derivados del repositorio [Spruce](https://github.com/dan-di
 3. Lectura de input (archivo único o directorio, no recursivo) implementada.
 4. Pipeline de 4 pasos con prompts inline implementado en `pipeline.py`.
 5. Abstracción de proveedor LLM con `GoogleProvider` registrado (`normalizer/providers/`).
-6. **Validado end-to-end con `data/spruce/` y `gemma-3-27b-it`**: el `04_ddl.sql` generado es prácticamente idéntico al DDL que el autor obtenía manualmente en chat. Hito del caso fácil cubierto.
-7. Preparado `data/spruce-difuso/` con archivos de servidor (rutas y handlers) **sin los schemas Mongoose**, para validar el caso realista.
+6. **Caso fácil validado** end-to-end con `data/spruce/` y `gemma-3-27b-it`: el `04_ddl.sql` generado es prácticamente idéntico al DDL que el autor obtenía manualmente en chat.
+7. **Caso difuso validado** con `data/spruce-difuso/` (mismo modelo): se recuperan las 11 entidades del UML manual + dos tablas extra legítimas (`post_comments` y `post_likes`) que normalizan los arrays anidados de posts. Se añadió al `PROMPT_DESIGN` una regla explícita de **reconciliación de atributos redundantes** (cuando dos columnas distintas referencian el mismo registro de otra tabla, conservar solo una FK canónica) — eso eliminó la duplicidad `posts.author_id` + `posts.authorID` que aparecía en la primera pasada.
 
 **Siguiente:**
 
-1. Ejecutar el pipeline contra `data/spruce-difuso/` y comparar el `04_ddl.sql` con el del caso fácil. Si las entidades coinciden con el UML manual, el prompt de análisis está bien calibrado para input difuso.
-2. Si hay diferencias importantes, iterar el prompt de análisis (paso 2) — es donde más impacto tiene la calidad del input difuso. NO tocar el pipeline en sí ni la estructura del proyecto sin causa.
-3. Cuando el caso difuso esté validado, plantear el siguiente cuasirequisito de la próxima reunión: implementar al menos un proveedor LLM adicional (Anthropic u OpenAI) usando la abstracción ya existente en `providers/`.
+1. **Cuasirequisito de la próxima reunión:** implementar al menos un proveedor LLM adicional (Anthropic u OpenAI) usando la abstracción ya existente en `normalizer/providers/`. Es el camino más corto para satisfacer RU-7 (independencia del proveedor) en la demo.
+2. Cuando se vuelva a iterar sobre la calidad del DDL: hay puntos menores conocidos que el autor decidió **no atacar ahora** porque "más o menos funciona" — el `04_ddl.sql` se emite envuelto en ` ```sql ... ``` ` (no es ejecutable tal cual sin pelar el cerco), y se usa `BOOLEAN` que Oracle no tiene nativo en versiones <23. Si en el futuro se fija una versión Oracle objetivo o se necesita ejecutar el SQL automáticamente, esos dos puntos vuelven a ser relevantes.
+
+**Convención de directorios de salida:** cada dataset se ejecuta a su propio `--out-dir` (`out-facil/`, `out-difuso/`, etc.) para no pisarse. El directorio `out/` por defecto NO debe asumirse vinculado a ningún dataset concreto: en este momento contiene un run pisado y no es comparable.
 
 ---
 
@@ -75,7 +76,9 @@ normalizer/
 data/
 ├── spruce/                 # 4 schemas Mongoose (caso fácil)
 └── spruce-difuso/          # 8 archivos de servidor sin schemas (caso realista)
-out/                        # artefactos del pipeline (gitignored)
+out-facil/                  # run de data/spruce/        (gitignored)
+out-difuso/                 # run de data/spruce-difuso/ (gitignored)
+out/                        # default si no se pasa --out-dir, no asumir contenido
 ```
 
 Principios que conviene preservar:
