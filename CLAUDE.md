@@ -17,7 +17,7 @@ La "evidencia" es heterogénea: schemas explícitos cuando los hay, pero tambié
 - Lenguaje: **Python 3.11+**.
 - API por defecto: **Google Generative AI** vía SDK `google-genai`, modelo **`gemma-3-27b-it`** (gratis en el tier gratuito; recomendación de los tutores).
 - Pipeline: **multi-paso de 4 fases** (lectura → análisis del modelo documental → diseño relacional → DDL Oracle). Cada paso intermedio se guarda en `out/` para inspección.
-- Invocación: **CLI con click** — `python -m normalizer <input> -o output.sql`.
+- Invocación: **CLI con click** — `python -m normalizer <input>` (los artefactos se escriben en `out/`, incluido el DDL final como `out/04_ddl.sql`).
 - Formato de input: **archivo único o directorio curado** con fragmentos heterogéneos.
 - **Abstracción de proveedor LLM ya en su sitio** (`normalizer/providers/` con `Protocol LLMProvider`), aunque la única implementación actual sea Google. Multi-proveedor real es **cuasirequisito de la siguiente reunión**.
 - Output: DDL compatible con **Oracle**.
@@ -30,7 +30,11 @@ La "evidencia" es heterogénea: schemas explícitos cuando los hay, pero tambié
 - Otros formatos de entrada de la visión completa (URL de repo, texto directo, etc.).
 
 **Datos de prueba:**
-Los schemas Mongoose del repositorio [Spruce](https://github.com/dan-divy/spruce) están copiados en `data/spruce/` (4 archivos: `analytics.js`, `keys.js`, `room.js`, `user.js`). Sirven como caso de prueba pero **representan el caso fácil** — tienen schemas explícitos con tipos declarados. El prototipo debe funcionar también con inputs donde el modelo documental sea implícito.
+
+Dos datasets, ambos derivados del repositorio [Spruce](https://github.com/dan-divy/spruce). **Importante:** ninguno contiene el repo entero — solo una selección manualmente curada de archivos relevantes para la BD. El repo tiene muchos más directorios y archivos (rutas, vistas, assets, libs cliente, configs, tests…) que no están en `data/`.
+
+- **`data/spruce/`** → caso fácil. Solo los 4 schemas Mongoose explícitos del repo (`analytics.js`, `keys.js`, `room.js`, `user.js`, originalmente en `utils/models/`).
+- **`data/spruce-difuso/`** → caso realista. 8 archivos del lado servidor renombrados con prefijo (`route_*.js`, `handler_*.js`) donde el modelo documental **no está declarado** en ningún sitio: solo se infiere cruzando rutas Express, handlers de socket y operaciones contra la BD (creación de objetos `new User({...})`, `posts.push({...})`, accesos `user.followers[i]`, `room.chats.push({...})`, etc.). NO incluye los schemas. Mismo "ground truth" que `spruce/` (mismo UML manual), por lo que es la prueba directa de si el prompt de análisis funciona sin schemas explícitos.
 
 **Baseline de comparación:** **no hay DDL manual**, solo un **diagrama UML** del autor. La comparación final con los resultados del prototipo será **cualitativa** (UML manual ↔ modelo relacional generado), no diff automático.
 
@@ -41,18 +45,18 @@ Los schemas Mongoose del repositorio [Spruce](https://github.com/dan-divy/spruce
 **Hecho:**
 
 1. Stack decidido y proyecto inicializado (`pyproject.toml`, `.gitignore`, `.env.example`).
-2. Estructura de carpetas creada (`normalizer/` con paquete + `data/spruce/` con input de prueba).
-3. Schemas de Spruce copiados a `data/spruce/`.
-4. Lectura de input (archivo único o directorio, no recursivo) implementada.
-5. Pipeline de 4 pasos con prompts inline implementado en `pipeline.py`.
-6. Abstracción de proveedor LLM con `GoogleProvider` registrado (`normalizer/providers/`).
+2. Estructura de carpetas creada y schemas de Spruce copiados a `data/spruce/`.
+3. Lectura de input (archivo único o directorio, no recursivo) implementada.
+4. Pipeline de 4 pasos con prompts inline implementado en `pipeline.py`.
+5. Abstracción de proveedor LLM con `GoogleProvider` registrado (`normalizer/providers/`).
+6. **Validado end-to-end con `data/spruce/` y `gemma-3-27b-it`**: el `04_ddl.sql` generado es prácticamente idéntico al DDL que el autor obtenía manualmente en chat. Hito del caso fácil cubierto.
+7. Preparado `data/spruce-difuso/` con archivos de servidor (rutas y handlers) **sin los schemas Mongoose**, para validar el caso realista.
 
 **Siguiente:**
 
-1. El autor obtiene una API key de Google AI Studio y la pone en `.env` (`GOOGLE_API_KEY=`).
-2. Ejecutar el pipeline end-to-end con Spruce y revisar los artefactos `01_input.txt`, `02_analysis.md`, `03_design.md`, `04_ddl.sql` en `out/`.
-3. Iterar sobre los prompts hasta que el modelo relacional generado sea coherente con el UML manual.
-4. Probar con un input "no-Spruce" donde el modelo documental no esté en schemas explícitos sino disperso en consultas/código — esto es lo que valida que el prompt de análisis no está sobreajustado al caso fácil.
+1. Ejecutar el pipeline contra `data/spruce-difuso/` y comparar el `04_ddl.sql` con el del caso fácil. Si las entidades coinciden con el UML manual, el prompt de análisis está bien calibrado para input difuso.
+2. Si hay diferencias importantes, iterar el prompt de análisis (paso 2) — es donde más impacto tiene la calidad del input difuso. NO tocar el pipeline en sí ni la estructura del proyecto sin causa.
+3. Cuando el caso difuso esté validado, plantear el siguiente cuasirequisito de la próxima reunión: implementar al menos un proveedor LLM adicional (Anthropic u OpenAI) usando la abstracción ya existente en `providers/`.
 
 ---
 
@@ -62,14 +66,16 @@ Los schemas Mongoose del repositorio [Spruce](https://github.com/dan-divy/spruce
 normalizer/
 ├── __init__.py
 ├── __main__.py             # `python -m normalizer` → cli.main
-├── cli.py                  # click CLI: --output, --provider, --model, --out-dir
+├── cli.py                  # click CLI: --provider, --model, --out-dir
 ├── pipeline.py             # 4 pasos + 3 prompts inline (analyze, design, ddl)
 └── providers/
     ├── base.py             # Protocol LLMProvider (name, model, generate(prompt))
     ├── google.py           # GoogleProvider (gemma-3-27b-it por defecto)
     └── __init__.py         # registry + build_provider() + available_providers()
-data/spruce/                # 4 schemas Mongoose como input de prueba
-out/                        # artefactos intermedios y DDL final (gitignored)
+data/
+├── spruce/                 # 4 schemas Mongoose (caso fácil)
+└── spruce-difuso/          # 8 archivos de servidor sin schemas (caso realista)
+out/                        # artefactos del pipeline (gitignored)
 ```
 
 Principios que conviene preservar:
@@ -101,6 +107,14 @@ Particularidad útil de los schemas de Spruce: muchos arrays están tipados como
 
 Entidades esperadas del UML manual (no es un DDL, es un diagrama del autor):
 `USERS`, `USER_FOLLOWERS`, `POSTS`, `USER_NOTIFICATIONS`, `CHAT_ROOMS`, `CHAT_ROOM_MEMBERS`, `CHAT_MESSAGES`, `API_KEYS`, `API_KEY_STATS`, `ANALYTICS`, `ANALYTICS_STATS`.
+
+**Sobre `data/spruce-difuso/`:** los 8 archivos copiados (rutas Express + handlers de socket) revelan el modelo documental implícitamente a través del uso. Casos típicos a observar en el `02_analysis.md`:
+
+- Estructura de **POSTS** (con `comments`, `likes`, `static_url`, `caption`, `category`, `createdAt`...): solo aparece en `route_settings.js` cuando se hace `u.posts.push({...})`.
+- Estructura de **CHAT_MESSAGES** (con `txt`, `by: {username, profile_pic, _id}`, `time`): solo en `handler_socket.js` con `room.chats.push({...})`. Nótese que `by` está **denormalizado** dentro del chat — el LLM tiene que decidir cómo modelarlo.
+- Estructura de **NOTIFICATIONS** (con `msg`, `link`, `time`): aparece repetidamente con `notifications.push(...)` en varios handlers.
+- Estructura de **API_KEY_STATS** (`time`, `request`): solo en `route_developer_api.js`.
+- Hay incluso un **typo del repo original** (`fistname` en vez de `firstname` en `route_auth.js`). El LLM tendrá que decidir si lo trata como atributo legítimo o lo reconcilia con `firstname`.
 
 El prototipo debe funcionar con cualquier input de evidencia documental, no solo con Spruce.
 

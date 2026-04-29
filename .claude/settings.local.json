@@ -5,7 +5,12 @@
       "Bash(cp /tmp/spruce/utils/models/analytics.js /tmp/spruce/utils/models/keys.js /tmp/spruce/utils/models/room.js /tmp/spruce/utils/models/user.js data/spruce/)",
       "Bash(rm -rf src)",
       "Bash(mkdir -p normalizer)",
-      "Bash(python -m py_compile normalizer/__init__.py normalizer/__main__.py normalizer/cli.py normalizer/llm.py normalizer/pipeline.py)"
+      "Bash(python -m py_compile normalizer/__init__.py normalizer/__main__.py normalizer/cli.py normalizer/llm.py normalizer/pipeline.py)",
+      "Bash(cp /tmp/spruce/routes/auth.js                  data/spruce-difuso/route_auth.js)",
+      "Bash(cp /tmp/spruce/routes/chat.js                  data/spruce-difuso/route_chat.js)",
+      "Bash(cp /tmp/spruce/routes/settings.js              data/spruce-difuso/route_settings.js)",
+      "Bash(cp /tmp/spruce/routes/api/v1/index.js          data/spruce-difuso/route_api_v1.js)",
+      "Bash(cp /tmp/spruce/routes/developer/api.js         data/spruce-difuso/route_developer_api.js)"
     ]
   }
 }
