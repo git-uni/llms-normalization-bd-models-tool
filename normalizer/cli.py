@@ -10,14 +10,6 @@ from normalizer.providers import available_providers, build_provider
 @click.command()
 @click.argument("input_path", type=click.Path(exists=True, path_type=Path))
 @click.option(
-    "-o",
-    "--output",
-    type=click.Path(path_type=Path),
-    default=Path("out/output.sql"),
-    show_default=True,
-    help="Ruta del DDL Oracle generado.",
-)
-@click.option(
     "--provider",
     "provider_name",
     type=click.Choice(available_providers()),
@@ -35,11 +27,10 @@ from normalizer.providers import available_providers, build_provider
     type=click.Path(path_type=Path),
     default=Path("out"),
     show_default=True,
-    help="Directorio donde se guardan los artefactos intermedios del pipeline.",
+    help="Directorio donde se guardan los artefactos del pipeline.",
 )
 def main(
     input_path: Path,
-    output: Path,
     provider_name: str,
     model: str | None,
     out_dir: Path,
@@ -56,13 +47,11 @@ def main(
     """
     load_dotenv()
     out_dir.mkdir(parents=True, exist_ok=True)
-    output.parent.mkdir(parents=True, exist_ok=True)
 
     provider = build_provider(name=provider_name, model=model)
-    ddl = run_pipeline(input_path=input_path, provider=provider, out_dir=out_dir)
-    output.write_text(ddl, encoding="utf-8")
-    click.echo(f"DDL generado en {output}")
-    click.echo(f"Artefactos intermedios en {out_dir}/")
+    run_pipeline(input_path=input_path, provider=provider, out_dir=out_dir)
+    click.echo(f"DDL generado en {out_dir / '04_ddl.sql'}")
+    click.echo(f"Artefactos intermedios en {out_dir}/ (01_input, 02_analysis, 03_design)")
 
 
 if __name__ == "__main__":
