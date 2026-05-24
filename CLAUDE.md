@@ -15,19 +15,20 @@ La "evidencia" es heterogénea: schemas explícitos cuando los hay, pero tambié
 **Decisiones tomadas:**
 
 - Lenguaje: **Python 3.11+**.
-- API por defecto: **Google Generative AI** vía SDK `google-genai`, modelo **`gemma-3-27b-it`** (gratis en el tier gratuito; recomendación de los tutores).
+- API por defecto: **Google Generative AI** vía SDK `google-genai`. Dos modelos por proveedor: el del pipeline (`gemma-4-31b-it`, free, solo texto) y el del agente de descubrimiento (`gemini-2.5-flash-lite`, free, con function-calling). Recomendación inicial de los tutores fue `gemma-3-27b-it`; Google lo retiró en mayo 2026 y se actualizó a `gemma-4-31b-it`.
 - Pipeline: **multi-paso de 4 fases** (lectura → análisis del modelo documental → diseño relacional → DDL Oracle). Cada paso intermedio se guarda en `out/` para inspección.
 - Invocación: **CLI con click** — `python -m normalizer <input>` (los artefactos se escriben en `out/`, incluido el DDL final como `out/04_ddl.sql`).
-- Formato de input: **archivo único o directorio curado** con fragmentos heterogéneos.
-- **Abstracción de proveedor LLM ya en su sitio** (`normalizer/providers/` con `Protocol LLMProvider`), aunque la única implementación actual sea Google. Multi-proveedor real es **cuasirequisito de la siguiente reunión**.
+- Formato de input: **archivo único, directorio curado o URL de repositorio Git público** (en el caso URL, un agente clona el repo y elige por sí mismo la evidencia — ver sección 2, hito 8).
+- **Abstracción de proveedor LLM ya en su sitio** (`normalizer/providers/` con `Protocol LLMProvider`) con dos métodos: `generate(prompt)` (texto-a-texto) y `chat(messages, tools)` (tool-use, para el agente). La única implementación actual es Google; multi-proveedor real es **cuasirequisito de la siguiente reunión**.
+- Paradigma del agente de descubrimiento: **tool-use nativo del SDK** (no bucle JSON manual ni framework externo). El bucle vive en `discovery/agent.py`; el provider solo expone un turno. Elegido pensando en que el mismo paradigma se reutilizará para el agente de refinamiento (RU-6) en un hito posterior.
 - Output: DDL compatible con **Oracle**.
 
 **Fuera del alcance de esta fase:**
 
 - UI o frontend.
 - Implementaciones reales de proveedores adicionales (la abstracción está, las clases no).
-- **Descubrimiento automático en un repositorio completo** — la herramienta NO escanea un repo crudo en busca de evidencia relevante. El input se asume curado por humano (archivo/directorio donde alguien ya recopiló los fragmentos relevantes). El descubrimiento automático requeriría una capa de agentes/heurísticas separada.
-- Otros formatos de entrada de la visión completa (URL de repo, texto directo, etc.).
+- **Agente de refinamiento interactivo (RU-6)**: dialogar con el resultado para renombrar entidades, fusionar tablas, etc. La extensión `chat()` del provider ya está preparada para ello, pero el flujo no se implementa todavía.
+- Descubrimiento sobre repos **privados** (autenticación) o **no-Git**.
 
 **Datos de prueba:**
 
@@ -88,16 +89,17 @@ normalizer/
 data/
 ├── spruce/                 # 4 schemas Mongoose (caso fácil)
 └── spruce-difuso/          # 8 archivos de servidor sin schemas (caso realista)
-out-facil/                  # run de data/spruce/        (gitignored)
-out-difuso/                 # run de data/spruce-difuso/ (gitignored)
+out-facil/                  # run de data/spruce/                       (gitignored)
+out-difuso/                 # run de data/spruce-difuso/                (gitignored)
+out-spruce-url/             # run desde URL https://github.com/dan-divy/spruce (gitignored)
 out/                        # default si no se pasa --out-dir, no asumir contenido
-.cache/repos/               # repos clonados por el agente (gitignored)
+.cache/repos/               # repos clonados por el agente              (gitignored)
 ```
 
 Principios que conviene preservar:
 
 - **El pipeline solo conoce `LLMProvider`**: nunca importa SDKs concretos. Añadir un proveedor nuevo es: clase nueva en `providers/`, entrada en `_REGISTRY`, `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS`. Cero cambios en `pipeline.py` o `cli.py`.
-- **Dos modelos por proveedor**: el del pipeline (`--model`, defaults en `DEFAULT_MODELS`) puede ser barato/free porque solo hace texto→texto; el del agente (`--agent-model`, defaults en `DEFAULT_AGENT_MODELS`) necesita function-calling — por eso para Google el default del agente es `gemini-2.5-flash` y no `gemma-3-27b-it`.
+- **Dos modelos por proveedor**: el del pipeline (`--model`, defaults en `DEFAULT_MODELS`) puede ser barato/free porque solo hace texto→texto; el del agente (`--agent-model`, defaults en `DEFAULT_AGENT_MODELS`) necesita function-calling — por eso para Google el default del agente es `gemini-2.5-flash-lite` y no `gemma-4-31b-it`.
 - **El agente despacha tools, el provider solo expone un turno.** `LLMProvider.chat(messages, tools)` devuelve la decisión del modelo (texto o `tool_calls`); el bucle agéntico vive en `discovery/agent.py`. Esto mantiene la responsabilidad de "saber del SDK" dentro del provider y la de "saber del repo" dentro de `discovery/`.
 - **Prompts inline** en `pipeline.py` y `discovery/prompts.py` mientras sean pocos. Si crecen mucho, extraer a `normalizer/prompts/*.md`.
 - **Layout flat** (no `src/`) para que `python -m normalizer` funcione sin `pip install -e .`, aunque la instalación también está soportada.
