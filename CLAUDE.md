@@ -102,7 +102,12 @@ out/                        # default si no se pasa --out-dir, no asumir conteni
 .cache/repos/               # repos clonados por el agente              (gitignored)
 ```
 
-**Sobre `notes/`:** archivo por sesión grande con el formato `YYYY-MM-DD-<tema>.md`. Recoge el *qué se hizo y por qué* — útil como input para la memoria del TFG y para reconstruir el razonamiento detrás de un commit meses después. No es el estado actual (eso vive en CLAUDE.md) ni reemplaza al historial git: es la narrativa que conecta varios commits relacionados. Crear una nota nueva solo si la sesión cierra un hito o introduce una decisión arquitectural que querrías recordar.
+**Sobre `notes/`:** material complementario para la memoria del TFG. Dos tipos:
+
+- **Logs de sesión** con formato `YYYY-MM-DD-<tema>.md`: el *qué se hizo y por qué* de una sesión grande, útil para reconstruir el razonamiento detrás de varios commits relacionados. Crear solo si la sesión cierra un hito o introduce una decisión arquitectural.
+- **Documentos vivos** con nombre temático sin fecha (p. ej. `proceso-agentico-explicado.md`): explicación conceptual de partes del código pensada para defender el TFG y nutrir la memoria. Crecen a medida que se exploran nuevos aspectos.
+
+Ninguno es el estado actual (eso vive en CLAUDE.md) ni reemplaza al historial git.
 
 Principios que conviene preservar:
 
