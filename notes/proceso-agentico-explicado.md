@@ -15,6 +15,8 @@ Documento vivo que recoge cómo funciona el agente de descubrimiento del prototi
 - [A. Cuántas peticiones consume un run del agente](#a-cuántas-peticiones-consume-un-run-del-agente)
 - [B. El modelo del agente es intercambiable vía CLI](#b-el-modelo-del-agente-es-intercambiable-vía-cli)
 - [C. Alternativas gratuitas a Google con cuota suficiente](#c-alternativas-gratuitas-a-google-con-cuota-suficiente)
+- [D. Los formatos de function calling y por qué seguimos el de OpenAI](#d-los-formatos-de-function-calling-y-por-qué-seguimos-el-de-openai)
+- [E. Sobre Groq como proveedor (contexto para defender la elección)](#e-sobre-groq-como-proveedor-contexto-para-defender-la-elección)
 
 ---
 
@@ -352,16 +354,30 @@ Por eso `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS` son diccionarios separados, no
 
 Google ahoga enseguida con tools (20 RPD en el tier gratis de `gemini-2.5-flash-lite`). Tres opciones para iterar más cómodamente:
 
-### Groq — top pick
+### Groq — top pick (implementado)
 
-Free tier muy generoso (orden de magnitud ~14k peticiones/día en `llama-3.3-70b-versatile`), latencia muy baja, API **compatible con OpenAI**, modelos con function-calling sólido. Encaja porque:
+Free tier muy generoso (orden de magnitud ~14k peticiones/día en `llama-3.3-70b-versatile`), latencia muy baja, API **compatible con OpenAI**, hospeda modelos open-weight. Encajó porque:
 
 - Cuota cómoda para iterar.
-- Implementar `GroqProvider` se reduce a copiar `GoogleProvider` y cambiar el cliente.
+- Implementar `GroqProvider` se redujo a copiar `GoogleProvider` y cambiar el cliente (~100 líneas).
 - Sin tarjeta, basta cuenta gratis.
-- **Y de paso tacha el cuasirequisito de "segundo proveedor" para la siguiente reunión** — dos pájaros de un tiro.
+- Cierra el cuasirequisito de "segundo proveedor" del TFG.
 
-Modelos con tool-use: `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`.
+**Aviso empírico: no todos los modelos del catálogo de Groq sirven para tool-use con la API OpenAI-compatible.** Se probaron cuatro candidatos contra el repo Spruce; solo uno funciona:
+
+| Modelo | Resultado |
+|---|---|
+| `llama-3.1-8b-instant` | ❌ emite function calls en formato markup (`<function=...>`) en vez del slot estructurado → `tool_use_failed` |
+| `llama-3.3-70b-versatile` | ❌ mismo problema que el 8B |
+| `openai/gpt-oss-20b` | ❌ usa el slot correcto pero emite JSON malformado en los argumentos |
+| `openai/gpt-oss-120b` | ❌ chain-of-thought en voz alta que el parser de Groq no consigue separar → `output_parse_failed` |
+| `qwen/qwen3-32b` | ✅ funciona consistentemente |
+
+Por eso el default del agente en Groq es **`qwen/qwen3-32b`**. Los Llama siguen valiendo para el **pipeline** (texto-a-texto, sin tools).
+
+El motivo de fondo de estos fallos está en el apéndice D: los modelos están entrenados con formatos de function calling distintos, y solo aquellos entrenados específicamente para el formato OpenAI estructurado funcionan limpiamente en una API OpenAI-compatible.
+
+**Validación end-to-end** sobre `https://github.com/dan-divy/spruce` con `--provider groq` (modelo agente `qwen/qwen3-32b`, modelo pipeline `llama-3.3-70b-versatile`, salida en `out-spruce-groq/`): **10/11 entidades del UML manual** recuperadas. Falta POSTS porque Qwen seleccionó solo los 4 schemas Mongoose y no leyó las rutas donde se hace `posts.push({...})` — limitación del exploration behavior del modelo del agente, no del provider. Aparece `key_invokes` como sobre-normalización menor.
 
 ### Ollama local — opción nuclear
 
@@ -383,3 +399,194 @@ Free tier con `mistral-small-latest` y `open-mistral-nemo`, ambos con function-c
 2. Cierra el cuasirequisito de "multi-proveedor" del TFG en el mismo movimiento.
 3. La API OpenAI-compatible se podrá reusar para añadir OpenAI/OpenRouter/Anthropic con esfuerzo aún menor.
 4. Los modelos Llama 3.3 70B son competitivos para esta tarea.
+
+---
+
+## D. Los formatos de function calling y por qué seguimos el de OpenAI
+
+### Por qué hay varios formatos
+
+"Function calling" **no es un estándar único**. Apareció en mitad de 2023 cuando OpenAI lo lanzó en su API. Cada proveedor que vino después (Anthropic, Google) implementó su propia versión, parecida pero no idéntica. Y por el otro lado, los LLMs en sí están entrenados para emitir function calls en uno u otro formato según sus datos de entrenamiento.
+
+Hay **dos planos** que confunden si no los separas:
+
+1. **El formato de la API del proveedor** (cómo declaras tools en la petición HTTP y cómo vienen los results en la respuesta).
+2. **El formato que el modelo emite internamente** (cómo está entrenado para "decir quiero llamar X").
+
+Lo normal es que el servidor del proveedor traduzca entre los dos. Lo anormal — el caso de Llama-en-Groq — es cuando el modelo emite un formato y la API espera otro y la traducción falla.
+
+### Los cuatro formatos que están en circulación
+
+**1. OpenAI (el de facto)** — lanzado mid-2023. La mayoría de proveedores ofrecen "OpenAI-compatible APIs" que lo replican exacto.
+
+```json
+// Petición: tools
+[{"type": "function", "function": {"name": "list_dir", "description": "...", "parameters": {...JSON Schema...}}}]
+
+// Respuesta: assistant message
+{"role": "assistant", "content": null,
+ "tool_calls": [{"id": "call_abc123", "type": "function",
+                 "function": {"name": "list_dir", "arguments": "{\"path\":\"models/\"}"}}]}
+
+// Resultado de tool de vuelta
+{"role": "tool", "tool_call_id": "call_abc123", "content": "..."}
+```
+
+Cada call tiene **id único**, los results se emparejan por id, los `arguments` van como **string JSON** (no objeto), las tools son una lista plana.
+
+Lo usan: OpenAI, Groq, Together AI, Fireworks, Mistral, DeepSeek, OpenRouter, vLLM, llama.cpp servidor… prácticamente todos los providers comerciales y self-hosted.
+
+**2. Anthropic (Claude)** — más nuevo (finales 2023). Estructura distinta pero conceptualmente parecida.
+
+```json
+// Petición
+{"tools": [{"name": "list_dir", "description": "...", "input_schema": {...}}]}
+
+// Respuesta: content como array de blocks
+{"content": [
+  {"type": "text", "text": "Voy a explorar..."},
+  {"type": "tool_use", "id": "toolu_xxx", "name": "list_dir", "input": {"path": "models/"}}
+]}
+
+// Resultado de vuelta
+{"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_xxx", "content": "..."}]}
+```
+
+Diferencias clave: el `content` es **array de blocks**, no string. Los results van con rol `user` (no `tool`). Los arguments ya vienen como **objeto JSON** (no string). Empareja por id.
+
+**3. Google Gemini** — otra variante. Lo más distintivo: **no usa IDs, empareja por nombre de función**.
+
+```python
+# Petición
+tools=[Tool(function_declarations=[FunctionDeclaration(name="list_dir", ...)])]
+
+# Respuesta: parts dentro del content
+candidate.content.parts = [Part(function_call=FunctionCall(name="list_dir", args={"path": "models/"}))]
+
+# Resultado de vuelta
+Content(role="user", parts=[Part.from_function_response(name="list_dir", response={"result": "..."})])
+```
+
+Estructura de **parts** dentro de un content, role del result es **`user`** (no `tool`), no hay IDs, el matching se hace por **nombre de función**. Esto último es una limitación real: si el modelo llama a la misma tool dos veces en un turno, no puedes asociar limpiamente cada result a su call.
+
+**4. Markup/texto (el que rompe Llama-en-Groq)** — algunos modelos están entrenados para emitir function calls como **texto literal con marcadores**, no como campo estructurado. Meta entrenó Llama 3.1+ con un formato propio:
+
+```
+<|python_tag|>list_dir.call(path="models/")<|eom_id|>
+```
+
+O Llama 3.2/3.3 con variantes:
+
+```
+<function=list_dir>{"path": "models/"}</function>
+```
+
+El modelo emite eso como **texto plano dentro de `content`**. Funciona bien si el cliente sabe parsearlo (servidores Llama-specific), pero **falla cuando lo metes detrás de una API OpenAI-compatible** porque el modelo emite markup y la API espera el slot estructurado `tool_calls`. Eso es exactamente lo que pasa con los Llama en Groq.
+
+### ¿Qué formato usamos nosotros?
+
+**Internamente seguimos la forma de OpenAI**, traducida a dataclasses neutras en `providers/base.py`:
+
+```python
+@dataclass
+class ToolSpec:                    # ↔ OpenAI's "function" block
+    name: str
+    description: str
+    parameters: dict[str, Any]     # JSON Schema, igual que OpenAI
+
+@dataclass
+class ToolCall:                    # ↔ OpenAI's "tool_calls[]" entry
+    id: str                        # call_id único
+    name: str
+    arguments: dict[str, Any]      # ya deserializado a dict (OpenAI lo da string)
+
+@dataclass
+class Message:                     # ↔ OpenAI's "messages[]" entry
+    role: Role                     # "system" / "user" / "assistant" / "tool"
+    content: str | None
+    tool_calls: list[ToolCall]     # solo si role=assistant
+    tool_call_id: str | None       # solo si role=tool (id para OpenAI/Groq)
+    tool_name: str | None          # solo si role=tool (nombre para Gemini)
+    raw: Any                       # objeto crudo del SDK por si hay que reusarlo
+```
+
+Y cada provider traduce a/desde su formato nativo:
+
+- `GoogleProvider._to_gemini_tools` / `_to_gemini_contents` → traducen al formato Gemini (parts, function_call, role=`user` con function_response, matching por nombre).
+- `GroqProvider._to_groq_tools` / `_to_groq_messages` → pasan al formato OpenAI casi 1:1 (es justo lo que Groq espera).
+
+Por eso `GroqProvider` es más corto que `GoogleProvider`: el formato interno es casi idéntico al de Groq.
+
+### ¿Por qué OpenAI y no otro?
+
+Tres razones, en orden de peso:
+
+1. **Es el de facto estándar.** Si tu abstracción interna se parece a OpenAI, integrar un proveedor nuevo es trivial cuando ese proveedor ofrece "OpenAI-compatible API" (que es casi todos los que no son OpenAI/Anthropic/Google). Se vio claro en Groq: 100 líneas y va.
+2. **El matching por id es estrictamente más expresivo que el matching por nombre.** Permite que el modelo llame a la misma tool varias veces en un turno y emparejar cada result a su call. Gemini no puede.
+3. **JSON Schema para parámetros** es el formato que toda la industria adoptó. No hay alternativa real.
+
+**¿Es el más usado?** Sí, sin duda. La frase "OpenAI-compatible API" es marketing precisamente porque ese formato se convirtió en el estándar al que todo el mundo apunta. Anthropic y Google tienen sus propios formatos pero la mayoría de SDKs de terceros (LangChain, LlamaIndex…) abstraen primero al formato OpenAI y traducen desde ahí.
+
+### Implicación práctica al elegir un modelo
+
+Cuando elijas un modelo para el agente, dos preguntas:
+
+1. **¿El proveedor expone una API que respeta el formato OpenAI?** Casi todos sí.
+2. **¿Está el modelo entrenado para emitir function calls en ese formato (estructurado) o en markup?** Esto es lo difícil de averiguar a priori — solo se ve probando.
+
+Heurística rápida:
+
+- **Modelos de OpenAI, Anthropic, Google nativos** → entrenados específicamente para sus APIs, funcionan bien con sus propios formatos.
+- **OpenAI `gpt-oss-*`** → open-source de OpenAI, *en principio* entrenados para el formato estructurado, *en la práctica* dan problemas en Groq (CoT no separable, JSON truncado).
+- **Qwen 2.5+ / Qwen3** → Alibaba entrenó tool-use compatible con OpenAI. Funciona consistentemente.
+- **Mistral** → idem, compatible con OpenAI.
+- **Llama 3.1+** → markup nativo, **roto contra OpenAI-compat APIs** salvo que el servidor traduzca (algunos lo hacen, Groq no).
+
+---
+
+## E. Sobre Groq como proveedor (contexto para defender la elección)
+
+### Quiénes son
+
+Startup estadounidense fundada en 2016 por **Jonathan Ross**, uno de los ingenieros originales del TPU de Google. Sede en Mountain View. Hardware especializado primero, servicio cloud después. Han levantado bastante capital (varios cientos de millones, valoración ~2-3B USD a 2024).
+
+### Su tesis técnica
+
+GPUs (NVIDIA) son **chips de propósito general** optimizados para entrenamiento de modelos: muchísima paralelización masiva, mucha memoria. Buenos para "muchas operaciones a la vez". Pero la **inferencia** (correr un modelo ya entrenado para generar texto) tiene un patrón de cómputo distinto: es esencialmente **secuencial** — cada token depende del anterior. Las GPUs lo hacen, pero infrautilizando recursos.
+
+Groq diseñó un chip propio llamado **LPU (Language Processing Unit)** específicamente para inferencia de modelos de lenguaje. Arquitectura determinista, sin caché, pipeline optimizado para generación token-a-token. El resultado es **velocidad**: a igualdad de modelo, Groq genera 5-10× más tokens/seg que la misma inferencia en GPU.
+
+Para que te hagas una idea: Llama 3.3 70B en Groq da ~250-500 tokens/seg sostenidos. En OpenAI o Anthropic estás en el rango 30-80 tokens/seg. Esta velocidad es su diferenciador y el motivo por el que la gente los conoce.
+
+### Lo que sí hacen y lo que no
+
+**No entrenan modelos propios.** No hay un "modelo Groq" como hay un "GPT" o un "Claude". Toman modelos open-weight (publicados gratis por sus creadores) y los corren en su hardware. Los principales:
+
+- **Llama** (Meta) — familia 3.1, 3.3.
+- **Mistral** y **Mixtral** — modelos europeos open-weight.
+- **Qwen** (Alibaba) — modelos chinos.
+- **gpt-oss** (OpenAI open-source) — open-weight de OpenAI.
+
+Cuando llamas a la API de Groq pidiendo `qwen/qwen3-32b`, estás hablando con el **modelo de Alibaba**, hospedado en hardware de Groq. El modelo lo podrías correr en local con Ollama si tuvieras la GPU; Groq solo te da la velocidad y la disponibilidad.
+
+### Modelo de negocio y free tier
+
+Cobran por token vía API (precios más baratos que OpenAI/Anthropic) y venden hardware/clusters a empresas. Su free tier es **deliberadamente generoso** por dos razones:
+
+1. **Captar developers.** La velocidad vende sola en cuanto la pruebas.
+2. **Su coste marginal es bajo.** Como el hardware es más eficiente, regalar inferencia les sale más barato.
+
+Cuota free típica: 30 RPM y ~14k req/día en `llama-3.3-70b-versatile`. Comparado con los 20 RPD de Google es otra liga.
+
+### Por qué encaja con el TFG (más allá de la cuota)
+
+- **Es la "cara amable" de los modelos open-source.** Para la memoria: "el prototipo no depende de un proveedor cerrado; usamos modelos open-weight (Qwen3-32B de Alibaba, Llama 3.3 de Meta) corridos en infraestructura comercial (Groq) que es intercambiable con correrlos en local (Ollama)".
+- **API OpenAI-compatible** = el estándar de facto en la industria. Añadir Anthropic u OpenAI luego es trivial sobre el mismo patrón.
+- **Demuestra RU-7** (independencia de proveedor) con dos providers de naturaleza muy distinta: Google (modelos propietarios) vs Groq (modelos abiertos). Argumento defensivo bueno.
+
+### Trampa de nombres
+
+**Groq** (con **q**) — la empresa de inferencia, fundada 2016 por Jonathan Ross (ex-Google TPU).
+**Grok** (con **k**) — el chatbot de xAI (la empresa de Elon Musk), lanzado 2023.
+
+Son **dos cosas distintas y sin relación**. Groq es anterior; han demandado a xAI varias veces por la confusión. Importante pronunciarlo/escribirlo bien en la defensa.
