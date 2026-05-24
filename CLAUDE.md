@@ -94,12 +94,15 @@ normalizer/
 data/
 ├── spruce/                 # 4 schemas Mongoose (caso fácil)
 └── spruce-difuso/          # 8 archivos de servidor sin schemas (caso realista)
+notes/                      # notas de sesión (YYYY-MM-DD-<tema>.md); contexto histórico complementario a CLAUDE.md
 out-facil/                  # run de data/spruce/                       (gitignored)
 out-difuso/                 # run de data/spruce-difuso/                (gitignored)
 out-spruce-url/             # run desde URL https://github.com/dan-divy/spruce (gitignored)
 out/                        # default si no se pasa --out-dir, no asumir contenido
 .cache/repos/               # repos clonados por el agente              (gitignored)
 ```
+
+**Sobre `notes/`:** archivo por sesión grande con el formato `YYYY-MM-DD-<tema>.md`. Recoge el *qué se hizo y por qué* — útil como input para la memoria del TFG y para reconstruir el razonamiento detrás de un commit meses después. No es el estado actual (eso vive en CLAUDE.md) ni reemplaza al historial git: es la narrativa que conecta varios commits relacionados. Crear una nota nueva solo si la sesión cierra un hito o introduce una decisión arquitectural que querrías recordar.
 
 Principios que conviene preservar:
 
