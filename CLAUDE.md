@@ -74,11 +74,16 @@ normalizer/
 ├── __init__.py
 ├── __main__.py             # `python -m normalizer` → cli.main
 ├── cli.py                  # click CLI: --provider, --model, --agent-model, --out-dir
-├── pipeline.py             # 4 pasos + 3 prompts inline (analyze, design, ddl)
+├── pipeline.py             # 4 pasos; los prompts se cargan desde normalizer/prompts/
+├── prompts/                # prompts como .md intercambiables sin tocar Python
+│   ├── __init__.py         # carga al importar: ANALYZE, DESIGN, DDL, DISCOVERY_SYSTEM
+│   ├── analyze.md          # paso 1 del pipeline (placeholder {evidence})
+│   ├── design.md           # paso 2 del pipeline (placeholder {analysis})
+│   ├── ddl.md              # paso 3 del pipeline (placeholder {design})
+│   └── discovery_system.md # system prompt del agente de descubrimiento
 ├── discovery/              # agente que descubre evidencia desde URL de repo
 │   ├── __init__.py         # expone discover_from_url()
 │   ├── agent.py            # bucle chat()-tools hasta `done` o presupuesto agotado
-│   ├── prompts.py          # SYSTEM_PROMPT del agente
 │   ├── tools.py            # ToolSpecs + dispatch (list_dir, read_file, grep, select_evidence, done)
 │   ├── filesystem.py       # filtrado del árbol y validación anti path-traversal
 │   └── repo.py             # git clone --depth 1 con cache en .cache/repos/
@@ -101,7 +106,7 @@ Principios que conviene preservar:
 - **El pipeline solo conoce `LLMProvider`**: nunca importa SDKs concretos. Añadir un proveedor nuevo es: clase nueva en `providers/`, entrada en `_REGISTRY`, `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS`. Cero cambios en `pipeline.py` o `cli.py`.
 - **Dos modelos por proveedor**: el del pipeline (`--model`, defaults en `DEFAULT_MODELS`) puede ser barato/free porque solo hace texto→texto; el del agente (`--agent-model`, defaults en `DEFAULT_AGENT_MODELS`) necesita function-calling — por eso para Google el default del agente es `gemini-2.5-flash-lite` y no `gemma-4-31b-it`.
 - **El agente despacha tools, el provider solo expone un turno.** `LLMProvider.chat(messages, tools)` devuelve la decisión del modelo (texto o `tool_calls`); el bucle agéntico vive en `discovery/agent.py`. Esto mantiene la responsabilidad de "saber del SDK" dentro del provider y la de "saber del repo" dentro de `discovery/`.
-- **Prompts inline** en `pipeline.py` y `discovery/prompts.py` mientras sean pocos. Si crecen mucho, extraer a `normalizer/prompts/*.md`.
+- **Prompts en `normalizer/prompts/*.md`**, intercambiables editando el archivo sin tocar Python. `__init__.py` los carga al importar y los expone como `ANALYZE`, `DESIGN`, `DDL`, `DISCOVERY_SYSTEM`. Los del pipeline tienen placeholders `{evidence}`/`{analysis}`/`{design}` (formato `str.format`); el del agente no. Cuidado al `.format()` un prompt cuyo contenido tiene `{...}` literales (caso de `discovery_system.md`, con `new Schema({...})` en los ejemplos): por eso no se le aplica `.format()` en el código actual.
 - **Layout flat** (no `src/`) para que `python -m normalizer` funcione sin `pip install -e .`, aunque la instalación también está soportada.
 - **Los prompts no asumen Mongoose ni schemas explícitos.** Hablan de "evidencia heterogénea" (schemas, consultas, ejemplos, accesos en código). Si se cambian, mantener este principio.
 

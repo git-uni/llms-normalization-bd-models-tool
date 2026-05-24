@@ -12,13 +12,13 @@ directorio curado.
 from pathlib import Path
 
 from normalizer.discovery.filesystem import build_tree_summary
-from normalizer.discovery.prompts import SYSTEM_PROMPT
 from normalizer.discovery.repo import clone_repo
 from normalizer.discovery.tools import (
     ALL_TOOLS,
     DiscoveryState,
     dispatch,
 )
+from normalizer.prompts import DISCOVERY_SYSTEM
 from normalizer.providers import LLMProvider, Message
 
 MAX_ITERS = 20
@@ -41,7 +41,7 @@ def discover_from_url(
     tree = build_tree_summary(repo_root)
 
     messages: list[Message] = [
-        Message(role="system", content=SYSTEM_PROMPT),
+        Message(role="system", content=DISCOVERY_SYSTEM),
         Message(
             role="user",
             content=(
