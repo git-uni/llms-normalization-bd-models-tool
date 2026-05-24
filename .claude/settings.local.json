@@ -10,7 +10,9 @@
       "Bash(cp /tmp/spruce/routes/chat.js                  data/spruce-difuso/route_chat.js)",
       "Bash(cp /tmp/spruce/routes/settings.js              data/spruce-difuso/route_settings.js)",
       "Bash(cp /tmp/spruce/routes/api/v1/index.js          data/spruce-difuso/route_api_v1.js)",
-      "Bash(cp /tmp/spruce/routes/developer/api.js         data/spruce-difuso/route_developer_api.js)"
+      "Bash(cp /tmp/spruce/routes/developer/api.js         data/spruce-difuso/route_developer_api.js)",
+      "Bash(find /c/Users/dani/llms-usage-normalization-bd-models/data/spruce* -type f)",
+      "Bash(python *)"
     ]
   }
 }

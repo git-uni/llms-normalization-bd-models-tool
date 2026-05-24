@@ -51,11 +51,13 @@ Dos datasets, ambos derivados del repositorio [Spruce](https://github.com/dan-di
 5. Abstracción de proveedor LLM con `GoogleProvider` registrado (`normalizer/providers/`).
 6. **Caso fácil validado** end-to-end con `data/spruce/` y `gemma-3-27b-it`: el `04_ddl.sql` generado es prácticamente idéntico al DDL que el autor obtenía manualmente en chat.
 7. **Caso difuso validado** con `data/spruce-difuso/` (mismo modelo): se recuperan las 11 entidades del UML manual + dos tablas extra legítimas (`post_comments` y `post_likes`) que normalizan los arrays anidados de posts. Se añadió al `PROMPT_DESIGN` una regla explícita de **reconciliación de atributos redundantes** (cuando dos columnas distintas referencian el mismo registro de otra tabla, conservar solo una FK canónica) — eso eliminó la duplicidad `posts.author_id` + `posts.authorID` que aparecía en la primera pasada.
+8. **Agente de descubrimiento desde URL implementado** (`normalizer/discovery/`, RU-1.3 + RU-5): si el `INPUT_PATH` empieza por `http(s)://` o `git@`, la CLI clona el repo (cache en `.cache/repos/`), un agente LLM con tool-use (`list_dir`, `read_file`, `grep`, `select_evidence`, `done`) localiza los archivos relevantes y los deposita en `out/00_discovery/evidence/` junto con una traza `discovery.md`. El pipeline lineal corre a continuación sin cambios sobre ese directorio. Pendiente validar end-to-end sobre `https://github.com/dan-divy/spruce`.
 
 **Siguiente:**
 
-1. **Cuasirequisito de la próxima reunión:** implementar al menos un proveedor LLM adicional (Anthropic u OpenAI) usando la abstracción ya existente en `normalizer/providers/`. Es el camino más corto para satisfacer RU-7 (independencia del proveedor) en la demo.
-2. Cuando se vuelva a iterar sobre la calidad del DDL: hay puntos menores conocidos que el autor decidió **no atacar ahora** porque "más o menos funciona" — el `04_ddl.sql` se emite envuelto en ` ```sql ... ``` ` (no es ejecutable tal cual sin pelar el cerco), y se usa `BOOLEAN` que Oracle no tiene nativo en versiones <23. Si en el futuro se fija una versión Oracle objetivo o se necesita ejecutar el SQL automáticamente, esos dos puntos vuelven a ser relevantes.
+1. **Validar el agente de descubrimiento end-to-end** sobre `https://github.com/dan-divy/spruce` y comparar el DDL resultante con `out-facil/04_ddl.sql`. Esperado: equivalencia cualitativa (mismas 11 entidades del UML manual).
+2. **Cuasirequisito de la próxima reunión:** implementar al menos un proveedor LLM adicional (Anthropic u OpenAI) usando la abstracción ya existente en `normalizer/providers/`. Cualquier nuevo provider debe implementar `generate()` *y* `chat()` para que pueda usarse también como agente; si solo implementa `generate()` queda inutilizable para el flujo de URL.
+3. Cuando se vuelva a iterar sobre la calidad del DDL: hay puntos menores conocidos que el autor decidió **no atacar ahora** porque "más o menos funciona" — el `04_ddl.sql` se emite envuelto en ` ```sql ... ``` ` (no es ejecutable tal cual sin pelar el cerco), y se usa `BOOLEAN` que Oracle no tiene nativo en versiones <23. Si en el futuro se fija una versión Oracle objetivo o se necesita ejecutar el SQL automáticamente, esos dos puntos vuelven a ser relevantes.
 
 **Convención de directorios de salida:** cada dataset se ejecuta a su propio `--out-dir` (`out-facil/`, `out-difuso/`, etc.) para no pisarse. El directorio `out/` por defecto NO debe asumirse vinculado a ningún dataset concreto: en este momento contiene un run pisado y no es comparable.
 
@@ -67,24 +69,34 @@ Dos datasets, ambos derivados del repositorio [Spruce](https://github.com/dan-di
 normalizer/
 ├── __init__.py
 ├── __main__.py             # `python -m normalizer` → cli.main
-├── cli.py                  # click CLI: --provider, --model, --out-dir
+├── cli.py                  # click CLI: --provider, --model, --agent-model, --out-dir
 ├── pipeline.py             # 4 pasos + 3 prompts inline (analyze, design, ddl)
+├── discovery/              # agente que descubre evidencia desde URL de repo
+│   ├── __init__.py         # expone discover_from_url()
+│   ├── agent.py            # bucle chat()-tools hasta `done` o presupuesto agotado
+│   ├── prompts.py          # SYSTEM_PROMPT del agente
+│   ├── tools.py            # ToolSpecs + dispatch (list_dir, read_file, grep, select_evidence, done)
+│   ├── filesystem.py       # filtrado del árbol y validación anti path-traversal
+│   └── repo.py             # git clone --depth 1 con cache en .cache/repos/
 └── providers/
-    ├── base.py             # Protocol LLMProvider (name, model, generate(prompt))
-    ├── google.py           # GoogleProvider (gemma-3-27b-it por defecto)
-    └── __init__.py         # registry + build_provider() + available_providers()
+    ├── base.py             # Protocol LLMProvider con generate() y chat() + dataclasses (Message, ToolSpec, ToolCall, ChatResponse)
+    ├── google.py           # GoogleProvider: generate() y chat() con function-calling
+    └── __init__.py         # registry + build_provider(for_agent=...) + DEFAULT_MODELS / DEFAULT_AGENT_MODELS
 data/
 ├── spruce/                 # 4 schemas Mongoose (caso fácil)
 └── spruce-difuso/          # 8 archivos de servidor sin schemas (caso realista)
 out-facil/                  # run de data/spruce/        (gitignored)
 out-difuso/                 # run de data/spruce-difuso/ (gitignored)
 out/                        # default si no se pasa --out-dir, no asumir contenido
+.cache/repos/               # repos clonados por el agente (gitignored)
 ```
 
 Principios que conviene preservar:
 
-- **El pipeline solo conoce `LLMProvider`**: nunca importa SDKs concretos. Añadir un proveedor nuevo es: clase nueva en `providers/`, entrada en `_REGISTRY` y `DEFAULT_MODELS`. Cero cambios en `pipeline.py` o `cli.py`.
-- **Prompts inline** en `pipeline.py` mientras sean ~3 y se iteren con frecuencia. Si crecen mucho, extraer a `normalizer/prompts/*.md`.
+- **El pipeline solo conoce `LLMProvider`**: nunca importa SDKs concretos. Añadir un proveedor nuevo es: clase nueva en `providers/`, entrada en `_REGISTRY`, `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS`. Cero cambios en `pipeline.py` o `cli.py`.
+- **Dos modelos por proveedor**: el del pipeline (`--model`, defaults en `DEFAULT_MODELS`) puede ser barato/free porque solo hace texto→texto; el del agente (`--agent-model`, defaults en `DEFAULT_AGENT_MODELS`) necesita function-calling — por eso para Google el default del agente es `gemini-2.5-flash` y no `gemma-3-27b-it`.
+- **El agente despacha tools, el provider solo expone un turno.** `LLMProvider.chat(messages, tools)` devuelve la decisión del modelo (texto o `tool_calls`); el bucle agéntico vive en `discovery/agent.py`. Esto mantiene la responsabilidad de "saber del SDK" dentro del provider y la de "saber del repo" dentro de `discovery/`.
+- **Prompts inline** en `pipeline.py` y `discovery/prompts.py` mientras sean pocos. Si crecen mucho, extraer a `normalizer/prompts/*.md`.
 - **Layout flat** (no `src/`) para que `python -m normalizer` funcione sin `pip install -e .`, aunque la instalación también está soportada.
 - **Los prompts no asumen Mongoose ni schemas explícitos.** Hablan de "evidencia heterogénea" (schemas, consultas, ejemplos, accesos en código). Si se cambian, mantener este principio.
 
@@ -146,13 +158,69 @@ Esta secuencia de pasos es una referencia para diseñar el pipeline del prototip
 
 Requisitos de usuario de la herramienta final:
 
-- **RU-1** — Formatos de entrada: archivo de schemas (RU-1.1), URL de repositorio (RU-1.2), texto directo (RU-1.3)
-- **RU-2** — Análisis automático del modelo documental (entidades, atributos, relaciones)
-- **RU-3** — Generación de modelo relacional normalizado (PKs, FKs, sin redundancia)
-- **RU-4** — Generación de DDL SQL
-- **RU-5** — Elección de LLM por el usuario
-- **RU-6** — Independencia del modelo LLM concreto
-- **RU-7** — Independencia del proveedor de API (Anthropic, OpenAI, Google…)
+RU-1. Suministro del modelo de datos de entrada
+El usuario debe poder proporcionar al sistema el modelo de base de datos desnormalizado que se quiere analizar, a través de distintos mecanismos según el grado de elaboración del material disponible.
+RU-1.1 Carga desde archivo de schemas
+El usuario debe poder seleccionar un único archivo que contenga la definición explícita de los schemas de una base de datos documental (por ejemplo, schemas Mongoose en JavaScript) y entregárselo al sistema como entrada.
+RU-1.2 Carga desde directorio de evidencia heterogénea
+El usuario debe poder proporcionar un conjunto de archivos previamente curados que contengan evidencia heterogénea del modelo documental: schemas explícitos, consultas, operaciones de escritura, ejemplos de documentos, accesos a campos desde código de aplicación, comentarios, etc..) Y obtener un resultado igualmente útil cuando no exista una declaración explicita de schemas.
+
+RU-1.3 Análisis a partir de la URL de un repositorio
+El usuario debe poder proporcionar únicamente la URL pública de un repositorio de código que contenga una aplicación basada en una base de datos documental, sin necesidad de seleccionar manualmente los archivos relevantes ni de preparar ningún material previo.
+RU-2. Análisis del modelo documental
+El usuario debe poder obtener, a partir de la entrada proporcionada, una descripción comprensible del modelo documental subyacente que le permita conocer cómo se ha interpretado su material.
+RU-2.1 Identificación de entidades y atributos
+El usuario debe poder conocer qué entidades (colecciones de documentos) se han identificado en su entrada, así como los atributos que componen cada una y, en la medida de lo posible, sus tipos de datos.
+RU-2.2 Detección de relaciones implícitas
+El usuario debe poder conocer las relaciones entre entidades que se han detectado, distinguiendo entre referencias por identificador, documentos embebidos y arrays anidados, incluso cuando estas relaciones no estuvieran declaradas formalmente en su material.
+RU-2.3 Trazabilidad del análisis
+El usuario debe poder consultar un documento intermedio que explique con qué evidencias se ha llegado a cada entidad, atributo o relación detectados, de modo que pueda validar o discutir el razonamiento del sistema.
+RU-3. Generación del modelo relacional normalizado
+El usuario debe poder obtener, a partir del modelo documental analizado, un modelo relacional normalizado equivalente que le sirva como base de partida para una migración o un rediseño.
+RU-3.1 Diseño de tablas, claves primarias y foráneas
+El usuario debe obtener un modelo relacional con tablas, claves primarias bien definidas y claves foráneas explícitas para las relaciones detectadas.
+RU-3.2 Eliminación de redundancias
+El usuario debe obtener un modelo relacional que minimice las redundancias presentes en el modelo documental original: arrays embebidos normalizados en tablas hijas, valores duplicados en distintos documentos consolidados en tablas independientes y atributos repetidos por denormalización reconciliados en una única columna canónica.
+RU-3.3 Generación de DDL Oracle
+El usuario debe poder obtener el modelo relacional final como un conjunto de sentencias DDL compatibles con Oracle (CREATE TABLE, claves primarias, claves foráneas y restricciones).
+RU-4. Independencia y configuración del proveedor de LLM
+El usuario no debe quedar atado a un único proveedor de LLM, ni a un único modelo dentro de un proveedor.
+RU-4.1 Elección del proveedor
+El usuario debe poder elegir, en el momento de invocar la herramienta, qué proveedor de LLM se utilizará (por ejemplo, Google, Anthropic, OpenAI).
+RU-4.2 Elección del modelo concreto
+El usuario debe poder seleccionar, dentro del proveedor elegido, el modelo concreto a emplear (por ejemplo, distintos modelos de la misma familia).
+RU-4.3 Gestión segura de credenciales
+El usuario debe poder configurar las credenciales (API keys) de los proveedores sin tener que modificar el código de la herramienta y sin que éstas queden registradas en repositorios públicos.
+RU-5. Uso de agentes para análisis de repositorios
+El usuario debe poder delegar en agentes inteligentes la tarea de localizar dentro de un repositorio cuál es la información relevante para reconstruir el modelo documental.
+RU-5.1 Descubrimiento autónomo de archivos relevantes
+El usuario debe poder confiar en que, dada únicamente la URL de un repositorio, los agentes localicen por sí mismos los archivos que contienen evidencia útil del modelo documental, sin necesidad de que el usuario los identifique o los aporte manualmente.
+RU-5.2 Justificación de las decisiones del agente
+El usuario debe poder consultar una traza o explicación de por qué el agente ha seleccionado unos archivos y descartado otros, para poder confiar en su criterio o corregirlo.
+RU-6. Interacción del usuario con el resultado mediante agentes
+El usuario debe poder no sólo recibir un resultado final estático, sino dialogar con el sistema para refinarlo según su criterio.
+RU-6.1 Revisión y modificación guiada del modelo relacional
+Una vez generado el modelo relacional, el usuario debe poder solicitar cambios en lenguaje natural (renombrar entidades, fusionar tablas, dividir una entidad, reinterpretar una relación, etc.), y un agente debe encargarse de aplicar esos cambios manteniendo la coherencia del modelo y del DDL resultante.
+RU-6.2 Iteración hasta resultado satisfactorio
+El usuario debe poder iterar varias rondas de refinamiento con el agente hasta dar por bueno el modelo, sin tener que reiniciar todo el pipeline desde cero en cada cambio.
+RU-7. Interfaz de uso de la herramienta
+El usuario debe poder utilizar la herramienta mediante una interfaz adecuada a su perfil, ya sea técnica o no técnica.
+RU-7.1 Interfaz de línea de comandos (CLI)
+El usuario debe poder utilizar la herramienta desde una interfaz de línea de comandos, de modo que pueda integrarla en pipelines automatizados o utilizarla en entornos sin escritorio gráfico.
+RU-7.2 Interfaz gráfica de usuario (GUI)
+El usuario debe poder utilizar la herramienta desde una interfaz gráfica que le permita cargar la entrada de forma visual, seguir el avance del proceso, inspeccionar los resultados intermedios, visualizar el modelo relacional generado y dialogar con el agente de refinamiento, sin necesidad de conocer la sintaxis de la línea de comandos.
+RU-8. Inspección de los resultados intermedios
+El usuario debe poder inspeccionar todos los artefactos producidos por el sistema durante el proceso, no sólo el DDL final, para entender, depurar y comparar ejecuciones.
+RU-8.1 Acceso a los artefactos por fases
+El usuario debe poder acceder a los resultados de cada fase del proceso (entrada agregada, análisis del modelo documental, diseño relacional, DDL final) como archivos independientes que pueda abrir y consultar.
+RU-8.2 Aislamiento de ejecuciones
+El usuario debe poder lanzar varias ejecuciones sobre distintos casos de prueba sin que los resultados de una sobrescriban los de otra.
+RU-9. Prototipo CLI
+El usuario debe poder disponer de un prototipo en línea de comandos que cubra el flujo completo de la herramienta para los casos de entrada de tipo archivo y directorio curado.
+RU-9.1 Ejecución end-to-end
+El usuario del prototipo debe poder, mediante una única invocación, ejecutar todo el proceso de transformación (lectura, análisis, diseño, DDL) y obtener el DDL Oracle final sobre los datasets de prueba.
+RU-9.2 Validación frente al modelo de referencia
+El usuario debe poder validar el prototipo comparando cualitativamente su salida con el modelo relacional de referencia elaborado manualmente para el repositorio de prueba seleccionado(Spruce).
 
 ### Contexto profesional del autor
 
