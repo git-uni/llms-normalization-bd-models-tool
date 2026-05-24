@@ -12,7 +12,9 @@ _REGISTRY: dict[str, type] = {
 }
 
 DEFAULT_MODELS: dict[str, str] = {
-    "google": "gemma-3-27b-it",
+    # gemma-3-27b-it fue retirado por Google (mayo 2026); gemma-4-31b-it es
+    # su sucesor directo dentro del catálogo gratuito.
+    "google": "gemma-4-31b-it",
 }
 
 # Modelos por defecto para el agente de descubrimiento (requieren tool-use).

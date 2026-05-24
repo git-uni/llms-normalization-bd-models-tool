@@ -39,6 +39,13 @@ class DiscoveryState:
     def __post_init__(self) -> None:
         self.discovery_dir.mkdir(parents=True, exist_ok=True)
         self.evidence_dir = self.discovery_dir / "evidence"
+        # Limpiar evidencia de runs anteriores para evitar leaks entre
+        # ejecuciones (lo que pasó cuando un retry externo añadió archivos
+        # sobre los del run anterior).
+        if self.evidence_dir.exists():
+            for item in self.evidence_dir.iterdir():
+                if item.is_file():
+                    item.unlink()
         self.evidence_dir.mkdir(parents=True, exist_ok=True)
 
     def add_selection(self, rel_path: str, reason: str) -> SelectedEvidence:

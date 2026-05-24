@@ -31,10 +31,7 @@ class GoogleProvider:
         self._client = genai.Client(api_key=api_key)
 
     def generate(self, prompt: str) -> str:
-        response = self._client.models.generate_content(
-            model=self.model,
-            contents=prompt,
-        )
+        response = self._call_with_retry(contents=prompt, config=None)
         return response.text or ""
 
     def chat(
@@ -84,11 +81,12 @@ class GoogleProvider:
 
 
     def _call_with_retry(self, *, contents, config):
+        kwargs = {"model": self.model, "contents": contents}
+        if config is not None:
+            kwargs["config"] = config
         for attempt in range(_MAX_RETRIES):
             try:
-                return self._client.models.generate_content(
-                    model=self.model, contents=contents, config=config
-                )
+                return self._client.models.generate_content(**kwargs)
             except genai_errors.ClientError as exc:
                 if getattr(exc, "code", None) != 429 or attempt == _MAX_RETRIES - 1:
                     raise
