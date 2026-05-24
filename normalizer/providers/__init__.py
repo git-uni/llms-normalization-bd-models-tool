@@ -6,15 +6,20 @@ from normalizer.providers.base import (
     ToolSpec,
 )
 from normalizer.providers.google import GoogleProvider
+from normalizer.providers.groq import GroqProvider
 
 _REGISTRY: dict[str, type] = {
     "google": GoogleProvider,
+    "groq": GroqProvider,
 }
 
 DEFAULT_MODELS: dict[str, str] = {
     # gemma-3-27b-it fue retirado por Google (mayo 2026); gemma-4-31b-it es
     # su sucesor directo dentro del catálogo gratuito.
     "google": "gemma-4-31b-it",
+    # Llama 3.3 70B: calidad alta y plenamente capaz para los prompts del
+    # pipeline (texto→texto). En el tier gratis de Groq tiene cuota holgada.
+    "groq": "llama-3.3-70b-versatile",
 }
 
 # Modelos por defecto para el agente de descubrimiento (requieren tool-use).
@@ -23,6 +28,9 @@ DEFAULT_AGENT_MODELS: dict[str, str] = {
     # gemini-2.5-flash-lite: function-calling y 10 RPM en free tier
     # (gemini-2.5-flash es solo 5 RPM y se agota enseguida con un agente).
     "google": "gemini-2.5-flash-lite",
+    # Llama 3.1 8B Instant: rápido, function-calling sólido y cuota muy
+    # generosa en Groq — encaja con un bucle agéntico de varias iteraciones.
+    "groq": "llama-3.1-8b-instant",
 }
 
 

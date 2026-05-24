@@ -74,7 +74,8 @@ def discover_from_url(
                 Message(
                     role="tool",
                     content=result,
-                    tool_call_id=call.name,
+                    tool_call_id=call.id,
+                    tool_name=call.name,
                 )
             )
 

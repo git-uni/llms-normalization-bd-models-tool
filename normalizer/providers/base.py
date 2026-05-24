@@ -30,7 +30,10 @@ class ToolCall:
 class Message:
     """Mensaje del historial de chat.
 
-    - `role="tool"` requiere `tool_call_id` (a qué llamada responde).
+    - `role="tool"` requiere `tool_call_id` (id de la llamada respondida; lo
+      usan OpenAI/Groq/Anthropic) y `tool_name` (nombre de la función; lo usa
+      Gemini, que empareja por nombre en lugar de por id). Conviene rellenar
+      ambos para que el mensaje funcione contra cualquier proveedor.
     - `role="assistant"` puede traer `tool_calls` además (o en lugar) de texto.
     - `raw` guarda el objeto original del SDK del proveedor para que el
       provider pueda reinyectarlo en turnos siguientes sin reconstruirlo.
@@ -40,6 +43,7 @@ class Message:
     content: str | None = None
     tool_calls: list[ToolCall] = field(default_factory=list)
     tool_call_id: str | None = None
+    tool_name: str | None = None
     raw: Any = None
 
 

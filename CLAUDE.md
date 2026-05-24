@@ -16,17 +16,18 @@ La "evidencia" es heterogénea: schemas explícitos cuando los hay, pero tambié
 
 - Lenguaje: **Python 3.11+**.
 - API por defecto: **Google Generative AI** vía SDK `google-genai`. Dos modelos por proveedor: el del pipeline (`gemma-4-31b-it`, free, solo texto) y el del agente de descubrimiento (`gemini-2.5-flash-lite`, free, con function-calling). Recomendación inicial de los tutores fue `gemma-3-27b-it`; Google lo retiró en mayo 2026 y se actualizó a `gemma-4-31b-it`.
+- **Segundo proveedor implementado: Groq** vía SDK `groq` (API OpenAI-compatible). Defaults: `llama-3.3-70b-versatile` para el pipeline y `llama-3.1-8b-instant` para el agente. Resuelve el cuello de cuota del free tier de Google y cierra el cuasirequisito de "multi-proveedor" del TFG.
 - Pipeline: **multi-paso de 4 fases** (lectura → análisis del modelo documental → diseño relacional → DDL Oracle). Cada paso intermedio se guarda en `out/` para inspección.
 - Invocación: **CLI con click** — `python -m normalizer <input>` (los artefactos se escriben en `out/`, incluido el DDL final como `out/04_ddl.sql`).
 - Formato de input: **archivo único, directorio curado o URL de repositorio Git público** (en el caso URL, un agente clona el repo y elige por sí mismo la evidencia — ver sección 2, hito 8).
-- **Abstracción de proveedor LLM ya en su sitio** (`normalizer/providers/` con `Protocol LLMProvider`) con dos métodos: `generate(prompt)` (texto-a-texto) y `chat(messages, tools)` (tool-use, para el agente). La única implementación actual es Google; multi-proveedor real es **cuasirequisito de la siguiente reunión**.
+- **Abstracción de proveedor LLM** (`normalizer/providers/` con `Protocol LLMProvider`) con dos métodos: `generate(prompt)` (texto-a-texto) y `chat(messages, tools)` (tool-use, para el agente). Implementaciones actuales: `GoogleProvider` y `GroqProvider`. Añadir uno más es: clase nueva en `providers/`, entrada en `_REGISTRY`, `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS`.
 - Paradigma del agente de descubrimiento: **tool-use nativo del SDK** (no bucle JSON manual ni framework externo). El bucle vive en `discovery/agent.py`; el provider solo expone un turno. Elegido pensando en que el mismo paradigma se reutilizará para el agente de refinamiento (RU-6) en un hito posterior.
 - Output: DDL compatible con **Oracle**.
 
 **Fuera del alcance de esta fase:**
 
 - UI o frontend.
-- Implementaciones reales de proveedores adicionales (la abstracción está, las clases no).
+- Tercer proveedor adicional (Anthropic, OpenAI, Mistral, etc.). La abstracción está y dos providers ya la usan; añadir un tercero es un copy-paste.
 - **Agente de refinamiento interactivo (RU-6)**: dialogar con el resultado para renombrar entidades, fusionar tablas, etc. La extensión `chat()` del provider ya está preparada para ello, pero el flujo no se implementa todavía.
 - Descubrimiento sobre repos **privados** (autenticación) o **no-Git**.
 
@@ -56,11 +57,12 @@ Dos datasets, ambos derivados del repositorio [Spruce](https://github.com/dan-di
 9. **Validación parcial end-to-end** sobre `https://github.com/dan-divy/spruce` (`out-spruce-url/`): el agente eligió 7 archivos (los 4 schemas + 3 rutas) en 5 iteraciones. El `04_ddl.sql` resultante contiene **las 11 entidades del UML manual** + `post_likes` y `post_comments` legítimas (igual que el `out-difuso/`) + 1 tabla `test_names` que es ruido proveniente de un bug ya corregido (un retry externo metió `test/database_tests.js` en `evidence/` además de los 7 del run real).
 10. **Bugs corregidos tras la validación:** (a) `DiscoveryState.__post_init__` ahora limpia `evidence/` al instanciar para que no leakeen archivos entre runs; (b) `GoogleProvider.generate()` también usa `_call_with_retry` (antes solo lo hacía `chat()`), con backoff que respeta el `retryDelay` del 429 — esto elimina la necesidad de relanzar el proceso desde fuera ante un rate-limit transitorio.
 11. **Rotación de modelos de Google (mayo 2026):** `gemma-3-27b-it` desapareció del catálogo; el nuevo default del pipeline es `gemma-4-31b-it`. El agente usa `gemini-2.5-flash-lite` (10 RPM, 20 RPD en el tier gratis de esta cuenta — suficiente para 1-2 runs por día con un agente de ~5-10 turnos).
+12. **Segundo proveedor implementado: Groq** (`normalizer/providers/groq.py`). API OpenAI-compatible vía SDK `groq`. Defaults: `llama-3.3-70b-versatile` (pipeline) y `llama-3.1-8b-instant` (agente). Cuota muy holgada en free tier — desbloquea iterar sin chocarse contra los rate-limits de Google. `Message` se amplió con un campo `tool_name` porque Gemini empareja respuestas de tools por nombre y OpenAI/Groq por id; ahora se rellenan ambos en el bucle del agente.
 
 **Siguiente:**
 
-1. **Re-validar el flujo completo URL → DDL** cuando se resetee la cuota diaria de `gemini-2.5-flash-lite`. Con los dos bugs corregidos, el `test_names` debería desaparecer del DDL final.
-2. **Cuasirequisito de la próxima reunión:** implementar al menos un proveedor LLM adicional (Anthropic u OpenAI) usando la abstracción ya existente en `normalizer/providers/`. Cualquier nuevo provider debe implementar `generate()` *y* `chat()` para que pueda usarse también como agente; si solo implementa `generate()` queda inutilizable para el flujo de URL.
+1. **Re-validar el flujo completo URL → DDL** con `--provider groq` (free tier holgado evita los problemas que tuvimos con Google). Verificar que `test_names` no aparece tras el fix de `evidence/`.
+2. **Re-validar también con Google** cuando resetee la cuota diaria, para confirmar que ambos providers producen DDLs equivalentes.
 3. Cuando se vuelva a iterar sobre la calidad del DDL: hay puntos menores conocidos que el autor decidió **no atacar ahora** porque "más o menos funciona" — el `04_ddl.sql` se emite envuelto en ` ```sql ... ``` ` (no es ejecutable tal cual sin pelar el cerco), y se usa `BOOLEAN` que Oracle no tiene nativo en versiones <23. Si en el futuro se fija una versión Oracle objetivo o se necesita ejecutar el SQL automáticamente, esos dos puntos vuelven a ser relevantes.
 
 **Convención de directorios de salida:** cada dataset se ejecuta a su propio `--out-dir` (`out-facil/`, `out-difuso/`, etc.) para no pisarse. El directorio `out/` por defecto NO debe asumirse vinculado a ningún dataset concreto: en este momento contiene un run pisado y no es comparable.
@@ -89,7 +91,8 @@ normalizer/
 │   └── repo.py             # git clone --depth 1 con cache en .cache/repos/
 └── providers/
     ├── base.py             # Protocol LLMProvider con generate() y chat() + dataclasses (Message, ToolSpec, ToolCall, ChatResponse)
-    ├── google.py           # GoogleProvider: generate() y chat() con function-calling
+    ├── google.py           # GoogleProvider: SDK google-genai
+    ├── groq.py             # GroqProvider: SDK groq (OpenAI-compatible)
     └── __init__.py         # registry + build_provider(for_agent=...) + DEFAULT_MODELS / DEFAULT_AGENT_MODELS
 data/
 ├── spruce/                 # 4 schemas Mongoose (caso fácil)

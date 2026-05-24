@@ -5,6 +5,7 @@ description = "Prototipo TFG: normalización de schemas MongoDB a DDL Oracle ví
 requires-python = ">=3.11"
 dependencies = [
     "google-genai>=1.0.0",
+    "groq>=0.11.0",
     "click>=8.1.0",
     "python-dotenv>=1.0.0",
 ]

@@ -174,10 +174,10 @@ def _to_gemini_contents(
 
         if msg.role == "tool":
             # En Gemini la respuesta de una tool se manda como rol "user" con un
-            # Part.from_function_response. Nuestro Message.content guarda el
-            # resultado serializado y `tool_call_id` el nombre de la función
-            # (Gemini no usa ids de llamada, hace matching por nombre).
-            tool_name = msg.tool_call_id or ""
+            # Part.from_function_response. Gemini empareja por nombre de la
+            # función, no por id (eso lo usan OpenAI/Groq/Anthropic). Usamos
+            # tool_name por eso; tool_call_id se ignora aquí.
+            tool_name = msg.tool_name or msg.tool_call_id or ""
             contents.append(
                 types.Content(
                     role="user",
