@@ -28,9 +28,13 @@ DEFAULT_AGENT_MODELS: dict[str, str] = {
     # gemini-2.5-flash-lite: function-calling y 10 RPM en free tier
     # (gemini-2.5-flash es solo 5 RPM y se agota enseguida con un agente).
     "google": "gemini-2.5-flash-lite",
-    # Llama 3.1 8B Instant: rápido, function-calling sólido y cuota muy
-    # generosa en Groq — encaja con un bucle agéntico de varias iteraciones.
-    "groq": "llama-3.1-8b-instant",
+    # Los Llama de Groq (8B y 70B) emiten tool calls con sintaxis markup
+    # `<function=...>` en lugar del slot estructurado tool_calls que Groq
+    # espera (formato OpenAI), y la API los rechaza con tool_use_failed.
+    # openai/gpt-oss-20b va por el slot correcto pero a veces emite JSON
+    # truncado en los argumentos. Qwen3-32B respeta el formato y produce
+    # tool_calls válidos de forma consistente.
+    "groq": "qwen/qwen3-32b",
 }
 
 
