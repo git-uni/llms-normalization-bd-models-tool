@@ -98,7 +98,40 @@ Iteraciones: 7 (vs 5 con Google). Total peticiones: 7 agente + 3 pipeline = 10.
 
 La abstracción `LLMProvider` queda demostrada: añadir un tercero (Anthropic, OpenAI, Mistral) es copy-paste con pequeñas adaptaciones de SDK.
 
-## 6. Pendiente
+## 6. Iteración posterior — varianza, segundo modelo y prompt nuevo
 
-- **Re-validar con Google** cuando resetee la cuota, para tener comparativa directa con los dos bugs ya corregidos (limpieza de `evidence/`, retry-on-429 también en `generate()`).
-- **Si la cobertura de Qwen preocupa para defender**: refinar el system prompt del agente para empujar exploración más allá de schemas. Cambiar de modelo (al 120b u otro) no funciona — ya probado.
+Después del primer 10/11 con Qwen, se volvió a correr el mismo input para confirmar consistencia: **6/11**. Qwen había decidido que analytics y keys eran "secundarios". Esto destapó el problema de **alta varianza** del agente entre runs sobre el mismo input.
+
+Antes de tocar el prompt, se intentó descartar que fuera un problema de modelo cubriendo el catálogo completo de Groq:
+
+- `meta-llama/llama-4-scout-17b-16e-instruct` (Llama 4): ✅ funciona, recupera POSTS por primera vez pero pierde analytics/keys → 6/11 + 2 extras legítimas.
+- `groq/compound`, `groq/compound-mini`: ❌ rechazan tools del cliente (`'tool calling' is not supported with this model`) — vienen con sus propias tools internas precableadas.
+
+Conclusión: dos modelos viables en el free tier de Groq (Qwen3-32B y Llama 4 Scout), con personalidades exploratorias distintas y ninguno alcanza Gemini.
+
+Después se reescribió el system prompt con tres principios nuevos (project-agnostic):
+
+1. **Cobertura sobre parsimonia** (antes: "sé selectivo, mejor 6 que 15"; ahora: "mejor sobre-incluir").
+2. **Prohibido descartar sin inspeccionar** (cierra el agujero "Qwen decide que algo es secundario sin abrirlo").
+3. **Vecindad estructural**: "si encuentras un schema en `X/Y/foo`, lee los hermanos del mismo `X/Y/` antes de cerrar".
+
+Más suelo cuantitativo (≥2 subdirs listados, ≥4 archivos inspeccionados) y obligación de justificar descartes top-level.
+
+Se compactó de ~75 a ~38 líneas eliminando pasos procedimentales que los modelos modernos no necesitan.
+
+Validación con el prompt nuevo:
+
+- **Qwen3-32B**: imposible probarlo, el TPM cap (6000 TPM en free tier) se revienta con el historial acumulado del agente, devolviendo HTTP 413.
+- **Llama 4 Scout**: 7/11 entidades (vs 6/11 antes). Llama 4 **ignora la regla de vecindad estructural** — lee `user.js` pero no toca `room.js`/`keys.js`/`analytics.js` que están en el mismo directorio.
+
+**Conclusión defendible**: el prompt nuevo es mejor (más corto, principios explícitos, project-agnostic), pero **el modelo es el cuello de botella real**. Modelos débiles ignoran instrucciones complejas; la regla está escrita, no se honra. Esto ya estaba documentado en general; este experimento lo confirma empíricamente y queda registrado en el apéndice F de `proceso-agentico-explicado.md`.
+
+## 7. Estado final y siguientes pasos
+
+- Default del agente en Groq: `qwen/qwen3-32b` (mejor cobertura potencial cuando funciona; Llama 4 es alternativa con tradeoff distinto).
+- Default del pipeline en Groq: `llama-3.3-70b-versatile`.
+- Único run vivo en disco: `out-spruce-llama4-v3/` (los intermedios y baselines fueron purgados para mantener el repo limpio).
+
+Pendiente:
+- **Re-validar con Google** cuando resetee la cuota diaria (Gemini debe seguir dando 11/11 con el prompt nuevo, sería bueno confirmar).
+- Si la varianza sigue preocupando para defender: tier dev de Groq (Qwen sin TPM cap) o un tercer provider con Claude/GPT.

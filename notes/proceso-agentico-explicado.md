@@ -17,6 +17,7 @@ Documento vivo que recoge cómo funciona el agente de descubrimiento del prototi
 - [C. Alternativas gratuitas a Google con cuota suficiente](#c-alternativas-gratuitas-a-google-con-cuota-suficiente)
 - [D. Los formatos de function calling y por qué seguimos el de OpenAI](#d-los-formatos-de-function-calling-y-por-qué-seguimos-el-de-openai)
 - [E. Sobre Groq como proveedor (contexto para defender la elección)](#e-sobre-groq-como-proveedor-contexto-para-defender-la-elección)
+- [F. Diseño del system prompt del agente y por qué el modelo es el cuello de botella](#f-diseño-del-system-prompt-del-agente-y-por-qué-el-modelo-es-el-cuello-de-botella)
 
 ---
 
@@ -377,7 +378,13 @@ Por eso el default del agente en Groq es **`qwen/qwen3-32b`**. Los Llama siguen 
 
 El motivo de fondo de estos fallos está en el apéndice D: los modelos están entrenados con formatos de function calling distintos, y solo aquellos entrenados específicamente para el formato OpenAI estructurado funcionan limpiamente en una API OpenAI-compatible.
 
-**Validación end-to-end** sobre `https://github.com/dan-divy/spruce` con `--provider groq` (modelo agente `qwen/qwen3-32b`, modelo pipeline `llama-3.3-70b-versatile`, salida en `out-spruce-groq/`): **10/11 entidades del UML manual** recuperadas. Falta POSTS porque Qwen seleccionó solo los 4 schemas Mongoose y no leyó las rutas donde se hace `posts.push({...})` — limitación del exploration behavior del modelo del agente, no del provider. Aparece `key_invokes` como sobre-normalización menor.
+**Validación end-to-end** sobre `https://github.com/dan-divy/spruce` con `--provider groq`. Resultados observados:
+
+- **Primer run con Qwen3-32B (agente) + Llama 3.3 70B (pipeline):** 10/11 entidades + `key_invokes` (sobre-normalización menor).
+- **Segundo run mismo input mismo modelos:** 6/11 — Qwen decidió que analytics y keys eran "secundarios" y los saltó. **Varianza alta del agente entre runs sobre el mismo input.**
+- **Run con Llama 4 Scout + prompt v3 compacto** (`out-spruce-llama4-v3/`): 7/11 + 2 extras legítimas (post_likes, post_comments). Llama 4 recupera POSTS por primera vez (cruza user.js con routes/), pero pierde keys/analytics aunque están en el mismo directorio que user.js.
+
+Conclusión empírica: los modelos en el free tier de Groq tienen distintas "personalidades exploratorias" — Qwen tiende a leer más schemas pero ignora rutas; Llama 4 lee pocos archivos pero cruza schemas con código de aplicación. Ninguno alcanza el 11/11 de Gemini 2.5 Flash Lite en Google. Más profundo en el apéndice F.
 
 ### Ollama local — opción nuclear
 
@@ -590,3 +597,69 @@ Cuota free típica: 30 RPM y ~14k req/día en `llama-3.3-70b-versatile`. Compara
 **Grok** (con **k**) — el chatbot de xAI (la empresa de Elon Musk), lanzado 2023.
 
 Son **dos cosas distintas y sin relación**. Groq es anterior; han demandado a xAI varias veces por la confusión. Importante pronunciarlo/escribirlo bien en la defensa.
+
+---
+
+## F. Diseño del system prompt del agente y por qué el modelo es el cuello de botella
+
+El system prompt del agente (`normalizer/prompts/discovery_system.md`) ha pasado por dos iteraciones tras los runs iniciales. Esta sección resume las decisiones de diseño y la lección de fondo.
+
+### Versión inicial — y por qué fallaba
+
+La versión original era larga (~75 líneas) e incluía instrucciones como:
+
+> Sé selectivo: el objetivo no es seleccionar muchos archivos sino los imprescindibles para entender el modelo. **Mejor 6 archivos clave que 15 redundantes.**
+
+> Si descartas algo ruidoso a propósito, está bien — **no necesitas justificarlo**, solo no lo selecciones.
+
+Estas frases sesgaban al agente hacia parar pronto. Modelos buenos las calibraban bien (Gemini lograba 11/11); modelos más débiles las sobreinterpretaban y producían cobertura muy variable. Caso concreto: en un run de Qwen3-32B sobre Spruce, el resumen del agente justificaba haber omitido analytics y keys con "no son críticos para la estructura principal" — Qwen tomó nuestra licencia de "descarta sin justificar" y la combinó con un juicio erróneo sobre qué era relevante.
+
+### Versión actual — tres principios de fondo
+
+La revisión (`prompts/discovery_system.md` ~38 líneas) invierte el sesgo y añade reglas explícitas:
+
+1. **Cobertura sobre parsimonia.** "Mejor sobre-incluir que perder una entidad" reemplaza "mejor 6 que 15". Justificación de fondo: el pipeline siguiente puede ignorar evidencia redundante sin coste, pero **no puede inventar entidades que no le pases**. La asimetría de coste justifica el sesgo a sobre-incluir.
+
+2. **Prohibido descartar sin inspeccionar.** "No puedes calificar un archivo o subdirectorio como 'secundario' sin haber abierto su contenido". Convierte una decisión opcional en una obligación: o lees, o no descartas.
+
+3. **Vecindad estructural.** "Si encuentras un schema en `X/Y/foo`, debes inspeccionar los hermanos del mismo `X/Y/` antes de cerrar". Esto **es project-agnostic**: no menciona `models/` ni `routes/` ni ningún path concreto, solo el patrón "los schemas viven juntos". Vale para cualquier layout (Java packages, Go modules, Python `app/db/`, etc.).
+
+Además: suelo cuantitativo (≥2 subdirs listados, ≥4 archivos inspeccionados antes de `done`) y obligación de justificar en el `summary` cada subdirectorio top-level no explorado.
+
+### Por qué NO se baja a paths concretos
+
+Sería tentador añadir "si ves un directorio llamado `models/` o `schemas/`, léelo entero". **No se hace** porque la herramienta tiene que valer para cualquier repo con BD documental, no solo para los que sigan el layout de Spruce. Un repo Java pondría las entidades en `com/foo/entity/`, un proyecto Go en `internal/db/models/`, un Flask app en `app/models.py`. Atar el prompt a nombres concretos lo rompe en cualquier proyecto que no siga la convención asumida.
+
+La heurística "vecindad estructural" es la versión generalizable del mismo principio: **agrupar por proximidad estructural, no por nombre**. Funciona porque "los schemas viven cerca" es invariante del layout.
+
+### La lección de fondo: prompt necesario, no suficiente
+
+Con el prompt nuevo, Llama 4 Scout sobre Spruce subió de 6/11 a 7/11 entre runs distintos — mejora real pero modesta. **Llama 4 ignora la regla de vecindad estructural**: lee `user.js` (en `utils/models/`) y no toca `room.js`/`keys.js`/`analytics.js` aunque son hermanos directos. La regla está, el modelo no la honra.
+
+Esto es la lección defendible:
+
+> **La capacidad del modelo para razonar y seguir instrucciones complejas pone un techo a lo que el prompt puede lograr.**
+
+El prompt es **necesario** (sin él, modelos débiles paran mucho más pronto) pero **no suficiente** (modelos débiles ignoran reglas explícitas). El gradiente observado en Spruce con el prompt nuevo:
+
+| Modelo del agente | Cobertura típica |
+|---|---|
+| Gemini 2.5 Flash Lite (Google) | 11/11 |
+| Qwen3-32B (Groq free) | 6-10 (alta varianza) |
+| Llama 4 Scout (Groq free) | 6-7 (varianza moderada) |
+| Llama 3.x | no funciona (formato markup) |
+
+Esto se conecta con la separación pipeline / agente: el pipeline es tarea estructurada y tolera modelos mid-tier; el agente es razonamiento abierto y exige un modelo de gama alta. Es el cuello de botella real del flujo URL → DDL.
+
+### Palancas para subir el techo
+
+Por orden de coste:
+
+1. **Refinar el prompt** (ya hecho). Coste cero, mejora modesta sobre modelos débiles.
+2. **Subir de modelo en el mismo proveedor.** En Groq significa tier dev (Qwen sin TPM cap). En Google significa Gemini 2.5 Flash o Pro. Coste: dinero o más cuota.
+3. **Añadir un proveedor con un modelo más capable.** Claude Haiku 4.5, GPT-4o-mini. Coste: implementación de un Provider más + tarjeta de crédito.
+4. **Múltiples runs + agregación.** Correr el agente 3 veces y unir las evidencias seleccionadas. Más caro en cuota pero reduce varianza efectiva sin tocar nada del código. Útil si la limitación es varianza, no techo absoluto.
+
+### Implicación para defender el TFG
+
+Esto es un ejemplo concreto de los **límites del approach agéntico**: la calidad de la salida no depende solo del software bien diseñado, depende del modelo que lo ejecuta. La arquitectura es robusta (la abstracción `LLMProvider` permite intercambiar libremente), pero la **cobertura efectiva** sobre un repo nuevo va a fluctuar con el modelo elegido. Hacer esto explícito en la memoria — con la tabla de cobertura por modelo y la lección "el modelo es el cuello de botella" — distingue un TFG técnico riguroso de uno que vende la herramienta como caja negra que "siempre funciona".

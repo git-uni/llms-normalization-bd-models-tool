@@ -64,15 +64,21 @@ Dos datasets, ambos derivados del repositorio [Spruce](https://github.com/dan-di
     - `openai/gpt-oss-120b`: chain-of-thought que el parser de Groq **no consigue separar** del output final → `output_parse_failed`. Es el patrón típico de los modelos tipo o1: razonan en voz alta y Groq espera estructura.
     - **`qwen/qwen3-32b`**: funciona consistentemente con el formato OpenAI estructurado. Es el default del agente en Groq.
     - Los Llama siguen valiendo para el **pipeline** (texto-a-texto, sin tools).
-14. **Validación end-to-end con Groq** (`out-spruce-groq/`, modelo agente `qwen/qwen3-32b`, modelo pipeline `llama-3.3-70b-versatile`): **10/11 entidades** del UML manual recuperadas — falta solo POSTS porque el agente fue menos agresivo explorando que Gemini y solo seleccionó los 4 schemas Mongoose, sin leer las rutas donde se hace `posts.push({...})`. Aparece `key_invokes` como sobre-normalización menor (el `invokes: Number` del schema debería ser columna de `keys`, no tabla aparte). El flujo en sí funciona; la calidad cualitativa es ligeramente inferior al run de Google por menos exploración del agente Qwen, no por bug del provider.
+14. **Validación end-to-end con Groq** (modelo agente `qwen/qwen3-32b`, modelo pipeline `llama-3.3-70b-versatile`): primer run produjo **10/11 entidades** del UML manual + `key_invokes` como sobre-normalización menor. Segundo run sobre el mismo input produjo **6/11**: Qwen decidió que `analytics` y `keys` eran "secundarios" y los saltó. **Varianza alta del agente con Qwen** — los runs oscilan entre 6 y 10 entidades sobre el mismo input. Por eso se forzó iteración del prompt y exploración de más modelos (siguiente hito).
+15. **Catálogo de Groq probado completo para tool-use.** Solo `qwen/qwen3-32b` y `meta-llama/llama-4-scout-17b-16e-instruct` funcionan con la API OpenAI-compatible para nuestro agente. Llama 3.x emite markup en lugar del slot estructurado, `gpt-oss-20b` emite JSON malformado, `gpt-oss-120b` emite chain-of-thought no parseable, y los `groq/compound-*` no aceptan tools del cliente (vienen con sus propias precableadas). Llama 4 recupera POSTS por primera vez (que Qwen suele perder), pero Qwen recupera analytics/keys que Llama 4 suele perder — distintas "personalidades" exploratorias, no Pareto dominado.
+16. **System prompt del agente reescrito** (`prompts/discovery_system.md`): de 75 líneas a 38, project-agnostic, con tres principios nuevos. (a) Cobertura sobre parsimonia: "mejor sobre-incluir que perder una entidad" — antes pedíamos "sé selectivo, mejor 6 archivos que 15" y los modelos débiles paraban demasiado pronto. (b) Prohibido descartar sin inspeccionar: no se puede marcar un archivo o directorio como "secundario" sin haber abierto su contenido. (c) Vecindad estructural: si encuentras un schema en `X/Y/foo`, debes inspeccionar los hermanos en `X/Y/` antes de cerrar — heurística agnóstica del layout que cubre el caso típico "schemas viven juntos". Más un suelo de exploración (≥2 subdirs listados, ≥4 archivos inspeccionados) y obligación de justificar descartes top-level en el `summary`.
+17. **Lección: el modelo es el cuello de botella del agente, no el prompt.** Validación parcial con el prompt nuevo + Llama 4 Scout (`out-spruce-llama4-v3/`): **7/11 entidades** — mejor que el peor run de Qwen (6/11) pero peor que el mejor (10/11) y muy lejos del 11/11 de Gemini. Llama 4 ignora la regla de vecindad estructural (lee `user.js` pero no toca `room.js`/`keys.js`/`analytics.js` que están en el mismo directorio). El prompt nuevo es necesario y mejora la base, pero **la capacidad del modelo para honrar instrucciones complejas pone un techo** que el prompt no puede saltarse. Para Spruce con tool-use: Gemini 2.5 Flash Lite (Google, 11/11) > Qwen3-32B (Groq, 6-10) > Llama 4 Scout (Groq, 6-7) > Llama 3.x (no funciona).
+18. **Qwen3-32B en Groq sufre el TPM cap del free tier** (6000 TPM). Iteraciones con historial moderado (≥6000 tokens en una petición) lo revientan con HTTP 413. El prompt nuevo solo ahorró ~150 tokens, insuficiente. Trabajar este modelo en serio requiere tier dev de pago o trimming agresivo del historial.
 
 **Siguiente:**
 
-1. **Re-validar con Google** cuando resetee la cuota diaria, para tener punto de comparación directo Google vs Groq con los bugs ya corregidos.
-2. Si la cobertura de Qwen3-32B preocupa para la defensa: probar `openai/gpt-oss-120b` como agente, o ajustar el system prompt del agente para empujar más exploración de rutas/handlers además de schemas.
+1. **Re-validar con Google** (Gemini 2.5 Flash Lite) cuando resetee la cuota diaria, con los bugs corregidos y el prompt nuevo. Punto de comparación directo Google vs Groq.
+2. Si la varianza del agente sigue siendo problemática para defender, dos vías:
+   - **Subir de modelo**: tier dev de Groq (Qwen sin TPM cap), o añadir un tercer provider con un modelo más capable (Claude Haiku 4.5, GPT-4o-mini).
+   - **Múltiples runs + agregación**: correr el agente 3 veces y unir las evidencias. Más caro pero baja la varianza efectiva sin tocar prompt.
 3. Cuando se vuelva a iterar sobre la calidad del DDL: hay puntos menores conocidos que el autor decidió **no atacar ahora** porque "más o menos funciona" — el `04_ddl.sql` se emite envuelto en ` ```sql ... ``` ` (no es ejecutable tal cual sin pelar el cerco), y se usa `BOOLEAN` que Oracle no tiene nativo en versiones <23. Si en el futuro se fija una versión Oracle objetivo o se necesita ejecutar el SQL automáticamente, esos dos puntos vuelven a ser relevantes.
 
-**Convención de directorios de salida:** cada dataset se ejecuta a su propio `--out-dir` (`out-facil/`, `out-difuso/`, etc.) para no pisarse. El directorio `out/` por defecto NO debe asumirse vinculado a ningún dataset concreto: en este momento contiene un run pisado y no es comparable.
+**Convención de directorios de salida:** cada run usa su propio `--out-dir` (`out-facil/`, `out-difuso/`, `out-spruce-llama4-v3/`, etc.) para no pisarse. Los runs intermedios suelen purgarse cuando dejan de ser referencia; los actuales en disco se ven con `ls -d out-*`. El directorio `out/` por defecto NO debe asumirse vinculado a ningún dataset concreto.
 
 ---
 
@@ -105,9 +111,10 @@ data/
 ├── spruce/                 # 4 schemas Mongoose (caso fácil)
 └── spruce-difuso/          # 8 archivos de servidor sin schemas (caso realista)
 notes/                      # notas de sesión (YYYY-MM-DD-<tema>.md); contexto histórico complementario a CLAUDE.md
-out-facil/                  # run de data/spruce/                       (gitignored)
-out-difuso/                 # run de data/spruce-difuso/                (gitignored)
-out-spruce-url/             # run desde URL https://github.com/dan-divy/spruce (gitignored)
+out-*/                      # cada run usa su propio --out-dir (gitignored)
+                            # Convención: out-<dataset>[-<variante>]/ p. ej.
+                            #   out-facil/, out-difuso/, out-spruce-url/,
+                            #   out-spruce-llama4-v3/  (el actual en disco)
 out/                        # default si no se pasa --out-dir, no asumir contenido
 .cache/repos/               # repos clonados por el agente              (gitignored)
 ```
