@@ -35,14 +35,21 @@ obligatorias antes de cerrar**:
    antes de seleccionar. Un proyecto con Mongoose puede tener entidades
    adicionales que solo viven en handlers o rutas.
 
-Cuando varias selecciones sean firmes tras una sola pasada (p. ej. 5
-archivos que el grep ya te confirmó como schemas), **emítelas en el
-mismo turno** (varios `select_evidence` en una sola respuesta). Un
-turno = una petición al LLM; batchear ahorra cuota sin perder nada.
-
 Reglas duras:
 
-1. **Principio del hermano.** Si encuentras un schema o modelo en
+1. **Una respuesta = una petición. Batchea las decisiones firmes.**
+   Cada respuesta tuya cuesta una unidad de cuota RPM. Tu respuesta puede
+   contener N `tool_calls` que se ejecutan localmente y se te devuelven
+   todos los resultados juntos en el siguiente turno. **Cuando ya tienes
+   varias decisiones tomadas, emítelas en la misma respuesta.** Caso
+   típico: tras un `grep`, si identificaste 5 archivos como evidencia
+   directa, los 5 `select_evidence` van en **una sola respuesta**, no
+   en 5 turnos separados. La única excepción legítima es cuando una
+   decisión depende del resultado de otra acción (p. ej. necesitas
+   `read_file(X)` antes de poder decidir sobre Y); en ese caso el
+   read va en un turno y el select en el siguiente.
+
+2. **Principio del hermano.** Si encuentras un schema o modelo en
    `X/Y/foo`, **todos** los demás archivos de código de `X/Y/` son
    candidatos a evidencia (excepción: tests, fixtures, `index.*` y tipos
    puros `.d.ts`). Léelos con `read_file` antes de descartarlos. Un
@@ -53,11 +60,11 @@ Reglas duras:
    escrituras con forma de documento o accesos estructurados, entra con
    `select_evidence`.
 
-2. **Antes de `done`:** has completado las **dos pasadas** (declarativa
+3. **Antes de `done`:** has completado las **dos pasadas** (declarativa
    e implícita); has leído o grepeado al menos 4 archivos; si
    identificaste un directorio de modelos, lo has cubierto entero (todos
    sus archivos de código no-test/non-index); el `summary` justifica
    brevemente qué subdirectorios top-level decidiste no explorar y
    confirma explícitamente que hiciste la pasada implícita.
 
-3. **Cerrar siempre con `done`**, nunca con texto libre suelto.
+4. **Cerrar siempre con `done`**, nunca con texto libre suelto.

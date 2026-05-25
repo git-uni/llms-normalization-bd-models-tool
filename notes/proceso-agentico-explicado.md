@@ -303,7 +303,7 @@ Rango realista por run:
 
 **Las dos cuotas son independientes** porque son modelos distintos. Con el agente en `gemini-3.1-flash-lite` (500 RPD, hasta diciembre 2025 era 20 RPD en `2.5-flash-lite`) la cuota diaria deja de ser cuello — pasan a serlo los **15 RPM** porque el agente lanza iteraciones casi seguidas. En Habitica se observó 13/15 RPM y 14/15 RPM en distintos runs; los repos más grandes saturarán y el SDK hará backoff.
 
-**El árbol inicial está incompleto en repos grandes.** `build_tree_summary` corta a 600 entradas con DFS alfabético. En Habitica eso significa que el agente recibe 11 de 12 top-level dirs en su mapa inicial — `website/` no entra. La única razón por la que el agente encuentra los models de Habitica es porque `grep` recorre el filesystem real, no el árbol truncado que vio. Para diagnosticar runs concretos, el árbol que recibe el agente se persiste a `out/00_discovery/tree.txt`. Fix candidato: BFS en lugar de DFS (todos los top-level dirs antes de profundizar), o subir el cap.
+**El árbol inicial fue incompleto en repos grandes hasta el fix de BFS.** `build_tree_summary` ahora hace BFS (no DFS) con cap de 2000 entradas (subido desde 600 al detectar que con DFS alfabético `website/` desaparecía del árbol entero de Habitica). Además los sufijos `.test.js/.spec.ts/...` se omiten del **dump del árbol** (pero no globalmente: los tests siguen siendo leíbles vía `read_file`/`grep` por si contienen fixtures). Para diagnosticar el árbol exacto de un run concreto, se persiste a `out/00_discovery/tree.txt`.
 
 ---
 
@@ -623,12 +623,12 @@ Mejoró cobertura en Llama 4 (6→7 sobre Spruce) y mantuvo 11/11 en Gemini 2.5 
 
 Se elimina la regla "no inventes rutas" (redundante con el error de la tool) y se comprime la enumeración de tools. Caps subidos en código: `MAX_FILES=15→30`, `MAX_ITERS=20→30`.
 
-**v5 (63 líneas, actual):** primer run de Habitica con prompt v4 reveló que el agente hacía solo una pasada `grep` declarativa para schemas Mongoose y cerraba — sin mirar handlers, rutas o seeds donde podía haber evidencia implícita. El v5 añade tres cosas:
-- **"Checklist, no menú"** sobre la lista de tipos de evidencia: en proyectos sin schemas declarados, el modelo vive en las categorías 2-5; encontrar la primera no termina la búsqueda.
-- **Dos pasadas obligatorias antes de `done`**: declarativa (grep schemas) e implícita (preguntarse "de los archivos que el grep no tocó, ¿cuáles podrían tener el modelo en escrituras/accesos/seeds?"). La condición se refuerza en la regla 2 ("antes de done") pidiendo confirmación explícita en el `summary`.
-- **Nudge de batching**: *"cuando varias selecciones sean firmes tras una pasada, emítelas en el mismo turno"*. Un turno = 1 RPM; batchear es la palanca obvia contra el cap de 15 RPM.
+**v5 (actual, evolucionó en dos sub-iteraciones):**
 
-Sobre el v5 hay dos observaciones honestas: (a) la pasada implícita sigue sin ejecutarse de verdad en los runs sobre Habitica — el modelo la afirma en el summary pero el trace registrado lo desmiente, y además el árbol incompleto (ver Apéndice A) le impediría hacerla bien aunque quisiera; (b) el nudge de batching es no determinista — un run con v5 emitió 6 selects + 1 done en un solo turno (4.0/iter); el siguiente con el mismo prompt fue estrictamente 1 tool_call por turno (23/23 iter).
+- **v5.0 (63 líneas):** primer run de Habitica con prompt v4 reveló que el agente hacía solo una pasada `grep` declarativa para schemas Mongoose y cerraba. Tres añadidos: *"checklist, no menú"* sobre la lista de tipos de evidencia (en proyectos sin schemas declarados la evidencia vive en categorías 2-5); **dos pasadas obligatorias antes de `done`** (declarativa con grep + implícita preguntándose qué archivos restantes podrían tener evidencia); **nudge de batching** al final de la sección de estrategia.
+- **v5.1 (~70 líneas, actual):** tras observar que el batching como "tip" no se sostenía entre runs (1.0/iter en uno, 4.0/iter en el siguiente con el mismo prompt), se promocionó a **Regla 1** del bloque de reglas duras con framing operativo sobre RPM: *"Una respuesta = una petición. (...) Tras un grep, si identificaste 5 archivos como evidencia directa, los 5 `select_evidence` van en una sola respuesta, no en 5 turnos separados"* + excepción para dependencias entre decisiones. Acoplado con el fix de BFS en `build_tree_summary` (Apéndice A), el Run G alcanzó 22 archivos en 5 iter / 25 tool_calls (5.0/iter) — el mejor run hasta la fecha sobre Habitica.
+
+Observación honesta sobre v5.1: la regla dura **sube el techo del mejor run** pero **no elimina la varianza** (Run F con el mismo prompt: 1.0/iter, 8 archivos). El comportamiento de batching parece ser una característica latente del modelo en cada corrida, poco influenciable por el prompt. Para forzarlo de verdad la vía es a nivel código (tool `select_evidence_batch(items=[...])` o agrupar `select_evidence` consecutivos en `dispatch()`). Sobre la pasada implícita: sigue siendo no determinista pero ya posible — Run F seleccionó `baseModel.js` fuera del dir de models, que con el árbol DFS anterior nunca habría visto.
 
 ### Por qué NO se baja a paths concretos
 
@@ -636,16 +636,20 @@ Sería tentador añadir "si ves un directorio llamado `models/` o `schemas/`, l�
 
 ### La lección de fondo: prompt necesario, no suficiente
 
-Con cada iteración del prompt la cobertura sube, pero **la varianza entre runs sigue siendo enorme**. Cuatro runs sobre Habitica con prompts v4/v5 y el mismo modelo:
+Con cada iteración del prompt la cobertura sube, pero **la varianza entre runs sigue siendo enorme**. Seis runs sobre Habitica con prompts v4/v5 y el mismo modelo:
 
-| Run | Prompt | Iter | Archivos | Estrategia observada |
+| Run | Prompt + sistema | Iter | Archivos | Estrategia observada |
 |---|---|---|---|---|
 | A | v4 | 14 | 10 | `list_dir`-heavy: explora dirs, lee algunos, selecciona |
 | B | v4 | 7 | 5 | `grep` amplio + selects directos sin `read_file` |
-| C | v5 | 2 | 6 | `grep` declarativo + **batching** (6 selects + done en 1 turno) |
-| D | v5 | 23 | **20** | `grep` + `select_evidence` archivo por archivo, sin batching |
+| C | v5 (nudge batching) | 2 | 6 | `grep` declarativo + **batching** (6 selects + done en 1 turno) |
+| D | v5 (nudge batching) | 23 | 20 | `grep` + `select_evidence` archivo por archivo, sin batching |
+| F | v5 + regla 1 batching + BFS | 10 | 8 | igual que D pero un toque a `baseModel.js` (visible gracias al árbol completo) |
+| **G** | v5 + regla 1 batching + BFS | **5** | **22** | grep + 19 selects batchéados (iter 2) + read user/ + 3 selects (iter 4); cobertura prácticamente completa |
 
-Run D es el único donde la cobertura se acerca al máximo posible del dir de modelos (20 de los ~21 archivos no-test/non-index). Pero la pasada implícita SIGUE sin ejecutarse: el agente nunca grepea por escrituras (`insertOne`, `.push(`) ni lee handlers/rutas — incluso con el prompt v5 que la pide explícitamente. Posibles razones: (a) el árbol incompleto le impide ver candidatos fuera del dir de modelos; (b) el modelo racionaliza el skip ("los schemas explícitos son suficientes") cuando la pasada declarativa fue rica.
+Run G es el mejor en todos los ejes simultáneamente: máxima cobertura, máximo batching, menos iter. Incluye archivos que ningún run anterior cogió (`analytics/registrationEvent.js`, `analytics/subscriptionEvent.js`). Pero NO es determinista: Run F tiene exactamente el mismo prompt y sistema, y se quedó en 8 archivos sin batchear. La regla dura del batching sube el techo del mejor run; no garantiza el comportamiento entre runs.
+
+Sobre la pasada implícita: Run F seleccionó `website/server/libs/baseModel.js` — un archivo fuera del dir de models que **antes del fix BFS no estaba en el árbol**. Pequeña señal de que la pasada implícita empieza a ser posible cuando el árbol cubre los dirs candidatos. Pero el patrón dominante sigue siendo conformarse con la pasada declarativa cuando es rica.
 
 Esto es la lección defendible:
 
@@ -655,7 +659,7 @@ El prompt es **necesario** (sin él, modelos débiles paran muy pronto) pero **n
 
 | Modelo del agente | Cobertura — Spruce | Cobertura — Habitica (rango entre runs) |
 |---|---|---|
-| Gemini 3.1 Flash Lite (Google free) | 11/11 entidades UML | 5–20 archivos models/ según run (alta varianza); DDL 33–36 tablas |
+| Gemini 3.1 Flash Lite (Google free) | 11/11 entidades UML | 5–22 archivos models/ según run (alta varianza); techo = 22/22 con prompt v5 + BFS |
 | Gemini 2.5 Flash Lite (Google free, retirado de facto) | 11/11 | sin datos |
 | Qwen3-32B (Groq free) | 6-10 (alta varianza) | sin datos (TPM free insuficiente) |
 | Llama 4 Scout (Groq free) | 6-7 | sin datos |

@@ -142,10 +142,54 @@ Run D es el primero donde la cobertura del dir de modelos se acerca al máximo: 
 
 **El prompt es necesario pero la varianza del modelo lo sobrescribe.** Dos runs con el mismo prompt v5 dieron 2 iter / 6 archivos / batched vs 23 iter / 20 archivos / sin batchear. La cobertura efectiva del prototipo NO está determinada solo por el código, el prompt y el modelo — también por la estrategia exploratoria que el modelo improvisa en cada run. Para defender el TFG: presentar los rangos observados, no un único número.
 
-### 6.6 Estado real al cerrar la sesión
+### 6.6 Estado real al cerrar la sesión (intermedio)
 
 - `DiscoveryState.turns` + render en `discovery.md`.
 - `out/00_discovery/tree.txt` con el árbol exacto que recibió el agente.
 - Prompt `discovery_system.md` en v5 (63 líneas).
 - Punto 25 añadido a CLAUDE.md con los 4 runs comparados y el descubrimiento del árbol truncado.
 - Próximo candidato más prometedor: **BFS en `build_tree_summary`** para garantizar visibilidad de todos los top-level dirs (bloquea la pasada implícita en repos grandes).
+
+---
+
+## 7. Addendum (misma sesión, sub-iteración final) — BFS + cap 2000 + skip tests + batching como regla dura
+
+Tras commitear lo de §6, el usuario preguntó dos cosas: *"¿por qué limitar a 600 el tree? hay muchas líneas de test que nos podríamos ahorrar"* y *"hay que mantener la calidad del batching, ahorra muchas peticiones"*. Ambas en un commit:
+
+### 7.1 `build_tree_summary` reescrito
+
+- **DFS → BFS**: BFS garantiza que todos los top-level dirs aparezcan antes de profundizar. Con DFS alfabético, en Habitica el cap se consumía dentro de `test/api/v3/...` antes de llegar a `website/`.
+- **`max_entries` 600 → 2000**: ~30K tokens, sigue muy por debajo del cap TPM de 250K. Los 600 originales eran conservadores sin medir.
+- **`TREE_SKIP_SUFFIXES`**: `.test.js`, `.test.ts`, `.spec.js`, `.spec.ts` etc. se omiten del dump del árbol. NO del filtro global: si el agente da con un test por otra vía (grep da hit en un fixture, p. ej.) puede leerlo. La lista de evidencia del prompt sigue mencionando "fixtures, tests" — la asimetría es deliberada (no acaparar el cap del árbol, pero no negar acceso).
+
+Verificación con el repo cacheado de Habitica:
+- Antes: 11 de 12 top-level dirs visibles, 0 entradas bajo `website/`.
+- Ahora: 12/12 top-level dirs, 1516 entradas bajo `website/`, 26 entradas en `website/server/models/`, dirs candidatos a evidencia implícita visibles (`website/server/{controllers,libs,middlewares}/`).
+
+### 7.2 Batching promovido a regla dura
+
+El nudge en la sección de estrategia se reescribió como **Regla 1** del bloque de reglas duras, con framing operativo sobre RPM en vez de "tip":
+
+> **Una respuesta = una petición. Batchea las decisiones firmes.** Cada respuesta tuya cuesta una unidad de cuota RPM. Tu respuesta puede contener N tool_calls que se ejecutan localmente y se te devuelven todos los resultados juntos en el siguiente turno. (...) Tras un grep, si identificaste 5 archivos como evidencia directa, los 5 select_evidence van en una sola respuesta, no en 5 turnos separados. La única excepción legítima es cuando una decisión depende del resultado de otra acción.
+
+### 7.3 Dos runs adicionales mostraron el efecto
+
+| Run | Prompt + sistema | Iter | Tool calls | Archivos | /iter |
+|---|---|---|---|---|---|
+| F | v5.1 + BFS | 10 | 10 | 8 | 1.0 |
+| **G** | v5.1 + BFS | **5** | **25** | **22** | **5.0** |
+
+Run G es el mejor sobre Habitica hasta ahora: 22 archivos cubriendo TODOS los modelos top-level + el subdir `user/` completo + el subdir `analytics/` completo (que nunca apareció en runs previos). El agente emitió 19 selects en un solo turno (iter 2). Pero Run F con la misma config solo dio 8 archivos sin batchear — **la regla dura sube el techo del mejor run sin eliminar la varianza**.
+
+### 7.4 Aprendizaje añadido (refuerza el del v3→v4→v5)
+
+El comportamiento de batching parece ser una característica latente del modelo en cada corrida, **poco influenciable por el prompt aunque sea regla dura**. Para forzar batching realmente, la vía es a nivel código: añadir una tool `select_evidence_batch(items=[...])` o agrupar `select_evidence` consecutivos en `dispatch()`. Queda pendiente como "Siguiente" #3 en CLAUDE.md.
+
+Sobre la pasada implícita: Run F seleccionó `website/server/libs/baseModel.js` — un archivo fuera del dir de models que **con el árbol DFS anterior no era visible**. Pequeña señal de que la pasada implícita empieza a ser posible cuando el árbol cubre los dirs candidatos. Sigue sin ser determinista.
+
+### 7.5 Estado final al cerrar la sesión
+
+- `build_tree_summary` en BFS, cap 2000, skip de tests del dump del árbol.
+- Prompt `discovery_system.md` en v5.1 (batching como regla 1).
+- Punto 26 añadido a CLAUDE.md.
+- "Siguiente" actualizado: #1 retry 5xx Google, #2 validar pasada implícita en repo Mongo-sin-Mongoose, #3 batching a nivel código si la varianza se confirma bloqueante.
