@@ -284,14 +284,16 @@ Depende del tamaño del repo y de cuántas vueltas necesite el agente:
 `N` en runs reales:
 
 - **Repo limpio con schemas explícitos** (Spruce caso fácil, observado): **5-13 iteraciones** según corrida.
-- **Repo realista mediano** (Habitica, observado): **11-14 iteraciones**.
+- **Repo realista mediano** (Habitica, observado tras varios runs con v4/v5): **2 a 23 iteraciones** sobre el mismo input — varianza brutal, depende totalmente de la estrategia que el modelo elija (grep amplio + selects directos = 2 iter; lectura archivo a archivo = 23 iter).
 - **Tope duro:** **30 iteraciones** (`MAX_ITERS` en `agent.py:24`). Se subió de 20 a 30 cuando el prompt v4 empezó a forzar más lecturas para cubrir directorios de modelos enteros.
 
 Rango realista por run:
 
-- Mínimo: **~8 peticiones** (5 agente + 3 pipeline).
+- Mínimo: **~5 peticiones** (2 agente + 3 pipeline).
 - Típico: **~14** (11 agente + 3 pipeline).
 - Máximo: **33** (30 agente + 3 pipeline).
+
+**El número de iter NO es el número de tool_calls.** Cada iteración es una petición al LLM, pero la respuesta puede contener N `tool_calls` ejecutados todos localmente en Python sin nuevas peticiones. Si el modelo batchea, una iteración puede materializar 5-7 acciones (visto: 6 selects + 1 done en un solo turno = 1 RPM). El nudge del prompt v5 lo pide explícitamente, pero el modelo lo respeta de forma inconsistente entre runs. Para inspeccionar exactamente cuándo batchea y cuándo no, `discovery.md` rinde una tabla `Iter | Tool calls` (registrada en `DiscoveryState.turns`).
 
 ### Detalles importantes
 
@@ -301,7 +303,7 @@ Rango realista por run:
 
 **Las dos cuotas son independientes** porque son modelos distintos. Con el agente en `gemini-3.1-flash-lite` (500 RPD, hasta diciembre 2025 era 20 RPD en `2.5-flash-lite`) la cuota diaria deja de ser cuello — pasan a serlo los **15 RPM** porque el agente lanza iteraciones casi seguidas. En Habitica se observó 13/15 RPM y 14/15 RPM en distintos runs; los repos más grandes saturarán y el SDK hará backoff.
 
-**Optimización barata si se vuelve un problema:** enriquecer el árbol inicial con las primeras ~20-30 líneas de cada archivo de código. Hoy el primer mensaje user contiene `build_tree_summary(repo_root)` con solo paths y tamaños; meter heads convertiría el patrón "explorar y decidir" en "filtrar de lo visto", recortando N y atacando el techo de cobertura observado en el run de Habitica.
+**El árbol inicial está incompleto en repos grandes.** `build_tree_summary` corta a 600 entradas con DFS alfabético. En Habitica eso significa que el agente recibe 11 de 12 top-level dirs en su mapa inicial — `website/` no entra. La única razón por la que el agente encuentra los models de Habitica es porque `grep` recorre el filesystem real, no el árbol truncado que vio. Para diagnosticar runs concretos, el árbol que recibe el agente se persiste a `out/00_discovery/tree.txt`. Fix candidato: BFS en lugar de DFS (todos los top-level dirs antes de profundizar), o subir el cap.
 
 ---
 
@@ -615,11 +617,18 @@ El system prompt del agente (`normalizer/prompts/discovery_system.md`) ha pasado
 
 Mejoró cobertura en Llama 4 (6→7 sobre Spruce) y mantuvo 11/11 en Gemini 2.5 Flash Lite, pero Habitica reveló que la regla "inspeccionar hermanos" era ambigua: el modelo listaba el dir, leía 4 de 17 archivos y cerraba con `done` etiquetando el resto como "auxiliares" — exactamente el filtro principal/secundario que el prompt quería evitar, pero aplicado un nivel más adentro.
 
-**v4 (41 líneas, actual):** colapsa los principios 2 y 3 en uno solo — el *"Principio del hermano"* — que dice literalmente *"el filtro principal/secundario lo hace el pipeline posterior, no tú"*. Añade dos cambios estructurales:
+**v4 (41 líneas):** colapsa los principios 2 y 3 en uno solo — el *"Principio del hermano"* — que dice literalmente *"el filtro principal/secundario lo hace el pipeline posterior, no tú"*. Añade dos cambios estructurales:
 - Mención explícita del **árbol filtrado del repo** que el agente ya recibe en su primer mensaje user (antes el prompt no lo nombraba y el agente listaba la raíz innecesariamente).
 - Condición de `done`: si identificaste un dir de modelos, lo has cubierto entero (todos los archivos no-test/non-index/non-`.d.ts`) antes de cerrar.
 
-Se elimina la regla "no inventes rutas" (redundante con el error de la tool) y se comprime la enumeración de tools. Caps subidos en código: `MAX_FILES=15→30`, `MAX_ITERS=20→30`, porque la regla nueva fuerza más lecturas y un repo del tamaño de Habitica (17 archivos solo en `models/`) chocaba contra los caps anteriores.
+Se elimina la regla "no inventes rutas" (redundante con el error de la tool) y se comprime la enumeración de tools. Caps subidos en código: `MAX_FILES=15→30`, `MAX_ITERS=20→30`.
+
+**v5 (63 líneas, actual):** primer run de Habitica con prompt v4 reveló que el agente hacía solo una pasada `grep` declarativa para schemas Mongoose y cerraba — sin mirar handlers, rutas o seeds donde podía haber evidencia implícita. El v5 añade tres cosas:
+- **"Checklist, no menú"** sobre la lista de tipos de evidencia: en proyectos sin schemas declarados, el modelo vive en las categorías 2-5; encontrar la primera no termina la búsqueda.
+- **Dos pasadas obligatorias antes de `done`**: declarativa (grep schemas) e implícita (preguntarse "de los archivos que el grep no tocó, ¿cuáles podrían tener el modelo en escrituras/accesos/seeds?"). La condición se refuerza en la regla 2 ("antes de done") pidiendo confirmación explícita en el `summary`.
+- **Nudge de batching**: *"cuando varias selecciones sean firmes tras una pasada, emítelas en el mismo turno"*. Un turno = 1 RPM; batchear es la palanca obvia contra el cap de 15 RPM.
+
+Sobre el v5 hay dos observaciones honestas: (a) la pasada implícita sigue sin ejecutarse de verdad en los runs sobre Habitica — el modelo la afirma en el summary pero el trace registrado lo desmiente, y además el árbol incompleto (ver Apéndice A) le impediría hacerla bien aunque quisiera; (b) el nudge de batching es no determinista — un run con v5 emitió 6 selects + 1 done en un solo turno (4.0/iter); el siguiente con el mismo prompt fue estrictamente 1 tool_call por turno (23/23 iter).
 
 ### Por qué NO se baja a paths concretos
 
@@ -627,7 +636,16 @@ Sería tentador añadir "si ves un directorio llamado `models/` o `schemas/`, l�
 
 ### La lección de fondo: prompt necesario, no suficiente
 
-Con cada iteración del prompt la cobertura sube modestamente, pero **nunca se cierra del todo**. Llama 4 Scout sigue ignorando la vecindad estructural en Spruce. Gemini 3.1 Flash Lite la honra parcialmente en Habitica (10/17 archivos del dir de modelos en v4 vs 4/17 en v3) pero su propio `summary` sigue diciendo *"priorizando los archivos de modelo"* — la heurística mental del modelo de filtrar por "centralidad" sobrevive al prompt.
+Con cada iteración del prompt la cobertura sube, pero **la varianza entre runs sigue siendo enorme**. Cuatro runs sobre Habitica con prompts v4/v5 y el mismo modelo:
+
+| Run | Prompt | Iter | Archivos | Estrategia observada |
+|---|---|---|---|---|
+| A | v4 | 14 | 10 | `list_dir`-heavy: explora dirs, lee algunos, selecciona |
+| B | v4 | 7 | 5 | `grep` amplio + selects directos sin `read_file` |
+| C | v5 | 2 | 6 | `grep` declarativo + **batching** (6 selects + done en 1 turno) |
+| D | v5 | 23 | **20** | `grep` + `select_evidence` archivo por archivo, sin batching |
+
+Run D es el único donde la cobertura se acerca al máximo posible del dir de modelos (20 de los ~21 archivos no-test/non-index). Pero la pasada implícita SIGUE sin ejecutarse: el agente nunca grepea por escrituras (`insertOne`, `.push(`) ni lee handlers/rutas — incluso con el prompt v5 que la pide explícitamente. Posibles razones: (a) el árbol incompleto le impide ver candidatos fuera del dir de modelos; (b) el modelo racionaliza el skip ("los schemas explícitos son suficientes") cuando la pasada declarativa fue rica.
 
 Esto es la lección defendible:
 
@@ -635,9 +653,9 @@ Esto es la lección defendible:
 
 El prompt es **necesario** (sin él, modelos débiles paran muy pronto) pero **no suficiente** (incluso modelos buenos siguen aplicando heurísticas latentes). El gradiente observado:
 
-| Modelo del agente | Cobertura — Spruce | Cobertura — Habitica |
+| Modelo del agente | Cobertura — Spruce | Cobertura — Habitica (rango entre runs) |
 |---|---|---|
-| Gemini 3.1 Flash Lite (Google free) | 11/11 entidades UML | 10/17 archivos models/, 33 tablas DDL |
+| Gemini 3.1 Flash Lite (Google free) | 11/11 entidades UML | 5–20 archivos models/ según run (alta varianza); DDL 33–36 tablas |
 | Gemini 2.5 Flash Lite (Google free, retirado de facto) | 11/11 | sin datos |
 | Qwen3-32B (Groq free) | 6-10 (alta varianza) | sin datos (TPM free insuficiente) |
 | Llama 4 Scout (Groq free) | 6-7 | sin datos |

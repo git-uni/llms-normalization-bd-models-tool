@@ -28,11 +28,25 @@ class SelectedEvidence:
 
 
 @dataclass
+class TurnTrace:
+    """Registro compacto de las tool_calls que el modelo emitió en un turno.
+
+    Sirve para inspeccionar a posteriori si el agente batchea varios calls en
+    una sola petición o va uno a uno — relevante para entender el consumo de
+    RPM en repos grandes.
+    """
+
+    iter: int
+    calls: list[str]
+
+
+@dataclass
 class DiscoveryState:
     repo_root: Path
     discovery_dir: Path
     evidence_dir: Path = field(init=False)
     selected: list[SelectedEvidence] = field(default_factory=list)
+    turns: list[TurnTrace] = field(default_factory=list)
     is_done: bool = False
     summary: str | None = None
 

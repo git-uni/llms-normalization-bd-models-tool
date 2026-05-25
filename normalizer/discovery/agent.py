@@ -16,10 +16,11 @@ from normalizer.discovery.repo import clone_repo
 from normalizer.discovery.tools import (
     ALL_TOOLS,
     DiscoveryState,
+    TurnTrace,
     dispatch,
 )
 from normalizer.prompts import DISCOVERY_SYSTEM
-from normalizer.providers import LLMProvider, Message
+from normalizer.providers import LLMProvider, Message, ToolCall
 
 MAX_ITERS = 30
 MAX_FILES = 30
@@ -39,6 +40,11 @@ def discover_from_url(
         discovery_dir=out_dir / "00_discovery",
     )
     tree = build_tree_summary(repo_root)
+    # Persistimos el árbol que el agente recibe en su primer mensaje user.
+    # Es la única "vista del mundo" que tiene de partida; saber exactamente
+    # qué vio es imprescindible para diagnosticar runs donde el agente "no
+    # encuentra" algo que sí está en el repo.
+    (state.discovery_dir / "tree.txt").write_text(tree, encoding="utf-8")
 
     messages: list[Message] = [
         Message(role="system", content=DISCOVERY_SYSTEM),
@@ -61,12 +67,22 @@ def discover_from_url(
         if not response.tool_calls:
             # El modelo respondió sin tools — sin `done` no hay forma de
             # cerrar limpio. Lo forzamos como terminación con aviso.
+            state.turns.append(
+                TurnTrace(iter=iters_used, calls=["(respuesta sin tool_calls)"])
+            )
             state.summary = (
                 (state.summary or "")
                 + "\n\n[WARN: el agente respondió sin llamar a tools; "
                 "cerrando con la evidencia recopilada hasta ahora.]"
             )
             break
+
+        state.turns.append(
+            TurnTrace(
+                iter=iters_used,
+                calls=[_format_call(c) for c in response.tool_calls],
+            )
+        )
 
         for call in response.tool_calls:
             result = dispatch(call, state, max_files=max_files)
@@ -93,16 +109,58 @@ def discover_from_url(
     return state.evidence_dir
 
 
+def _format_call(call: ToolCall) -> str:
+    """Formato compacto de una ToolCall para la traza turno a turno.
+
+    Renderiza solo lo que distingue una llamada de otra (paths, patrones); el
+    `reason` de `select_evidence` y el `summary` de `done` se truncan porque
+    son texto libre y harían ilegible la tabla.
+    """
+    args = call.arguments or {}
+    if call.name == "select_evidence":
+        path = args.get("path", "")
+        reason = args.get("reason", "")
+        if len(reason) > 40:
+            reason = reason[:37] + "…"
+        return f"select_evidence({path}, reason={reason!r})"
+    if call.name == "grep":
+        pattern = args.get("pattern", "")
+        glob = args.get("glob", "")
+        glob_part = f", glob={glob!r}" if glob else ""
+        return f"grep({pattern!r}{glob_part})"
+    if call.name == "done":
+        return "done(summary=…)"
+    if "path" in args:
+        return f"{call.name}({args['path']})"
+    return f"{call.name}({args})"
+
+
 def _write_discovery_md(
     state: DiscoveryState, *, url: str, iters_used: int
 ) -> None:
+    total_calls = sum(len(t.calls) for t in state.turns)
+    if iters_used:
+        calls_line = (
+            f"- **Tool calls totales:** {total_calls} "
+            f"(promedio {total_calls / iters_used:.1f}/iter)"
+        )
+    else:
+        calls_line = f"- **Tool calls totales:** {total_calls}"
+    tree_path = state.discovery_dir / "tree.txt"
+    tree_lines = (
+        len(tree_path.read_text(encoding="utf-8").splitlines())
+        if tree_path.exists()
+        else 0
+    )
     lines: list[str] = [
         "# Descubrimiento del modelo documental",
         "",
         f"- **URL:** {url}",
         f"- **Repo local:** `{state.repo_root}`",
         f"- **Iteraciones del agente:** {iters_used}",
+        calls_line,
         f"- **Archivos seleccionados:** {len(state.selected)}",
+        f"- **Árbol entregado al agente:** `tree.txt` ({tree_lines} líneas)",
         "",
         "## Resumen del agente",
         "",
@@ -119,6 +177,26 @@ def _write_discovery_md(
             lines.append("")
             lines.append(sel.reason)
             lines.append("")
+
+    lines.extend(
+        [
+            "## Traza turno a turno",
+            "",
+            "Cada fila es una iteración del bucle = una petición al LLM. "
+            "Una fila con varias entradas significa que el modelo batcheó "
+            "esos tool_calls en una sola respuesta (consume 1 RPM en vez de N).",
+            "",
+            "| Iter | Tool calls |",
+            "| ---: | --- |",
+        ]
+    )
+    if not state.turns:
+        lines.append("| — | (sin turnos registrados) |")
+    else:
+        for turn in state.turns:
+            calls_md = "<br>".join(f"`{c}`" for c in turn.calls)
+            lines.append(f"| {turn.iter} | {calls_md} |")
+    lines.append("")
 
     (state.discovery_dir / "discovery.md").write_text(
         "\n".join(lines), encoding="utf-8"

@@ -102,3 +102,50 @@ Mejora real: **2.5× la cobertura del dir de models/** (4/17 → 10/17) y +3 tab
   1. Manifiesto enriquecido del árbol inicial (ataque del techo de cobertura).
   2. Retry de 5xx en `GoogleProvider` (independiente).
   3. RPM cap como cuello latente en repos mayores que Habitica.
+
+---
+
+## 6. Addendum (misma sesión, sub-iteración) — Trace, prompt v5 y árbol incompleto
+
+Tras cerrar el v4, dos preguntas del usuario abrieron tres mejoras encadenadas:
+
+### 6.1 Trace turno a turno
+
+*"¿Lanzó un read_file por cada uno consumiendo 1 petición? ¿Un select_evidence por cada uno?"* — no había forma de saberlo desde `discovery.md`, que solo registra la lista final. Cambio: `DiscoveryState.turns: list[TurnTrace]` con `iter` y `calls` (formateados compactos), renderizado al final de `discovery.md` como tabla `| Iter | Tool calls |`. Reveló inmediatamente que la afirmación de `proceso-agentico-explicado.md` de "casi siempre 1 por turno" era falsa: la varianza entre runs es enorme.
+
+### 6.2 Prompt v5 (41 → 63 líneas)
+
+*"El agente hizo un grep declarativo y no fue más allá — ¿no debería preguntarse qué archivos restantes podrían tener evidencia implícita?"*. Tres cambios:
+
+- **"Checklist, no menú"** sobre la lista de cinco tipos de evidencia. En proyectos sin schemas declarados la evidencia vive en categorías 2-5; encontrar la primera no termina la búsqueda.
+- **Dos pasadas obligatorias antes de `done`**: declarativa (grep de schemas) e implícita (mirar el árbol restante y preguntarse qué podría contener escrituras/accesos/seeds). La condición se refuerza en la regla 2 pidiendo confirmación explícita en el `summary`.
+- **Nudge de batching**: emite varios `select_evidence` en el mismo turno cuando las decisiones son firmes. Un turno = 1 RPM.
+
+### 6.3 Logging del árbol y descubrimiento del árbol incompleto
+
+*"¿Puede ser que el árbol que tiene el agente sea incompleto?"*. Se loggea ahora a `out/00_discovery/tree.txt`. Inspección sobre Habitica: el árbol corta a 600 entradas con DFS alfabético, y `website/` (donde vive `server/models/` y todo el backend) **no entra en el árbol**. El agente ve 11 de 12 top-level dirs. La única razón por la que encuentra los models es que `grep` recorre el filesystem real. Esto explica por qué la "pasada implícita" del prompt v5 no se ejecuta de verdad — el agente no puede preguntarse "qué archivos restantes podrían tener evidencia" porque literalmente no los ve.
+
+### 6.4 Cuatro runs sobre Habitica con varianza enorme
+
+Mismo modelo (`gemini-3.1-flash-lite`), mismo repo, prompts v4 y v5:
+
+| Run | Prompt | Iter | Archivos | Estrategia |
+|---|---|---|---|---|
+| A | v4 | 14 | 10 | `list_dir`-heavy: explora, lee, selecciona |
+| B | v4 | 7 | 5 | `grep` amplio + selects directos sin `read_file` |
+| C | v5 | 2 | 6 | `grep` + **batching** (6 selects + done en 1 turno) |
+| D | v5 | 23 | **20** | `grep` + selects 1-a-1, sin batching |
+
+Run D es el primero donde la cobertura del dir de modelos se acerca al máximo: aparecen por fin `Coupon`, `Transaction`, `Blocker`, `IapPurchaseReceipt`, `NewsPost`, `EmailUnsubscription`, `PushDevice`, `SubscriptionPlan`, `UserHistory`, `UserNotification`. Pero la pasada implícita SIGUE sin hacerse — el agente lo afirma en el summary y el trace lo desmiente (cero grep/read fuera del dir de models).
+
+### 6.5 Aprendizaje añadido
+
+**El prompt es necesario pero la varianza del modelo lo sobrescribe.** Dos runs con el mismo prompt v5 dieron 2 iter / 6 archivos / batched vs 23 iter / 20 archivos / sin batchear. La cobertura efectiva del prototipo NO está determinada solo por el código, el prompt y el modelo — también por la estrategia exploratoria que el modelo improvisa en cada run. Para defender el TFG: presentar los rangos observados, no un único número.
+
+### 6.6 Estado real al cerrar la sesión
+
+- `DiscoveryState.turns` + render en `discovery.md`.
+- `out/00_discovery/tree.txt` con el árbol exacto que recibió el agente.
+- Prompt `discovery_system.md` en v5 (63 líneas).
+- Punto 25 añadido a CLAUDE.md con los 4 runs comparados y el descubrimiento del árbol truncado.
+- Próximo candidato más prometedor: **BFS en `build_tree_summary`** para garantizar visibilidad de todos los top-level dirs (bloquea la pasada implícita en repos grandes).
