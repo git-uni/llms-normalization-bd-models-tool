@@ -277,31 +277,31 @@ Depende del tamaño del repo y de cuántas vueltas necesite el agente:
 
 | Fase | Llamadas | Modelo / cuota |
 |---|---|---|
-| Agente (descubrimiento) | **N** iteraciones del bucle, 1 `chat()` por vuelta | `gemini-2.5-flash-lite` (20 RPD free en esta cuenta) |
+| Agente (descubrimiento) | **N** iteraciones del bucle, 1 `chat()` por vuelta | `gemini-3.1-flash-lite` (15 RPM / 250K TPM / 500 RPD free en esta cuenta) |
 | Pipeline (analyze + design + DDL) | **3** llamadas `generate()` fijas | `gemma-4-31b-it` (cuota separada) |
 | **Total contra la API** | **N + 3** | repartido en dos quotas distintas |
 
 `N` en runs reales:
 
-- **Repo limpio con schemas explícitos** (Spruce caso fácil, observado): **5 iteraciones**. El agente encuentra `utils/models/` rápido, lo lista, selecciona los 4 schemas + algunas rutas y llama a `done`.
-- **Repo realista mediano:** estimado **8-12 iteraciones**.
-- **Tope duro:** **20 iteraciones** (`MAX_ITERS` en `agent.py:24`).
+- **Repo limpio con schemas explícitos** (Spruce caso fácil, observado): **5-13 iteraciones** según corrida.
+- **Repo realista mediano** (Habitica, observado): **11-14 iteraciones**.
+- **Tope duro:** **30 iteraciones** (`MAX_ITERS` en `agent.py:24`). Se subió de 20 a 30 cuando el prompt v4 empezó a forzar más lecturas para cubrir directorios de modelos enteros.
 
 Rango realista por run:
 
 - Mínimo: **~8 peticiones** (5 agente + 3 pipeline).
-- Típico: **~13** (10 agente + 3 pipeline).
-- Máximo: **23** (20 agente + 3 pipeline).
+- Típico: **~14** (11 agente + 3 pipeline).
+- Máximo: **33** (30 agente + 3 pipeline).
 
 ### Detalles importantes
 
-**El retry transparente sobre 429 multiplica:** si una llamada lógica falla con rate-limit y reintenta, eso son 2 o más peticiones HTTP reales para una única llamada lógica. Hasta 4× por configuración en `google.py:_MAX_RETRIES`.
+**El retry transparente sobre 429 multiplica:** si una llamada lógica falla con rate-limit y reintenta, eso son 2 o más peticiones HTTP reales para una única llamada lógica. Hasta 4× por configuración en `google.py:_MAX_RETRIES`. (Pendiente: el retry no cubre 5xx, y Gemma ha devuelto 500/503 transitorios varias veces.)
 
 **Los tokens crecen cuadráticamente con N**, no las peticiones. Cada turno del agente reenvía **el historial completo** (la API es stateless). Turno 1: ~3000 tokens. Turno 5: ~15000+ tokens.
 
-**Las dos cuotas son independientes** porque son modelos distintos. En esta cuenta concreta el cuello de botella es el agente: 20 RPD significan **~4 runs end-to-end por día** del caso fácil. Si quieres más, hay que cambiar de modelo o pagar.
+**Las dos cuotas son independientes** porque son modelos distintos. Con el agente en `gemini-3.1-flash-lite` (500 RPD, hasta diciembre 2025 era 20 RPD en `2.5-flash-lite`) la cuota diaria deja de ser cuello — pasan a serlo los **15 RPM** porque el agente lanza iteraciones casi seguidas. En Habitica se observó 13/15 RPM y 14/15 RPM en distintos runs; los repos más grandes saturarán y el SDK hará backoff.
 
-**Optimización barata si se vuelve un problema:** meter en el primer prompt al agente algunas pistas del árbol ya pre-procesadas para reducir N. Hoy le mandamos el árbol crudo y deducir requiere 1-2 vueltas extra.
+**Optimización barata si se vuelve un problema:** enriquecer el árbol inicial con las primeras ~20-30 líneas de cada archivo de código. Hoy el primer mensaje user contiene `build_tree_summary(repo_root)` con solo paths y tamaños; meter heads convertiría el patrón "explorar y decidir" en "filtrar de lo visto", recortando N y atacando el techo de cobertura observado en el run de Habitica.
 
 ---
 
@@ -353,7 +353,7 @@ Por eso `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS` son diccionarios separados, no
 
 ## C. Alternativas gratuitas a Google con cuota suficiente
 
-Google ahoga enseguida con tools (20 RPD en el tier gratis de `gemini-2.5-flash-lite`). Tres opciones para iterar más cómodamente:
+Google relajó el ahogo en el tier gratis al cambiar el default del agente a `gemini-3.1-flash-lite` (500 RPD, 15 RPM). El RPD ya no es el problema, pero los 15 RPM siguen siendo cuello en repos grandes y el modelo no es el más capable disponible. Tres opciones para iterar con más músculo:
 
 ### Groq — top pick (implementado)
 
@@ -602,63 +602,58 @@ Son **dos cosas distintas y sin relación**. Groq es anterior; han demandado a x
 
 ## F. Diseño del system prompt del agente y por qué el modelo es el cuello de botella
 
-El system prompt del agente (`normalizer/prompts/discovery_system.md`) ha pasado por dos iteraciones tras los runs iniciales. Esta sección resume las decisiones de diseño y la lección de fondo.
+El system prompt del agente (`normalizer/prompts/discovery_system.md`) ha pasado por varias iteraciones tras los runs reales. Esta sección resume las decisiones de diseño y la lección de fondo.
 
-### Versión inicial — y por qué fallaba
+### Iteraciones
 
-La versión original era larga (~75 líneas) e incluía instrucciones como:
+**v1 (~75 líneas, inicial):** sesgaba hacia parar pronto con frases como *"sé selectivo… mejor 6 archivos clave que 15 redundantes"* y *"no necesitas justificar descartes"*. Gemini calibraba bien (11/11 en Spruce); Qwen y Llama sobreinterpretaban y producían cobertura muy variable. Caso concreto: Qwen3-32B en Spruce omitiendo analytics/keys con "no son críticos para la estructura principal".
 
-> Sé selectivo: el objetivo no es seleccionar muchos archivos sino los imprescindibles para entender el modelo. **Mejor 6 archivos clave que 15 redundantes.**
+**v3 (~38 líneas, primer refactor):** invirtió el sesgo con tres principios:
+1. *Cobertura sobre parsimonia*: "mejor sobre-incluir que perder una entidad".
+2. *Prohibido descartar sin inspeccionar*: o lees el archivo, o no puedes etiquetarlo como "secundario".
+3. *Vecindad estructural*: si encuentras un schema en `X/Y/foo`, inspecciona los hermanos del mismo `X/Y/`. Project-agnostic: no menciona paths concretos como `models/`.
 
-> Si descartas algo ruidoso a propósito, está bien — **no necesitas justificarlo**, solo no lo selecciones.
+Mejoró cobertura en Llama 4 (6→7 sobre Spruce) y mantuvo 11/11 en Gemini 2.5 Flash Lite, pero Habitica reveló que la regla "inspeccionar hermanos" era ambigua: el modelo listaba el dir, leía 4 de 17 archivos y cerraba con `done` etiquetando el resto como "auxiliares" — exactamente el filtro principal/secundario que el prompt quería evitar, pero aplicado un nivel más adentro.
 
-Estas frases sesgaban al agente hacia parar pronto. Modelos buenos las calibraban bien (Gemini lograba 11/11); modelos más débiles las sobreinterpretaban y producían cobertura muy variable. Caso concreto: en un run de Qwen3-32B sobre Spruce, el resumen del agente justificaba haber omitido analytics y keys con "no son críticos para la estructura principal" — Qwen tomó nuestra licencia de "descarta sin justificar" y la combinó con un juicio erróneo sobre qué era relevante.
+**v4 (41 líneas, actual):** colapsa los principios 2 y 3 en uno solo — el *"Principio del hermano"* — que dice literalmente *"el filtro principal/secundario lo hace el pipeline posterior, no tú"*. Añade dos cambios estructurales:
+- Mención explícita del **árbol filtrado del repo** que el agente ya recibe en su primer mensaje user (antes el prompt no lo nombraba y el agente listaba la raíz innecesariamente).
+- Condición de `done`: si identificaste un dir de modelos, lo has cubierto entero (todos los archivos no-test/non-index/non-`.d.ts`) antes de cerrar.
 
-### Versión actual — tres principios de fondo
-
-La revisión (`prompts/discovery_system.md` ~38 líneas) invierte el sesgo y añade reglas explícitas:
-
-1. **Cobertura sobre parsimonia.** "Mejor sobre-incluir que perder una entidad" reemplaza "mejor 6 que 15". Justificación de fondo: el pipeline siguiente puede ignorar evidencia redundante sin coste, pero **no puede inventar entidades que no le pases**. La asimetría de coste justifica el sesgo a sobre-incluir.
-
-2. **Prohibido descartar sin inspeccionar.** "No puedes calificar un archivo o subdirectorio como 'secundario' sin haber abierto su contenido". Convierte una decisión opcional en una obligación: o lees, o no descartas.
-
-3. **Vecindad estructural.** "Si encuentras un schema en `X/Y/foo`, debes inspeccionar los hermanos del mismo `X/Y/` antes de cerrar". Esto **es project-agnostic**: no menciona `models/` ni `routes/` ni ningún path concreto, solo el patrón "los schemas viven juntos". Vale para cualquier layout (Java packages, Go modules, Python `app/db/`, etc.).
-
-Además: suelo cuantitativo (≥2 subdirs listados, ≥4 archivos inspeccionados antes de `done`) y obligación de justificar en el `summary` cada subdirectorio top-level no explorado.
+Se elimina la regla "no inventes rutas" (redundante con el error de la tool) y se comprime la enumeración de tools. Caps subidos en código: `MAX_FILES=15→30`, `MAX_ITERS=20→30`, porque la regla nueva fuerza más lecturas y un repo del tamaño de Habitica (17 archivos solo en `models/`) chocaba contra los caps anteriores.
 
 ### Por qué NO se baja a paths concretos
 
-Sería tentador añadir "si ves un directorio llamado `models/` o `schemas/`, léelo entero". **No se hace** porque la herramienta tiene que valer para cualquier repo con BD documental, no solo para los que sigan el layout de Spruce. Un repo Java pondría las entidades en `com/foo/entity/`, un proyecto Go en `internal/db/models/`, un Flask app en `app/models.py`. Atar el prompt a nombres concretos lo rompe en cualquier proyecto que no siga la convención asumida.
-
-La heurística "vecindad estructural" es la versión generalizable del mismo principio: **agrupar por proximidad estructural, no por nombre**. Funciona porque "los schemas viven cerca" es invariante del layout.
+Sería tentador añadir "si ves un directorio llamado `models/` o `schemas/`, léelo entero". **No se hace** porque la herramienta tiene que valer para cualquier repo con BD documental, no solo para los que sigan ese layout. Un repo Java pondría las entidades en `com/foo/entity/`, un proyecto Go en `internal/db/models/`, un Flask app en `app/models.py`. La heurística "vecindad estructural" del v3/v4 es la versión generalizable: **agrupar por proximidad estructural, no por nombre**. Funciona porque "los schemas viven cerca" es invariante del layout.
 
 ### La lección de fondo: prompt necesario, no suficiente
 
-Con el prompt nuevo, Llama 4 Scout sobre Spruce subió de 6/11 a 7/11 entre runs distintos — mejora real pero modesta. **Llama 4 ignora la regla de vecindad estructural**: lee `user.js` (en `utils/models/`) y no toca `room.js`/`keys.js`/`analytics.js` aunque son hermanos directos. La regla está, el modelo no la honra.
+Con cada iteración del prompt la cobertura sube modestamente, pero **nunca se cierra del todo**. Llama 4 Scout sigue ignorando la vecindad estructural en Spruce. Gemini 3.1 Flash Lite la honra parcialmente en Habitica (10/17 archivos del dir de modelos en v4 vs 4/17 en v3) pero su propio `summary` sigue diciendo *"priorizando los archivos de modelo"* — la heurística mental del modelo de filtrar por "centralidad" sobrevive al prompt.
 
 Esto es la lección defendible:
 
 > **La capacidad del modelo para razonar y seguir instrucciones complejas pone un techo a lo que el prompt puede lograr.**
 
-El prompt es **necesario** (sin él, modelos débiles paran mucho más pronto) pero **no suficiente** (modelos débiles ignoran reglas explícitas). El gradiente observado en Spruce con el prompt nuevo:
+El prompt es **necesario** (sin él, modelos débiles paran muy pronto) pero **no suficiente** (incluso modelos buenos siguen aplicando heurísticas latentes). El gradiente observado:
 
-| Modelo del agente | Cobertura típica |
-|---|---|
-| Gemini 2.5 Flash Lite (Google) | 11/11 |
-| Qwen3-32B (Groq free) | 6-10 (alta varianza) |
-| Llama 4 Scout (Groq free) | 6-7 (varianza moderada) |
-| Llama 3.x | no funciona (formato markup) |
+| Modelo del agente | Cobertura — Spruce | Cobertura — Habitica |
+|---|---|---|
+| Gemini 3.1 Flash Lite (Google free) | 11/11 entidades UML | 10/17 archivos models/, 33 tablas DDL |
+| Gemini 2.5 Flash Lite (Google free, retirado de facto) | 11/11 | sin datos |
+| Qwen3-32B (Groq free) | 6-10 (alta varianza) | sin datos (TPM free insuficiente) |
+| Llama 4 Scout (Groq free) | 6-7 | sin datos |
+| Llama 3.x | no funciona (formato markup) | n/a |
 
-Esto se conecta con la separación pipeline / agente: el pipeline es tarea estructurada y tolera modelos mid-tier; el agente es razonamiento abierto y exige un modelo de gama alta. Es el cuello de botella real del flujo URL → DDL.
+Spruce es "saturado" en el mejor modelo (no hay margen) y revela varianza en los débiles. Habitica es el primer repo donde se ve el techo de Gemini 3.1 Flash Lite: cumple parcialmente la regla de cobertura del dir pero deja fuera ~7 hermanos legítimos. El cuello de botella es el agente, no el pipeline.
 
 ### Palancas para subir el techo
 
-Por orden de coste:
+Por orden de coste/intrusividad:
 
-1. **Refinar el prompt** (ya hecho). Coste cero, mejora modesta sobre modelos débiles.
-2. **Subir de modelo en el mismo proveedor.** En Groq significa tier dev (Qwen sin TPM cap). En Google significa Gemini 2.5 Flash o Pro. Coste: dinero o más cuota.
-3. **Añadir un proveedor con un modelo más capable.** Claude Haiku 4.5, GPT-4o-mini. Coste: implementación de un Provider más + tarjeta de crédito.
-4. **Múltiples runs + agregación.** Correr el agente 3 veces y unir las evidencias seleccionadas. Más caro en cuota pero reduce varianza efectiva sin tocar nada del código. Útil si la limitación es varianza, no techo absoluto.
+1. **Refinar el prompt** (hecho v1→v3→v4). Coste cero. Mejora modesta y con rendimientos decrecientes — cada iteración cierra menos brecha que la anterior.
+2. **Enriquecer el árbol inicial.** Antes del primer turno, el agente ya recibe `build_tree_summary` con paths + tamaños; añadir las primeras ~20-30 líneas de cada archivo de código convierte "explorar y decidir" en "filtrar de lo visto". Cambio acotado en `discovery/filesystem.py` + `agent.py`. Hipótesis: cierra parte del techo en Habitica porque obvia el paso "abrir para confirmar".
+3. **Nudge dinámico tras `read_file`**: la tool puede devolver, además del contenido, una lista *"hermanos de este dir que aún no has leído"*. Hace explícito el constraint en el momento de decisión, sin tocar el prompt.
+4. **Subir de modelo en el mismo proveedor.** Tier dev de Groq, billing en Google, o un proveedor con un modelo más capable (Claude, GPT-4o). Coste: dinero.
+5. **Múltiples runs + agregación.** Correr el agente 3 veces y unir las evidencias seleccionadas. Más caro en cuota pero reduce varianza sin tocar código. Útil si la limitación es varianza, no techo absoluto.
 
 ### Implicación para defender el TFG
 

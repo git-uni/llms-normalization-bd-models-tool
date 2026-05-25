@@ -21,8 +21,8 @@ from normalizer.discovery.tools import (
 from normalizer.prompts import DISCOVERY_SYSTEM
 from normalizer.providers import LLMProvider, Message
 
-MAX_ITERS = 20
-MAX_FILES = 15
+MAX_ITERS = 30
+MAX_FILES = 30
 
 
 def discover_from_url(
