@@ -100,23 +100,32 @@ Dos datasets, ambos derivados del repositorio [Spruce](https://github.com/dan-di
       - **Run F**: 10 iter, 8 archivos, 1.0/iter (sin batching). Cobertura mediocre.
       - **Run G**: **5 iter, 25 tool_calls, 5.0/iter, 22 archivos**. **El mejor run hasta la fecha sobre Habitica**. El agente emitió **19 selects en un solo turno** (iter 2) tras una grep declarativa, leyó `user/index.js` (iter 3) para verificar el subdir user/, batchéo 3 selects más (iter 4) y cerró (iter 5). Cobertura: TODOS los archivos top-level de `website/server/models/` + el subdir `user/` completo + el subdir **`analytics/` completo** (que ningún run anterior tocó: `registrationEvent.js`, `subscriptionEvent.js`).
     - **Lectura conjunta**: la varianza del modelo no se elimina con prompt, pero el techo del *mejor* run sube con cada iteración del sistema (prompt + caps + árbol). Para defender el TFG: el rango observado en Habitica con esta configuración es 8-22 archivos según el run; el techo (22) cubre prácticamente todo el modelo documental declarativo, y la pasada implícita se vuelve posible (no garantizada) gracias al árbol completo.
+27. **Observabilidad en tiempo real (stderr `[mm:ss]`) + retry de Google extendido a 5xx.** Antes de esto una corrida típica se resumía en 3 líneas de `click.echo`: arranque del descubrimiento, ruta de evidencia, ruta del DDL. Todo lo demás —clonado del repo, hasta 30 iteraciones del agente, los 3 `generate()` del pipeline, y los `time.sleep()` de los retries 429— era silencioso, indistinguible de un cuelgue. Cambios:
+    - **Helper único `normalizer/_log.py`** (~15 líneas): `log(msg)` emite por stderr con timestamp relativo desde el arranque del proceso (`time.monotonic()` capturado a nivel módulo). Reusa `click.echo(err=True)` por consistencia con el resto del CLI; sin `logging`, sin `--verbose` (default siempre on — el modo "callado" no aporta en un prototipo).
+    - **Puntos instrumentados**:
+      - `cli.py`: log de arranque con `provider | pipeline=<model> [| agent=<model>] | out=<dir>/` (los providers se construyen antes para poder mostrar el modelo real, no la opción CLI que puede ser `None`).
+      - `pipeline.py`: cada uno de los 3 `provider.generate(...)` envuelto con `log("Pipeline: X ...")` antes y `log("Pipeline: X ok (Ns)")` después. Etiquetas: `ANÁLISIS / DISEÑO / DDL`.
+      - `discovery/repo.py`: log antes del `git clone --depth 1` y log si el repo ya estaba en cache.
+      - `discovery/agent.py`: log de arranque (max_iters, max_files, líneas del árbol), log por iteración con `[iter NN] -> ` + las tool_calls compactas (mismo formato que la columna del `discovery.md`, separadas por ` , ` cuando hay batching), log al cerrar con `done` (archivos seleccionados + iter usadas) y log si se agota el presupuesto.
+      - `providers/google.py` y `providers/groq.py`: dentro de `_call_with_retry`, antes del `time.sleep(delay)`, log con `{code} en {provider}.{op} — esperando Ns (intento N/4)`. El parámetro `op` ("generate" o "chat") se pasa desde los call sites.
+    - **Fix del 5xx en Google bundleado.** Cerraba el ítem 1 de "Siguiente" y tocaba la misma función. `_call_with_retry` ahora captura la base `genai_errors.APIError` y reintenta el código si está en `{429, 500, 502, 503, 504}` — antes solo 429, lo que rompía corridas de Gemma cada vez que Google devolvía un 500/503 transitorio (≥3-4 veces vistas en sesiones previas). Para Groq no se amplía: la doc histórica no menciona 5xx persistente y `RateLimitError` ya lo cubre.
+    - **Verificación** sobre `data/spruce/`: corrida completa en ~4 min, todas las etiquetas salen en orden con sus duraciones (`ANÁLISIS 78s`, `DISEÑO 85s`, `DDL 78s`), `04_ddl.sql` mantiene las 11 `CREATE TABLE` del baseline manual sin regresión. La corrida URL (clone + agente + pipeline) queda pendiente de validar pero los puntos instrumentados están todos cubiertos por el cambio.
 
 **Siguiente:**
 
-1. **Fix puntual del retry de Google para 5xx.** `_call_with_retry` solo trata 429. Gemma ya ha devuelto 500/503 transitorios al menos 3-4 veces. Añadir 500/502/503/504 al backoff es ~5 líneas en `providers/google.py`. Independiente del resto.
-2. **Pasada implícita real**: el punto 26 deja el árbol completo para Habitica, pero ningún run hasta ahora ejecuta una pasada implícita "de verdad" en repos con Mongoose — el agente sigue conformándose con la pasada declarativa cuando el dir de modelos es rico. Es defendible (en proyectos con schemas explícitos la cobertura del dir de models cubre todo), pero NO está validado contra un repo con MongoDB **sin** Mongoose. Próximo dataset relevante: un repo público con MongoDB nativo donde la grep declarativa no dé hits.
-3. **Batching no determinista**: Run F (1.0/iter) y Run G (5.0/iter) tienen el mismo prompt. La regla dura sube el techo pero no elimina la varianza. Si esto se vuelve un problema defendible, la vía es a nivel código: añadir una tool `select_evidence_batch(items=[...])` que materialice la batching en una sola call; o agrupar `select_evidence` consecutivos en `dispatch()`.
-4. **Otros candidatos pendientes (no urgentes):**
+1. **Pasada implícita real**: el punto 26 deja el árbol completo para Habitica, pero ningún run hasta ahora ejecuta una pasada implícita "de verdad" en repos con Mongoose — el agente sigue conformándose con la pasada declarativa cuando el dir de modelos es rico. Es defendible (en proyectos con schemas explícitos la cobertura del dir de models cubre todo), pero NO está validado contra un repo con MongoDB **sin** Mongoose. Próximo dataset relevante: un repo público con MongoDB nativo donde la grep declarativa no dé hits.
+2. **Batching no determinista**: Run F (1.0/iter) y Run G (5.0/iter) tienen el mismo prompt. La regla dura sube el techo pero no elimina la varianza. Si esto se vuelve un problema defendible, la vía es a nivel código: añadir una tool `select_evidence_batch(items=[...])` que materialice la batching en una sola call; o agrupar `select_evidence` consecutivos en `dispatch()`.
+3. **Otros candidatos pendientes (no urgentes):**
    - **Devolver al agente, tras `read_file`, qué hermanos de ese dir aún no ha leído**: nudge directo contra el patrón principal/secundario, sin tocar el prompt.
    - **Caching de `read_file` en `DiscoveryState`**: si el modelo lee el mismo archivo dos veces, ahorra iter.
-5. **Si el RPM cap del free tier se confirma bloqueante** en proyectos más grandes que Habitica, las opciones son:
+4. **Si el RPM cap del free tier se confirma bloqueante** en proyectos más grandes que Habitica, las opciones son:
    - **Tier dev de Google** (paid) — sube el RPM pero rompe el "free tier".
    - **Cerebras como provider alternativo** — sigue siendo el candidato más prometedor (qwen-3-235b free, 1M TPD). Antes el caso era el RPD; ahora sería el RPM. Implementación: copy-paste de `groq.py`. Verificar antes en `inference-docs.cerebras.ai/llms.txt` que el modelo elegido soporta tools.
    - **Multi-proveedor balanceado** — agente en Google, pipeline en Groq. En la práctica esta sesión ya lo hizo de facto (Groq como fallback de Gemma). Requeriría un `--agent-provider` separado en la CLI; ahora mismo el `--provider` es único.
-6. Si la varianza del agente sigue siendo problemática para defender, dos vías:
+5. Si la varianza del agente sigue siendo problemática para defender, dos vías:
    - **Subir de modelo**: tier dev de Groq (Qwen sin TPM cap), o billing en Google.
    - **Múltiples runs + agregación**: correr el agente 3 veces y unir las evidencias. Más caro pero baja la varianza efectiva sin tocar prompt.
-7. Cuando se vuelva a iterar sobre la calidad del DDL: hay puntos menores conocidos que el autor decidió **no atacar ahora** porque "más o menos funciona" — el `04_ddl.sql` se emite envuelto en ` ```sql ... ``` ` (no es ejecutable tal cual sin pelar el cerco), y se usa `BOOLEAN` que Oracle no tiene nativo en versiones <23. Si en el futuro se fija una versión Oracle objetivo o se necesita ejecutar el SQL automáticamente, esos dos puntos vuelven a ser relevantes.
+6. Cuando se vuelva a iterar sobre la calidad del DDL: hay puntos menores conocidos que el autor decidió **no atacar ahora** porque "más o menos funciona" — el `04_ddl.sql` se emite envuelto en ` ```sql ... ``` ` (no es ejecutable tal cual sin pelar el cerco), y se usa `BOOLEAN` que Oracle no tiene nativo en versiones <23. Si en el futuro se fija una versión Oracle objetivo o se necesita ejecutar el SQL automáticamente, esos dos puntos vuelven a ser relevantes.
 
 **Convención de directorios de salida:** cada run usa su propio `--out-dir` (`out-facil/`, `out-difuso/`, `out-spruce-llama4-v3/`, etc.) para no pisarse. Los runs intermedios suelen purgarse cuando dejan de ser referencia; los actuales en disco se ven con `ls -d out-*`. El directorio `out/` por defecto NO debe asumirse vinculado a ningún dataset concreto.
 
@@ -128,6 +137,7 @@ Dos datasets, ambos derivados del repositorio [Spruce](https://github.com/dan-di
 normalizer/
 ├── __init__.py
 ├── __main__.py             # `python -m normalizer` → cli.main
+├── _log.py                 # log(msg) a stderr con timestamp relativo [mm:ss]
 ├── cli.py                  # click CLI: --provider, --model, --agent-model, --out-dir
 ├── pipeline.py             # 4 pasos; los prompts se cargan desde normalizer/prompts/
 ├── prompts/                # prompts como .md intercambiables sin tocar Python

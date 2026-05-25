@@ -4,6 +4,8 @@ import hashlib
 import subprocess
 from pathlib import Path
 
+from normalizer._log import log
+
 CACHE_DIR = Path(".cache") / "repos"
 
 
@@ -20,12 +22,14 @@ def clone_repo(url: str, cache_root: Path | None = None) -> Path:
     target = cache_root / digest
 
     if target.exists() and (target / ".git").exists():
+        log(f"Repo cacheado en {target}")
         return target
 
     if target.exists():
         # Directorio a medias de un intento anterior: limpiar y reintentar.
         _rmtree(target)
 
+    log(f"Clonando {url} ...")
     try:
         subprocess.run(
             ["git", "clone", "--depth", "1", url, str(target)],

@@ -11,6 +11,7 @@ directorio curado.
 
 from pathlib import Path
 
+from normalizer._log import log
 from normalizer.discovery.filesystem import build_tree_summary
 from normalizer.discovery.repo import clone_repo
 from normalizer.discovery.tools import (
@@ -45,6 +46,10 @@ def discover_from_url(
     # qué vio es imprescindible para diagnosticar runs donde el agente "no
     # encuentra" algo que sí está en el repo.
     (state.discovery_dir / "tree.txt").write_text(tree, encoding="utf-8")
+    log(
+        f"Agente arrancado (max_iters={max_iters}, max_files={max_files}, "
+        f"árbol={len(tree.splitlines())} entradas)"
+    )
 
     messages: list[Message] = [
         Message(role="system", content=DISCOVERY_SYSTEM),
@@ -70,6 +75,7 @@ def discover_from_url(
             state.turns.append(
                 TurnTrace(iter=iters_used, calls=["(respuesta sin tool_calls)"])
             )
+            log(f"[iter {iters_used:02d}] -> (sin tool_calls — cerrando)")
             state.summary = (
                 (state.summary or "")
                 + "\n\n[WARN: el agente respondió sin llamar a tools; "
@@ -82,6 +88,10 @@ def discover_from_url(
                 iter=iters_used,
                 calls=[_format_call(c) for c in response.tool_calls],
             )
+        )
+        log(
+            f"[iter {iters_used:02d}] -> "
+            f"{' , '.join(state.turns[-1].calls)}"
         )
 
         for call in response.tool_calls:
@@ -96,9 +106,14 @@ def discover_from_url(
             )
 
         if state.is_done:
+            log(
+                f"Agente done — {len(state.selected)} archivos seleccionados "
+                f"en {iters_used} iter."
+            )
             break
 
     if not state.is_done and iters_used >= max_iters:
+        log(f"WARN: presupuesto de {max_iters} iter agotado sin done.")
         state.summary = (
             (state.summary or "")
             + f"\n\n[WARN: presupuesto de {max_iters} iteraciones agotado "

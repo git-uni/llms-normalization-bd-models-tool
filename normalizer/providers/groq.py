@@ -6,6 +6,7 @@ import uuid
 
 from groq import Groq, RateLimitError
 
+from normalizer._log import log
 from normalizer.providers.base import (
     ChatResponse,
     Message,
@@ -33,6 +34,7 @@ class GroqProvider:
         response = self._call_with_retry(
             messages=[{"role": "user", "content": prompt}],
             tools=None,
+            op="generate",
         )
         return response.choices[0].message.content or ""
 
@@ -43,7 +45,7 @@ class GroqProvider:
         groq_tools = _to_groq_tools(tools)
 
         response = self._call_with_retry(
-            messages=groq_messages, tools=groq_tools
+            messages=groq_messages, tools=groq_tools, op="chat"
         )
 
         msg = response.choices[0].message
@@ -74,7 +76,7 @@ class GroqProvider:
             tool_calls=tool_calls,
         )
 
-    def _call_with_retry(self, *, messages, tools):
+    def _call_with_retry(self, *, messages, tools, op: str):
         kwargs = {"model": self.model, "messages": messages}
         if tools:
             kwargs["tools"] = tools
@@ -85,6 +87,10 @@ class GroqProvider:
                 if attempt == _MAX_RETRIES - 1:
                     raise
                 delay = _parse_retry_delay(exc) or _FALLBACK_RETRY_DELAY_S
+                log(
+                    f"  429 en groq.{op} — esperando {delay:.0f}s "
+                    f"(intento {attempt + 1}/{_MAX_RETRIES})"
+                )
                 time.sleep(delay)
         raise RuntimeError("unreachable")  # pragma: no cover
 

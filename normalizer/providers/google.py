@@ -7,6 +7,7 @@ from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
 
+from normalizer._log import log
 from normalizer.providers.base import (
     ChatResponse,
     Message,
@@ -16,6 +17,10 @@ from normalizer.providers.base import (
 
 _MAX_RETRIES = 4
 _FALLBACK_RETRY_DELAY_S = 15.0
+# Códigos HTTP que se tratan como transitorios y reintentables. 429 = rate
+# limit; 5xx = errores del lado del servidor de Google (Gemma free ha
+# devuelto 500/503 en varias ocasiones durante el pipeline).
+_RETRYABLE_CODES = {429, 500, 502, 503, 504}
 
 
 class GoogleProvider:
@@ -31,7 +36,7 @@ class GoogleProvider:
         self._client = genai.Client(api_key=api_key)
 
     def generate(self, prompt: str) -> str:
-        response = self._call_with_retry(contents=prompt, config=None)
+        response = self._call_with_retry(contents=prompt, config=None, op="generate")
         return response.text or ""
 
     def chat(
@@ -48,7 +53,7 @@ class GoogleProvider:
             ),
         )
 
-        response = self._call_with_retry(contents=contents, config=config)
+        response = self._call_with_retry(contents=contents, config=config, op="chat")
 
         assistant_content = response.candidates[0].content
         text_parts: list[str] = []
@@ -80,17 +85,22 @@ class GoogleProvider:
         )
 
 
-    def _call_with_retry(self, *, contents, config):
+    def _call_with_retry(self, *, contents, config, op: str):
         kwargs = {"model": self.model, "contents": contents}
         if config is not None:
             kwargs["config"] = config
         for attempt in range(_MAX_RETRIES):
             try:
                 return self._client.models.generate_content(**kwargs)
-            except genai_errors.ClientError as exc:
-                if getattr(exc, "code", None) != 429 or attempt == _MAX_RETRIES - 1:
+            except genai_errors.APIError as exc:
+                code = getattr(exc, "code", None)
+                if code not in _RETRYABLE_CODES or attempt == _MAX_RETRIES - 1:
                     raise
                 delay = _parse_retry_delay(exc) or _FALLBACK_RETRY_DELAY_S
+                log(
+                    f"  {code} en google.{op} — esperando {delay:.0f}s "
+                    f"(intento {attempt + 1}/{_MAX_RETRIES})"
+                )
                 time.sleep(delay)
         raise RuntimeError("unreachable")  # pragma: no cover
 

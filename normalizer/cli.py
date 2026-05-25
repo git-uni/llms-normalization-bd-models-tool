@@ -3,6 +3,7 @@ from pathlib import Path
 import click
 from dotenv import load_dotenv
 
+from normalizer._log import log
 from normalizer.discovery import discover_from_url
 from normalizer.pipeline import run_pipeline
 from normalizer.providers import available_providers, build_provider
@@ -62,29 +63,41 @@ def main(
     load_dotenv()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if _is_url(input_path):
-        agent_provider = build_provider(
-            name=provider_name, model=agent_model, for_agent=True
-        )
-        click.echo(f"Descubriendo evidencia desde {input_path}...")
-        evidence_dir = discover_from_url(
-            url=input_path, agent_provider=agent_provider, out_dir=out_dir
-        )
-        click.echo(
-            f"Evidencia en {evidence_dir} (traza en {out_dir}/00_discovery/discovery.md)"
-        )
-        pipeline_input = evidence_dir
-    else:
+    is_url = _is_url(input_path)
+    if not is_url:
         pipeline_input = Path(input_path)
         if not pipeline_input.exists():
             raise click.BadParameter(f"No existe: {input_path}")
 
+    agent_provider = (
+        build_provider(name=provider_name, model=agent_model, for_agent=True)
+        if is_url
+        else None
+    )
     pipeline_provider = build_provider(name=provider_name, model=model)
+
+    agent_part = f" | agent={agent_provider.model}" if agent_provider else ""
+    log(
+        f"Provider: {provider_name} | pipeline={pipeline_provider.model}"
+        f"{agent_part} | out={out_dir}/"
+    )
+
+    if is_url:
+        log(f"Descubriendo evidencia desde {input_path}...")
+        evidence_dir = discover_from_url(
+            url=input_path, agent_provider=agent_provider, out_dir=out_dir
+        )
+        log(
+            f"Evidencia en {evidence_dir} "
+            f"(traza en {out_dir}/00_discovery/discovery.md)"
+        )
+        pipeline_input = evidence_dir
+
     run_pipeline(
         input_path=pipeline_input, provider=pipeline_provider, out_dir=out_dir
     )
-    click.echo(f"DDL generado en {out_dir / '04_ddl.sql'}")
-    click.echo(
+    log(f"DDL generado en {out_dir / '04_ddl.sql'}")
+    log(
         f"Artefactos intermedios en {out_dir}/ (01_input, 02_analysis, 03_design)"
     )
 

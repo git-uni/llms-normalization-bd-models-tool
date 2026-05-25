@@ -1,5 +1,7 @@
+import time
 from pathlib import Path
 
+from normalizer._log import log
 from normalizer.prompts import ANALYZE, DDL, DESIGN
 from normalizer.providers import LLMProvider
 
@@ -44,13 +46,22 @@ def run_pipeline(
     evidence = _read_input(input_path)
     (out_dir / "01_input.txt").write_text(evidence, encoding="utf-8")
 
+    log("Pipeline: ANÁLISIS ...")
+    t0 = time.monotonic()
     analysis = provider.generate(ANALYZE.format(evidence=evidence))
     (out_dir / "02_analysis.md").write_text(analysis, encoding="utf-8")
+    log(f"Pipeline: ANÁLISIS ok ({int(time.monotonic() - t0)}s)")
 
+    log("Pipeline: DISEÑO ...")
+    t0 = time.monotonic()
     design = provider.generate(DESIGN.format(analysis=analysis))
     (out_dir / "03_design.md").write_text(design, encoding="utf-8")
+    log(f"Pipeline: DISEÑO ok ({int(time.monotonic() - t0)}s)")
 
+    log("Pipeline: DDL ...")
+    t0 = time.monotonic()
     ddl = provider.generate(DDL.format(design=design))
     (out_dir / "04_ddl.sql").write_text(ddl, encoding="utf-8")
+    log(f"Pipeline: DDL ok ({int(time.monotonic() - t0)}s)")
 
     return ddl
