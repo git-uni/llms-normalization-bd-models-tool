@@ -25,9 +25,10 @@ DEFAULT_MODELS: dict[str, str] = {
 # Modelos por defecto para el agente de descubrimiento (requieren tool-use).
 # Distintos del pipeline porque Gemma free no soporta function-calling.
 DEFAULT_AGENT_MODELS: dict[str, str] = {
-    # gemini-2.5-flash-lite: function-calling y 10 RPM en free tier
-    # (gemini-2.5-flash es solo 5 RPM y se agota enseguida con un agente).
-    "google": "gemini-2.5-flash-lite",
+    # gemini-3.1-flash-lite: function-calling, 15 RPM / 500 RPD en free tier.
+    # Sucesor del 2.5-flash-lite (10 RPM / 20 RPD), que se quedó corto tras
+    # el recorte de cuotas de Google de diciembre 2025.
+    "google": "gemini-3.1-flash-lite",
     # Los Llama de Groq (8B y 70B) emiten tool calls con sintaxis markup
     # `<function=...>` en lugar del slot estructurado tool_calls que Groq
     # espera (formato OpenAI), y la API los rechaza con tool_use_failed.
