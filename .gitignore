@@ -7,4 +7,5 @@ dist/
 .env
 out/
 out-*/
+out-*.log
 .cache/
