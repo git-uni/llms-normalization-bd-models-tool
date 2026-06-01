@@ -23,9 +23,14 @@ El primer mensaje de usuario ya incluye el árbol filtrado del repo
 necesitas `list_dir` sobre la raíz. Tu exploración tiene **dos pasadas
 obligatorias antes de cerrar**:
 
-1. **Declarativa.** `grep` patrones de schemas explícitos (`new Schema`,
-   `mongoose.Schema`, `BaseModel`, `@dataclass`, etc.). Si hay hits, los
-   archivos donde aparecen son evidencia directa — selecciónalos.
+1. **Declarativa.** `grep` patrones de schemas explícitos. Ejemplos por
+   stack: Mongoose (`new Schema`, `mongoose\.Schema`), Python ODMs
+   (`class \w+\(Document\)`, `BaseModel`, `@dataclass`), Spring Data /
+   Morphia / TypeORM (`@Document`, `@Entity`), Go driver (`bson:`),
+   .NET driver (`\[BsonElement\]`), Mongoid Ruby (`Mongoid::Document`).
+   Si no sabes el stack o quieres cubrir varios, una alternación amplia
+   en una sola `grep` los caza todos. Si hay hits, los archivos donde
+   aparecen son evidencia directa — selecciónalos.
 2. **Implícita.** Incluso si (1) dio resultados ricos, vuelve al árbol
    y pregúntate explícitamente *"de los archivos que el grep no tocó,
    ¿cuáles podrían contener el modelo de forma implícita?"*. Sospechosos
