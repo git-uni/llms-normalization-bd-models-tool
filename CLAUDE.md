@@ -15,119 +15,61 @@ La "evidencia" es heterogénea: schemas explícitos cuando los hay, pero tambié
 **Decisiones tomadas:**
 
 - Lenguaje: **Python 3.11+**.
-- API por defecto: **Google Generative AI** vía SDK `google-genai`. Dos modelos por proveedor: el del pipeline (`gemma-4-31b-it`, free, solo texto) y el del agente de descubrimiento (`gemini-2.5-flash-lite`, free, con function-calling). Recomendación inicial de los tutores fue `gemma-3-27b-it`; Google lo retiró en mayo 2026 y se actualizó a `gemma-4-31b-it`.
-- **Segundo proveedor implementado: Groq** vía SDK `groq` (API OpenAI-compatible). Defaults: `llama-3.3-70b-versatile` para el pipeline y `llama-3.1-8b-instant` para el agente. Resuelve el cuello de cuota del free tier de Google y cierra el cuasirequisito de "multi-proveedor" del TFG.
 - Pipeline: **multi-paso de 4 fases** (lectura → análisis del modelo documental → diseño relacional → DDL Oracle). Cada paso intermedio se guarda en `out/` para inspección.
-- Invocación: **CLI con click** — `python -m normalizer <input>` (los artefactos se escriben en `out/`, incluido el DDL final como `out/04_ddl.sql`).
-- Formato de input: **archivo único, directorio curado o URL de repositorio Git público** (en el caso URL, un agente clona el repo y elige por sí mismo la evidencia — ver sección 2, hito 8).
-- **Abstracción de proveedor LLM** (`normalizer/providers/` con `Protocol LLMProvider`) con dos métodos: `generate(prompt)` (texto-a-texto) y `chat(messages, tools)` (tool-use, para el agente). Implementaciones actuales: `GoogleProvider` y `GroqProvider`. Añadir uno más es: clase nueva en `providers/`, entrada en `_REGISTRY`, `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS`.
+- Invocación: **CLI con click** — `python -m normalizer <input>`.
+- Formato de input: **archivo único, directorio curado o URL de repositorio Git público**. En el caso URL, un agente clona el repo y elige por sí mismo la evidencia.
+- **Abstracción de proveedor LLM** (`normalizer/providers/` con `Protocol LLMProvider`) con dos métodos: `generate(prompt)` (texto-a-texto, para el pipeline) y `chat(messages, tools)` (tool-use, para el agente). Implementaciones: `GoogleProvider` y `GroqProvider`.
+- Dos modelos por proveedor: el del pipeline (barato, solo texto) y el del agente (con function-calling). Defaults vigentes:
+  - Google: `gemma-4-31b-it` (pipeline) + `gemini-3.1-flash-lite` (agente, 15 RPM / 250K TPM / 500 RPD).
+  - Groq: `llama-3.3-70b-versatile` (pipeline) + `qwen/qwen3-32b` (agente).
 - Paradigma del agente de descubrimiento: **tool-use nativo del SDK** (no bucle JSON manual ni framework externo). El bucle vive en `discovery/agent.py`; el provider solo expone un turno. Elegido pensando en que el mismo paradigma se reutilizará para el agente de refinamiento (RU-6) en un hito posterior.
 - Output: DDL compatible con **Oracle**.
 
 **Fuera del alcance de esta fase:**
 
 - UI o frontend.
-- Tercer proveedor adicional (Anthropic, OpenAI, Mistral, etc.). La abstracción está y dos providers ya la usan; añadir un tercero es un copy-paste.
-- **Agente de refinamiento interactivo (RU-6)**: dialogar con el resultado para renombrar entidades, fusionar tablas, etc. La extensión `chat()` del provider ya está preparada para ello, pero el flujo no se implementa todavía.
-- Descubrimiento sobre repos **privados** (autenticación) o **no-Git**.
+- Tercer proveedor (Anthropic, OpenAI, Mistral, Cerebras…). La abstracción está y dos providers ya la usan; añadir uno es copy-paste.
+- **Agente de refinamiento interactivo (RU-6)**: dialogar con el resultado para renombrar entidades, fusionar tablas, etc. La extensión `chat()` ya lo soporta, el flujo no.
+- Descubrimiento sobre repos **privados** o **no-Git**.
 
 **Datos de prueba:**
 
-Dos datasets, ambos derivados del repositorio [Spruce](https://github.com/dan-divy/spruce). **Importante:** ninguno contiene el repo entero — solo una selección manualmente curada de archivos relevantes para la BD. El repo tiene muchos más directorios y archivos (rutas, vistas, assets, libs cliente, configs, tests…) que no están en `data/`.
+Dos datasets, ambos derivados del repositorio [Spruce](https://github.com/dan-divy/spruce). Ninguno contiene el repo entero — solo selección manualmente curada para BD.
 
-- **`data/spruce/`** → caso fácil. Solo los 4 schemas Mongoose explícitos del repo (`analytics.js`, `keys.js`, `room.js`, `user.js`, originalmente en `utils/models/`).
-- **`data/spruce-difuso/`** → caso realista. 8 archivos del lado servidor renombrados con prefijo (`route_*.js`, `handler_*.js`) donde el modelo documental **no está declarado** en ningún sitio: solo se infiere cruzando rutas Express, handlers de socket y operaciones contra la BD (creación de objetos `new User({...})`, `posts.push({...})`, accesos `user.followers[i]`, `room.chats.push({...})`, etc.). NO incluye los schemas. Mismo "ground truth" que `spruce/` (mismo UML manual), por lo que es la prueba directa de si el prompt de análisis funciona sin schemas explícitos.
+- **`data/spruce/`** → caso fácil. Los 4 schemas Mongoose explícitos del repo (`analytics.js`, `keys.js`, `room.js`, `user.js`).
+- **`data/spruce-difuso/`** → caso realista. 8 archivos del lado servidor (`route_*.js`, `handler_*.js`) donde el modelo documental **no está declarado**: solo se infiere cruzando rutas Express, handlers de socket y operaciones contra la BD (`new User({...})`, `posts.push({...})`, `room.chats.push({...})`, etc.). Mismo ground truth UML que `spruce/`.
 
-**Baseline de comparación:** **no hay DDL manual**, solo un **diagrama UML** del autor. La comparación final con los resultados del prototipo será **cualitativa** (UML manual ↔ modelo relacional generado), no diff automático.
+**Baseline de comparación:** **no hay DDL manual**, solo un **diagrama UML** del autor. La comparación final será **cualitativa** (UML manual ↔ modelo relacional generado).
 
 ---
 
 ## 2. Estado del prototipo
 
-**Hecho:**
+**Validado:**
 
-1. Stack decidido y proyecto inicializado (`pyproject.toml`, `.gitignore`, `.env.example`).
-2. Estructura de carpetas creada y schemas de Spruce copiados a `data/spruce/`.
-3. Lectura de input (archivo único o directorio, no recursivo) implementada.
-4. Pipeline de 4 pasos con prompts inline implementado en `pipeline.py`.
-5. Abstracción de proveedor LLM con `GoogleProvider` registrado (`normalizer/providers/`).
-6. **Caso fácil validado** end-to-end con `data/spruce/` y `gemma-3-27b-it`: el `04_ddl.sql` generado es prácticamente idéntico al DDL que el autor obtenía manualmente en chat.
-7. **Caso difuso validado** con `data/spruce-difuso/` (mismo modelo): se recuperan las 11 entidades del UML manual + dos tablas extra legítimas (`post_comments` y `post_likes`) que normalizan los arrays anidados de posts. Se añadió al `PROMPT_DESIGN` una regla explícita de **reconciliación de atributos redundantes** (cuando dos columnas distintas referencian el mismo registro de otra tabla, conservar solo una FK canónica) — eso eliminó la duplicidad `posts.author_id` + `posts.authorID` que aparecía en la primera pasada.
-8. **Agente de descubrimiento desde URL implementado** (`normalizer/discovery/`, RU-1.3 + RU-5): si el `INPUT_PATH` empieza por `http(s)://` o `git@`, la CLI clona el repo (cache en `.cache/repos/`), un agente LLM con tool-use (`list_dir`, `read_file`, `grep`, `select_evidence`, `done`) localiza los archivos relevantes y los deposita en `out/00_discovery/evidence/` junto con una traza `discovery.md`. El pipeline lineal corre a continuación sin cambios sobre ese directorio.
-9. **Validación parcial end-to-end** sobre `https://github.com/dan-divy/spruce` (`out-spruce-url/`): el agente eligió 7 archivos (los 4 schemas + 3 rutas) en 5 iteraciones. El `04_ddl.sql` resultante contiene **las 11 entidades del UML manual** + `post_likes` y `post_comments` legítimas (igual que el `out-difuso/`) + 1 tabla `test_names` que es ruido proveniente de un bug ya corregido (un retry externo metió `test/database_tests.js` en `evidence/` además de los 7 del run real).
-10. **Bugs corregidos tras la validación:** (a) `DiscoveryState.__post_init__` ahora limpia `evidence/` al instanciar para que no leakeen archivos entre runs; (b) `GoogleProvider.generate()` también usa `_call_with_retry` (antes solo lo hacía `chat()`), con backoff que respeta el `retryDelay` del 429 — esto elimina la necesidad de relanzar el proceso desde fuera ante un rate-limit transitorio.
-11. **Rotación de modelos de Google (mayo 2026):** `gemma-3-27b-it` desapareció del catálogo; el nuevo default del pipeline es `gemma-4-31b-it`. El default del agente fue inicialmente `gemini-2.5-flash-lite` (10 RPM, 20 RPD) y se actualizó después a `gemini-3.1-flash-lite` tras descubrir cuota más holgada — ver punto 22.
-12. **Segundo proveedor implementado: Groq** (`normalizer/providers/groq.py`). API OpenAI-compatible vía SDK `groq`. Defaults: `llama-3.3-70b-versatile` (pipeline) y `qwen/qwen3-32b` (agente). `Message` se amplió con un campo `tool_name` porque Gemini empareja respuestas de tools por nombre y OpenAI/Groq por id; ahora se rellenan ambos en el bucle del agente.
-13. **Gotcha de modelos en Groq para tool-use:** se probaron varios y solo Qwen funciona consistentemente. Resumen:
-    - `llama-3.1-8b-instant` y `llama-3.3-70b-versatile`: emiten function calls con sintaxis **markup** (`<function=name>args</function>`) en lugar del slot estructurado `tool_calls`. La API de Groq los rechaza con `tool_use_failed`.
-    - `openai/gpt-oss-20b`: usa el slot correcto pero **emite JSON malformado** en los argumentos (truncado al final).
-    - `openai/gpt-oss-120b`: chain-of-thought que el parser de Groq **no consigue separar** del output final → `output_parse_failed`. Es el patrón típico de los modelos tipo o1: razonan en voz alta y Groq espera estructura.
-    - **`qwen/qwen3-32b`**: funciona consistentemente con el formato OpenAI estructurado. Es el default del agente en Groq.
-    - Los Llama siguen valiendo para el **pipeline** (texto-a-texto, sin tools).
-14. **Validación end-to-end con Groq** (modelo agente `qwen/qwen3-32b`, modelo pipeline `llama-3.3-70b-versatile`): primer run produjo **10/11 entidades** del UML manual + `key_invokes` como sobre-normalización menor. Segundo run sobre el mismo input produjo **6/11**: Qwen decidió que `analytics` y `keys` eran "secundarios" y los saltó. **Varianza alta del agente con Qwen** — los runs oscilan entre 6 y 10 entidades sobre el mismo input. Por eso se forzó iteración del prompt y exploración de más modelos (siguiente hito).
-15. **Catálogo de Groq probado completo para tool-use.** Solo `qwen/qwen3-32b` y `meta-llama/llama-4-scout-17b-16e-instruct` funcionan con la API OpenAI-compatible para nuestro agente. Llama 3.x emite markup en lugar del slot estructurado, `gpt-oss-20b` emite JSON malformado, `gpt-oss-120b` emite chain-of-thought no parseable, y los `groq/compound-*` no aceptan tools del cliente (vienen con sus propias precableadas). Llama 4 recupera POSTS por primera vez (que Qwen suele perder), pero Qwen recupera analytics/keys que Llama 4 suele perder — distintas "personalidades" exploratorias, no Pareto dominado.
-16. **System prompt del agente reescrito** (`prompts/discovery_system.md`): de 75 líneas a 38, project-agnostic, con tres principios nuevos. (a) Cobertura sobre parsimonia: "mejor sobre-incluir que perder una entidad" — antes pedíamos "sé selectivo, mejor 6 archivos que 15" y los modelos débiles paraban demasiado pronto. (b) Prohibido descartar sin inspeccionar: no se puede marcar un archivo o directorio como "secundario" sin haber abierto su contenido. (c) Vecindad estructural: si encuentras un schema en `X/Y/foo`, debes inspeccionar los hermanos en `X/Y/` antes de cerrar — heurística agnóstica del layout que cubre el caso típico "schemas viven juntos". Más un suelo de exploración (≥2 subdirs listados, ≥4 archivos inspeccionados) y obligación de justificar descartes top-level en el `summary`.
-17. **Lección: el modelo es el cuello de botella del agente, no el prompt.** Validación parcial con el prompt nuevo + Llama 4 Scout (`out-spruce-llama4-v3/`): **7/11 entidades** — mejor que el peor run de Qwen (6/11) pero peor que el mejor (10/11) y muy lejos del 11/11 de Gemini. Llama 4 ignora la regla de vecindad estructural (lee `user.js` pero no toca `room.js`/`keys.js`/`analytics.js` que están en el mismo directorio). El prompt nuevo es necesario y mejora la base, pero **la capacidad del modelo para honrar instrucciones complejas pone un techo** que el prompt no puede saltarse. Para Spruce con tool-use: Gemini 2.5 Flash Lite (Google, 11/11) > Qwen3-32B (Groq, 6-10) > Llama 4 Scout (Groq, 6-7) > Llama 3.x (no funciona).
-18. **Qwen3-32B en Groq sufre el TPM cap del free tier** (6000 TPM). Iteraciones con historial moderado (≥6000 tokens en una petición) lo revientan con HTTP 413. El prompt nuevo solo ahorró ~150 tokens, insuficiente. Trabajar este modelo en serio requiere tier dev de pago o trimming agresivo del historial.
-19. **Segundo run de Llama 4 Scout aún peor que v3** (`out-spruce-llama4-test/`): 8 iteraciones, **solo 2 archivos seleccionados** (`config/app.js` + `utils/models/user.js`), 4/11 entidades sustanciales en el DDL. El propio `summary` del agente identifica `analytics.js`/`keys.js`/`room.js` como "potencialmente relevantes" y aun así no los abre — ignora frontalmente la regla de vecindad estructural incluso cuando la nombra. Refuerza punto 17: el modelo es el techo y Llama 4 Scout tiene varianza alta + bias contrarian.
-20. **Colapso del free tier de Google (mayo 2026).** Fuentes oficiales: Google recortó el free tier en diciembre 2025 "para liberar compute para Gemini 3 Pro" sin aviso previo. Estado actual de la cuenta del autor:
-    - `gemini-2.0-flash` y `gemini-2.0-flash-lite`: **`limit: 0`** (retirados del free tier).
-    - `gemini-2.5-flash` y `gemini-2.5-flash-lite`: **20 RPD** (antes 250+). Una sola corrida del agente con prompt nuevo (≥10-20 iter) iguala o supera el cap diario.
-    - Familia `gemini-3.*`: paid tier focus, no figura en free tier público.
-    - La página oficial `ai.google.dev/gemini-api/docs/rate-limits` ya no publica la tabla — redirige al dashboard de AI Studio.
-    - **Bomba de relojería**: `MAX_ITERS = 20` coincide con RPD = 20. El prototipo no es defectuoso, simplemente el free tier de Google está dimensionado para "1 corrida/día".
-21. **Cerebras identificado como mejor candidato free tier no implementado.** Free tier: 5 RPM / 30K TPM / **1M TPD** por modelo (vs 500K de Groq, 20 RPD de Google). Modelos free: `gpt-oss-120b`, `qwen-3-235b-a22b-instruct-2507` (hermano 7× del Qwen 32B que ya usamos), `llama3.1-8b`, `zai-glm-4.7`. API OpenAI-compatible → adaptar `groq.py` es casi copy-paste. Sin probar todavía. Investigación detallada en `notes/2026-05-25-free-tier-google-y-alternativas.md`.
-22. **`gemini-3.1-flash-lite` validado como nuevo default del agente Google.** Inspeccionando el dashboard de AI Studio aparecen modelos `gemini-3.*` en el free tier que no estaban en la página pública. El más interesante: `gemini-3.1-flash-lite` con **15 RPM / 250K TPM / 500 RPD** — 1.5× RPM y **25× RPD** sobre el 2.5-flash-lite anterior. ID estable (no `-preview`), soporta `generateContent` y function-calling. Validación end-to-end sobre `https://github.com/dan-divy/spruce` (`out-spruce-3.1/`): el agente seleccionó los 4 schemas exactos en 13 iteraciones, sin ruido tipo `test/`. El pipeline se completó con Groq porque Gemma devolvió 500/503 transitorios — el cambio toca solo el agente, así que la validación del modelo nuevo es limpia. DDL final: 11/11 entidades del UML + 1 sobre-normalización legítima (`user_rooms`, junction redundante con `room_users`). La "bomba de relojería" del punto 20 queda **desactivada para Spruce**; Cerebras pasa a back-burner.
-23. **Nuevo cuello potencial: RPM (no RPD) en proyectos reales.** El run de Spruce tocó **13/15 RPM** porque el agente lanza iteraciones casi seguidas. Con un repo realista (más archivos, jerarquía compleja, más iteraciones de exploración) probablemente saturará el cap y el SDK hará backoff entre turnos — el run se completará pero con wall-clock peor. La cuota diaria (500 RPD) ya no es el cuello; lo es **cuántas requests/min puede emitir el agente**. No bloquea validar proyectos grandes, solo los hace lentos.
-24. **Primer proyecto "real" probado: Habitica** (`https://github.com/HabitRPG/habitica`, app real en producción). Dos runs sobre el mismo input:
-    - **v3 del prompt (4 de 17 archivos en `website/server/models/`):** el agente abrió user/task/group/challenge y cerró con `done` calificando el resto de hermanos ("message.js, coupon.js, subscriptionPlan.js, transaction.js, tag.js, webhook.js...") como "auxiliares". DDL: 30 tablas, sin entidades como Message, Tag, SubscriptionPlan. Mismo patrón "principal vs secundario" visto antes con Llama 4 y Qwen.
-    - **v4 del prompt + caps subidos** (`MAX_ITERS=20→30`, `MAX_FILES=15→30`): el prompt se condensó de 55 a 41 líneas. Cambios principales: (a) mención explícita del árbol filtrado que el agente recibe en su primer mensaje user — antes el prompt no lo nombraba y el agente listaba la raíz innecesariamente; (b) fusión de las antiguas reglas "no descartar sin inspeccionar" y "vecindad estructural" en un único "Principio del hermano" que dice literalmente *"el filtro principal/secundario lo hace el pipeline posterior, no tú"*; (c) eliminada la regla "no inventes rutas" (ya lo cubre el error de la tool); (d) condición de `done`: si identificaste un dir de modelos, lo cubres entero antes de cerrar. Resultado: **10 archivos seleccionados** (vs 4), 14 iter, sin saturar caps. DDL: 33 tablas con entidades nuevas (**Tag, Webhook, Chat, Inbox, SubscriptionPlan** + mejor descomposición del User: UserAuth, UserStats, UserChallenge, UserGuild, UserTag). **Sigue sin recuperar** `coupon.js`, `transaction.js`, `blocker.js`, `iapPurchaseReceipt.js`, `newsPost.js`, `emailUnsubscription.js`, `userHistory.js`, `userNotification.js`, `pushDevice.js`. Mejora real (~2.5× cobertura de modelos) pero **el techo del modelo sigue ahí**: el summary del agente literalmente dice *"priorizando los archivos de modelo"* — la heurística "principal/secundario" no se elimina con el prompt, solo se atenúa. Refuerza punto 17.
-    - **Inestabilidad de Gemma en este run:** `gemma-4-31b-it` devolvió 500 INTERNAL dos veces en el paso DESIGN del pipeline. La tercera reintento funcionó. `_call_with_retry` solo trata 429 — los 5xx no se reintentan en código. No se hizo en este commit porque el scope era el prompt, pero el patrón se ha visto ya 3-4 veces en Gemma; merece su propio fix.
-25. **Trace turno a turno + prompt v5 (dos pasadas + nudge de batching) + tree.txt + descubrimiento del árbol incompleto.** Tres movimientos encadenados sobre Habitica:
-    - **Trace.** `DiscoveryState.turns: list[TurnTrace]` y render en `discovery.md` como tabla `Iter | Tool calls`. Permite ver si el modelo batchea o va 1-a-1 y dejó claro que el "casi siempre 1 por turno" anotado en `proceso-agentico-explicado.md` era incorrecto: la varianza es enorme entre runs sobre el mismo input.
-    - **Prompt v5** (41 → 63 líneas). Tres cambios: (a) la lista de evidencia se enmarca como **"checklist, no menú"** — en proyectos sin schemas declarados la evidencia vive en categorías 2-5; (b) la estrategia se parte en **dos pasadas obligatorias**: declarativa (grep de schemas explícitos) e implícita (mirar el árbol restante y buscar escrituras/accesos/seeds); (c) nudge explícito sobre **batching**: "varios `select_evidence` en una sola respuesta = 1 petición".
-    - **Logging del árbol.** Se persiste a `tree.txt` el listado que recibe el agente en su primer mensaje user. Surgió de la pregunta del usuario "¿el árbol que tiene es incompleto?" y la respuesta empírica fue **sí, catastróficamente**.
-    - **Cuatro runs sobre Habitica** (mismo prompt v4/v5, mismo modelo, mismo repo) ilustran la varianza brutal:
-      - Run A (prompt v4): 14 iter, 10 archivos, 33 tablas. Estrategia `list_dir`-heavy.
-      - Run B (prompt v4 con trace): 7 iter, 5 archivos, 36 tablas (pero perdió Webhook, SubscriptionPlan, Tag). Estrategia "grep amplio + selects directos sin read".
-      - Run C (prompt v5, 1ª corrida): 2 iter, **6 archivos batchéados en un solo turno** (4.0/iter). Cobertura baja pero el batching funcionó. Skip explícito de la pasada implícita.
-      - Run D (prompt v5, 2ª corrida): 23 iter, **20 archivos (cobertura prácticamente completa del dir de modelos)**, 1.0/iter sin batching. Aparecen por fin Coupon, Transaction, Blocker, IapPurchaseReceipt, NewsPost, EmailUnsubscription, PushDevice, SubscriptionPlan, UserHistory, UserNotification. Pero el batching nudge no se sostuvo y la pasada implícita sigue sin ejecutarse de verdad — el agente la afirma en el summary y el trace lo desmiente (cero grep/read fuera del dir de models).
-    - **Árbol incompleto: el hallazgo más importante.** `build_tree_summary` corta a 600 entradas con DFS alfabético. En Habitica eso significa que el agente **ve 11 de los 12 top-level dirs y `website/` no está en su árbol**. El dir de modelos al que apuntan los selects vive en `website/server/models/`, que el agente *nunca vio* en su mapa inicial — lo encontró porque `grep` recorre el filesystem real, no el árbol truncado. Donde el árbol truncado SÍ haría daño es exactamente en la **pasada implícita**: el agente no puede preguntarse "¿qué archivos de handlers/rutas restantes tienen evidencia?" porque literalmente no sabe que `website/server/controllers/`, `website/server/api/`, etc. existen.
-26. **Árbol BFS + cap 2000 + skip de tests del dump + batching como regla dura.** Respuesta a los dos problemas que dejó abiertos el punto 25:
-    - **`build_tree_summary` reescrito.** DFS → BFS (garantiza visibilidad de todos los top-level dirs antes de profundizar), `max_entries` 600 → **2000** (~30K tokens, sigue muy por debajo del cap TPM de 250K), y sufijos `.test.js/.test.ts/.spec.js/.spec.ts` excluidos del **dump del árbol** (no globalmente — siguen accesibles vía `read_file`/`grep` si el agente da con ellos por otra vía, p. ej. la lista de evidencia del prompt menciona "fixtures, tests"). Resultado verificado: Habitica ahora muestra 12/12 top-level dirs, 1516 entradas bajo `website/`, 26 entradas en `website/server/models/`, y dirs candidatos a evidencia implícita visibles (`website/server/{controllers,libs,middlewares,models}/`).
-    - **Batching promovido a regla dura.** El "tip" del v5 al final de la sección de estrategia se reescribió como **Regla 1** en el bloque de reglas duras: *"Una respuesta = una petición. Batchea las decisiones firmes. (...) Tras un `grep`, si identificaste 5 archivos como evidencia directa, los 5 `select_evidence` van en **una sola respuesta**, no en 5 turnos separados."* + excepción explícita para cuando una decisión depende de otra.
-    - **Dos runs adicionales sobre Habitica** muestran que el batching como regla dura **sí funciona pero con varianza**:
-      - **Run F**: 10 iter, 8 archivos, 1.0/iter (sin batching). Cobertura mediocre.
-      - **Run G**: **5 iter, 25 tool_calls, 5.0/iter, 22 archivos**. **El mejor run hasta la fecha sobre Habitica**. El agente emitió **19 selects en un solo turno** (iter 2) tras una grep declarativa, leyó `user/index.js` (iter 3) para verificar el subdir user/, batchéo 3 selects más (iter 4) y cerró (iter 5). Cobertura: TODOS los archivos top-level de `website/server/models/` + el subdir `user/` completo + el subdir **`analytics/` completo** (que ningún run anterior tocó: `registrationEvent.js`, `subscriptionEvent.js`).
-    - **Lectura conjunta**: la varianza del modelo no se elimina con prompt, pero el techo del *mejor* run sube con cada iteración del sistema (prompt + caps + árbol). Para defender el TFG: el rango observado en Habitica con esta configuración es 8-22 archivos según el run; el techo (22) cubre prácticamente todo el modelo documental declarativo, y la pasada implícita se vuelve posible (no garantizada) gracias al árbol completo.
-27. **Observabilidad en tiempo real (stderr `[mm:ss]`) + retry de Google extendido a 5xx.** Antes de esto una corrida típica se resumía en 3 líneas de `click.echo`: arranque del descubrimiento, ruta de evidencia, ruta del DDL. Todo lo demás —clonado del repo, hasta 30 iteraciones del agente, los 3 `generate()` del pipeline, y los `time.sleep()` de los retries 429— era silencioso, indistinguible de un cuelgue. Cambios:
-    - **Helper único `normalizer/_log.py`** (~15 líneas): `log(msg)` emite por stderr con timestamp relativo desde el arranque del proceso (`time.monotonic()` capturado a nivel módulo). Reusa `click.echo(err=True)` por consistencia con el resto del CLI; sin `logging`, sin `--verbose` (default siempre on — el modo "callado" no aporta en un prototipo).
-    - **Puntos instrumentados**:
-      - `cli.py`: log de arranque con `provider | pipeline=<model> [| agent=<model>] | out=<dir>/` (los providers se construyen antes para poder mostrar el modelo real, no la opción CLI que puede ser `None`).
-      - `pipeline.py`: cada uno de los 3 `provider.generate(...)` envuelto con `log("Pipeline: X ...")` antes y `log("Pipeline: X ok (Ns)")` después. Etiquetas: `ANÁLISIS / DISEÑO / DDL`.
-      - `discovery/repo.py`: log antes del `git clone --depth 1` y log si el repo ya estaba en cache.
-      - `discovery/agent.py`: log de arranque (max_iters, max_files, líneas del árbol), log por iteración con `[iter NN] -> ` + las tool_calls compactas (mismo formato que la columna del `discovery.md`, separadas por ` , ` cuando hay batching), log al cerrar con `done` (archivos seleccionados + iter usadas) y log si se agota el presupuesto.
-      - `providers/google.py` y `providers/groq.py`: dentro de `_call_with_retry`, antes del `time.sleep(delay)`, log con `{code} en {provider}.{op} — esperando Ns (intento N/4)`. El parámetro `op` ("generate" o "chat") se pasa desde los call sites.
-    - **Fix del 5xx en Google bundleado.** Cerraba el ítem 1 de "Siguiente" y tocaba la misma función. `_call_with_retry` ahora captura la base `genai_errors.APIError` y reintenta el código si está en `{429, 500, 502, 503, 504}` — antes solo 429, lo que rompía corridas de Gemma cada vez que Google devolvía un 500/503 transitorio (≥3-4 veces vistas en sesiones previas). Para Groq no se amplía: la doc histórica no menciona 5xx persistente y `RateLimitError` ya lo cubre.
-    - **Verificación** sobre `data/spruce/`: corrida completa en ~4 min, todas las etiquetas salen en orden con sus duraciones (`ANÁLISIS 78s`, `DISEÑO 85s`, `DDL 78s`), `04_ddl.sql` mantiene las 11 `CREATE TABLE` del baseline manual sin regresión. La corrida URL (clone + agente + pipeline) queda pendiente de validar pero los puntos instrumentados están todos cubiertos por el cambio.
+- **Caso fácil** (`data/spruce/`) y **caso difuso** (`data/spruce-difuso/`) end-to-end: el DDL recupera las 11 entidades del UML manual (+ tablas hijas legítimas como `post_comments`, `post_likes`). Para difuso hizo falta una regla explícita en `design.md` de **reconciliación de atributos redundantes** (dos columnas que referencian el mismo registro de otra tabla → conservar solo una FK canónica).
+- **Descubrimiento desde URL** (`normalizer/discovery/`, RU-1.3 + RU-5): la CLI clona el repo (cache en `.cache/repos/`), el agente con tool-use (`list_dir`, `read_file`, `grep`, `select_evidence`, `done`) selecciona archivos y los deposita en `out/00_discovery/evidence/` junto con traza `discovery.md` (tabla `Iter | Tool calls`) y `tree.txt` (lo que el agente vio en su primer mensaje). Validado contra `https://github.com/dan-divy/spruce`: agente selecciona los 4 schemas exactos, DDL 11/11 entidades.
+- **Multi-proveedor**: Google y Groq intercambiables; cierra el cuasirequisito multi-proveedor del TFG.
+
+**Lecciones que conviene no olvidar:**
+
+- **El modelo es el techo del agente, no el prompt.** Sobre Spruce con tool-use: Gemini (Google) > Qwen3-32B (Groq) > Llama 4 Scout (Groq) > Llama 3.x (no funciona). Iterar el prompt sube el suelo pero la capacidad del modelo para honrar instrucciones complejas pone un techo.
+- **Tool-use en Groq es delicado.** Solo `qwen/qwen3-32b` y `meta-llama/llama-4-scout-17b-16e-instruct` funcionan con el slot estructurado. Llama 3.x emite markup `<function=...>`, `gpt-oss-20b` emite JSON malformado, `gpt-oss-120b` emite chain-of-thought no parseable, `groq/compound-*` no aceptan tools del cliente. Los Llama 3.x siguen valiendo para el **pipeline**.
+- **Patrón "principal vs secundario" del agente.** Modelos débiles cierran el descubrimiento tras abrir 3-4 archivos del dir de modelos calificando el resto de hermanos como "auxiliares". El prompt actual (`prompts/discovery_system.md`) ataca esto con tres palancas: (a) **Principio del hermano**: si encuentras un schema en `X/Y/foo`, inspeccionas los hermanos en `X/Y/` antes de cerrar — el filtro principal/secundario lo hace el pipeline posterior, no el agente; (b) **dos pasadas obligatorias**: declarativa (grep de schemas explícitos) e implícita (mirar el árbol restante buscando escrituras/accesos/seeds); (c) **batching como regla dura**: una respuesta = una petición, `select_evidence` consecutivos van batchéados.
+- **Varianza alta del agente.** Sobre el mismo input (Habitica, mismo prompt, mismo modelo) se han visto runs de 5 a 22 archivos. El batching como regla dura sube el techo pero no elimina la varianza. La pasada implícita sigue siendo "posible pero no garantizada".
+- **Árbol BFS + cap 2000**: `build_tree_summary` usa BFS (no DFS) y cap 2000 entradas (~30K tokens) precisamente para que el agente vea **todos los top-level dirs** antes de profundizar — versiones DFS antiguas hacían invisible `website/` en Habitica. Sufijos `.test.js/.test.ts/.spec.js/.spec.ts` se excluyen solo del dump del árbol, no globalmente (siguen accesibles vía `read_file`/`grep`).
+- **Observabilidad por stderr (`[mm:ss]`)**: helper único `normalizer/_log.py`. Instrumentados arranque del CLI, las 3 `generate()` del pipeline, clonado, cada iteración del agente con sus tool_calls compactas, y los retries del provider antes del `sleep`. Default siempre on.
+- **Retries de Google extendidos a 5xx.** `_call_with_retry` en `google.py` reintenta `{429, 500, 502, 503, 504}` respetando el `retryDelay` del 429. Gemma devuelve 500/503 transitorios con cierta frecuencia. En Groq solo `RateLimitError`.
 
 **Siguiente:**
 
-1. **Pasada implícita real**: el punto 26 deja el árbol completo para Habitica, pero ningún run hasta ahora ejecuta una pasada implícita "de verdad" en repos con Mongoose — el agente sigue conformándose con la pasada declarativa cuando el dir de modelos es rico. Es defendible (en proyectos con schemas explícitos la cobertura del dir de models cubre todo), pero NO está validado contra un repo con MongoDB **sin** Mongoose. Próximo dataset relevante: un repo público con MongoDB nativo donde la grep declarativa no dé hits.
-2. **Batching no determinista**: Run F (1.0/iter) y Run G (5.0/iter) tienen el mismo prompt. La regla dura sube el techo pero no elimina la varianza. Si esto se vuelve un problema defendible, la vía es a nivel código: añadir una tool `select_evidence_batch(items=[...])` que materialice la batching en una sola call; o agrupar `select_evidence` consecutivos en `dispatch()`.
-3. **Otros candidatos pendientes (no urgentes):**
-   - **Devolver al agente, tras `read_file`, qué hermanos de ese dir aún no ha leído**: nudge directo contra el patrón principal/secundario, sin tocar el prompt.
-   - **Caching de `read_file` en `DiscoveryState`**: si el modelo lee el mismo archivo dos veces, ahorra iter.
-4. **Si el RPM cap del free tier se confirma bloqueante** en proyectos más grandes que Habitica, las opciones son:
-   - **Tier dev de Google** (paid) — sube el RPM pero rompe el "free tier".
-   - **Cerebras como provider alternativo** — sigue siendo el candidato más prometedor (qwen-3-235b free, 1M TPD). Antes el caso era el RPD; ahora sería el RPM. Implementación: copy-paste de `groq.py`. Verificar antes en `inference-docs.cerebras.ai/llms.txt` que el modelo elegido soporta tools.
-   - **Multi-proveedor balanceado** — agente en Google, pipeline en Groq. En la práctica esta sesión ya lo hizo de facto (Groq como fallback de Gemma). Requeriría un `--agent-provider` separado en la CLI; ahora mismo el `--provider` es único.
-5. Si la varianza del agente sigue siendo problemática para defender, dos vías:
-   - **Subir de modelo**: tier dev de Groq (Qwen sin TPM cap), o billing en Google.
-   - **Múltiples runs + agregación**: correr el agente 3 veces y unir las evidencias. Más caro pero baja la varianza efectiva sin tocar prompt.
-6. Cuando se vuelva a iterar sobre la calidad del DDL: hay puntos menores conocidos que el autor decidió **no atacar ahora** porque "más o menos funciona" — el `04_ddl.sql` se emite envuelto en ` ```sql ... ``` ` (no es ejecutable tal cual sin pelar el cerco), y se usa `BOOLEAN` que Oracle no tiene nativo en versiones <23. Si en el futuro se fija una versión Oracle objetivo o se necesita ejecutar el SQL automáticamente, esos dos puntos vuelven a ser relevantes.
+1. **Pasada implícita real en repo sin Mongoose.** Hoy no está validada contra MongoDB nativo donde la grep declarativa no dé hits — el agente se conforma con la pasada declarativa cuando el dir de modelos es rico. Buscar un repo público con MongoDB sin Mongoose como próximo dataset.
+2. **Reducir varianza del batching.** Si se vuelve bloqueante: tool nueva `select_evidence_batch(items=[...])` que materialice el batching en una sola call, o agrupar `select_evidence` consecutivos en `dispatch()`.
+3. **Nudges contra "principal vs secundario" sin tocar prompt**: devolver al agente, tras `read_file`, qué hermanos del dir aún no ha leído. Cachear `read_file` en `DiscoveryState` para que relecturas no cuesten iter.
+4. **Calidad del DDL — puntos menores aparcados:** el `04_ddl.sql` se emite envuelto en ` ```sql ... ``` ` (no ejecutable sin pelar el cerco), y se usa `BOOLEAN` que Oracle <23 no tiene nativo. Solo relevantes si se fija versión Oracle o se necesita ejecución automática.
+5. **Si RPM del free tier se confirma bloqueante** en repos más grandes: tier dev de Google (paid), Cerebras como provider alternativo (free tier 5 RPM / 30K TPM / **1M TPD**, qwen-3-235b, API OpenAI-compatible — adaptar `groq.py` es copy-paste), o multi-proveedor balanceado (agente Google + pipeline Groq, requiere `--agent-provider` separado).
 
-**Convención de directorios de salida:** cada run usa su propio `--out-dir` (`out-facil/`, `out-difuso/`, `out-spruce-llama4-v3/`, etc.) para no pisarse. Los runs intermedios suelen purgarse cuando dejan de ser referencia; los actuales en disco se ven con `ls -d out-*`. El directorio `out/` por defecto NO debe asumirse vinculado a ningún dataset concreto.
+**Convención de directorios de salida:** cada run usa su propio `--out-dir` (`out-facil/`, `out-difuso/`, `out-spruce-url/`, etc.). Los intermedios se purgan cuando dejan de ser referencia; los actuales en disco con `ls -d out-*`. `out/` por defecto NO se asume vinculado a ningún dataset.
 
 ---
 
@@ -153,37 +95,33 @@ normalizer/
 │   ├── filesystem.py       # filtrado del árbol y validación anti path-traversal
 │   └── repo.py             # git clone --depth 1 con cache en .cache/repos/
 └── providers/
-    ├── base.py             # Protocol LLMProvider con generate() y chat() + dataclasses (Message, ToolSpec, ToolCall, ChatResponse)
+    ├── base.py             # Protocol LLMProvider + dataclasses (Message, ToolSpec, ToolCall, ChatResponse)
     ├── google.py           # GoogleProvider: SDK google-genai
     ├── groq.py             # GroqProvider: SDK groq (OpenAI-compatible)
     └── __init__.py         # registry + build_provider(for_agent=...) + DEFAULT_MODELS / DEFAULT_AGENT_MODELS
 data/
 ├── spruce/                 # 4 schemas Mongoose (caso fácil)
 └── spruce-difuso/          # 8 archivos de servidor sin schemas (caso realista)
-notes/                      # notas de sesión (YYYY-MM-DD-<tema>.md); contexto histórico complementario a CLAUDE.md
+notes/                      # notas de sesión y documentos vivos (ver abajo)
 out-*/                      # cada run usa su propio --out-dir (gitignored)
-                            # Convención: out-<dataset>[-<variante>]/ p. ej.
-                            #   out-facil/, out-difuso/, out-spruce-url/,
-                            #   out-spruce-llama4-v3/  (el actual en disco)
-out/                        # default si no se pasa --out-dir, no asumir contenido
-.cache/repos/               # repos clonados por el agente              (gitignored)
+.cache/repos/               # repos clonados por el agente (gitignored)
 ```
 
-**Sobre `notes/`:** material complementario para la memoria del TFG. Dos tipos:
+**Sobre `notes/`:** material complementario para la memoria del TFG.
 
-- **Logs de sesión** con formato `YYYY-MM-DD-<tema>.md`: el *qué se hizo y por qué* de una sesión grande, útil para reconstruir el razonamiento detrás de varios commits relacionados. Crear solo si la sesión cierra un hito o introduce una decisión arquitectural.
-- **Documentos vivos** con nombre temático sin fecha (p. ej. `proceso-agentico-explicado.md`): explicación conceptual de partes del código pensada para defender el TFG y nutrir la memoria. Crecen a medida que se exploran nuevos aspectos.
+- **Logs de sesión** `YYYY-MM-DD-<tema>.md`: el *qué se hizo y por qué* de una sesión grande. Crear solo si cierra un hito o introduce una decisión arquitectural.
+- **Documentos vivos** con nombre temático sin fecha (p. ej. `proceso-agentico-explicado.md`): explicación conceptual para defender el TFG.
 
-Ninguno es el estado actual (eso vive en CLAUDE.md) ni reemplaza al historial git.
+Ninguno es el estado actual (eso vive aquí) ni reemplaza al historial git.
 
-Principios que conviene preservar:
+**Principios que conviene preservar:**
 
 - **El pipeline solo conoce `LLMProvider`**: nunca importa SDKs concretos. Añadir un proveedor nuevo es: clase nueva en `providers/`, entrada en `_REGISTRY`, `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS`. Cero cambios en `pipeline.py` o `cli.py`.
-- **Dos modelos por proveedor**: el del pipeline (`--model`, defaults en `DEFAULT_MODELS`) puede ser barato/free porque solo hace texto→texto; el del agente (`--agent-model`, defaults en `DEFAULT_AGENT_MODELS`) necesita function-calling — por eso para Google el default del agente es `gemini-3.1-flash-lite` y no `gemma-4-31b-it`.
-- **El agente despacha tools, el provider solo expone un turno.** `LLMProvider.chat(messages, tools)` devuelve la decisión del modelo (texto o `tool_calls`); el bucle agéntico vive en `discovery/agent.py`. Esto mantiene la responsabilidad de "saber del SDK" dentro del provider y la de "saber del repo" dentro de `discovery/`.
-- **Prompts en `normalizer/prompts/*.md`**, intercambiables editando el archivo sin tocar Python. `__init__.py` los carga al importar y los expone como `ANALYZE`, `DESIGN`, `DDL`, `DISCOVERY_SYSTEM`. Los del pipeline tienen placeholders `{evidence}`/`{analysis}`/`{design}` (formato `str.format`); el del agente no. Cuidado al `.format()` un prompt cuyo contenido tiene `{...}` literales (caso de `discovery_system.md`, con `new Schema({...})` en los ejemplos): por eso no se le aplica `.format()` en el código actual.
-- **Layout flat** (no `src/`) para que `python -m normalizer` funcione sin `pip install -e .`, aunque la instalación también está soportada.
-- **Los prompts no asumen Mongoose ni schemas explícitos.** Hablan de "evidencia heterogénea" (schemas, consultas, ejemplos, accesos en código). Si se cambian, mantener este principio.
+- **Dos modelos por proveedor**: el del pipeline (`--model`) puede ser barato porque solo hace texto→texto; el del agente (`--agent-model`) necesita function-calling.
+- **El agente despacha tools, el provider solo expone un turno.** `LLMProvider.chat(messages, tools)` devuelve texto o `tool_calls`; el bucle agéntico vive en `discovery/agent.py`. Saber del SDK → provider. Saber del repo → `discovery/`. `Message` tiene un campo `tool_name` porque Gemini empareja respuestas de tools por nombre y OpenAI/Groq por id; se rellenan ambos.
+- **Prompts en `normalizer/prompts/*.md`**, intercambiables editando el archivo sin tocar Python. Los del pipeline tienen placeholders `{evidence}`/`{analysis}`/`{design}` (formato `str.format`); el del agente no — y no se le aplica `.format()` porque su contenido tiene `{...}` literales (`new Schema({...})` en ejemplos).
+- **Layout flat** (no `src/`) para que `python -m normalizer` funcione sin `pip install -e .`.
+- **Los prompts no asumen Mongoose ni schemas explícitos.** Hablan de "evidencia heterogénea". Mantener este principio.
 
 ---
 
@@ -197,120 +135,49 @@ Principios que conviene preservar:
 
 ### Problema que aborda
 
-Las bases de datos NoSQL orientadas a documentos (MongoDB) almacenan datos desnormalizados. Migrarlos a un modelo relacional requiere identificar entidades, detectar relaciones implícitas, eliminar redundancia y diseñar claves primarias y foráneas. Es un proceso manual, complejo y propenso a errores. El TFG explora hasta qué punto los LLMs pueden automatizarlo.
+Las BD NoSQL orientadas a documentos (MongoDB) almacenan datos desnormalizados. Migrarlos a un modelo relacional requiere identificar entidades, detectar relaciones implícitas, eliminar redundancia y diseñar claves primarias y foráneas. Es un proceso manual, complejo y propenso a errores. El TFG explora hasta qué punto los LLMs pueden automatizarlo.
 
 ### Spruce como dataset de prueba
 
-[Spruce](https://github.com/dan-divy/spruce) es una aplicación real con MongoDB y schemas definidos explícitamente en el código (Mongoose, en `utils/models/`). Se eligió como caso de estudio por su complejidad moderada y la claridad de sus definiciones de esquema — pero precisamente por eso es el **caso fácil**: en proyectos reales el modelo documental rara vez está declarado tan limpiamente.
+[Spruce](https://github.com/dan-divy/spruce) es una aplicación real con MongoDB y schemas Mongoose explícitos (en `utils/models/`). Se eligió por su complejidad moderada y la claridad de sus definiciones — pero precisamente por eso es el **caso fácil**.
 
-Particularidad útil de los schemas de Spruce: muchos arrays están tipados como `Array` genérico, y la estructura real del objeto contenido **solo aparece en los comentarios** al lado del campo (p. ej. `notifications: Array, // [{msg:"...", link:"..."}]`). De ahí salen tablas hijas del modelo relacional como `USER_NOTIFICATIONS` o `CHAT_MESSAGES` — es el LLM quien debe leer esos comentarios.
+Particularidad útil: muchos arrays están tipados como `Array` genérico, y la estructura real **solo aparece en los comentarios** (`notifications: Array, // [{msg:"...", link:"..."}]`). De ahí salen tablas hijas como `USER_NOTIFICATIONS` o `CHAT_MESSAGES` — es el LLM quien lee esos comentarios.
 
-Entidades esperadas del UML manual (no es un DDL, es un diagrama del autor):
+Entidades esperadas del UML manual:
 `USERS`, `USER_FOLLOWERS`, `POSTS`, `USER_NOTIFICATIONS`, `CHAT_ROOMS`, `CHAT_ROOM_MEMBERS`, `CHAT_MESSAGES`, `API_KEYS`, `API_KEY_STATS`, `ANALYTICS`, `ANALYTICS_STATS`.
 
-**Sobre `data/spruce-difuso/`:** los 8 archivos copiados (rutas Express + handlers de socket) revelan el modelo documental implícitamente a través del uso. Casos típicos a observar en el `02_analysis.md`:
+**Sobre `data/spruce-difuso/`:** los 8 archivos revelan el modelo implícitamente. Casos típicos:
 
-- Estructura de **POSTS** (con `comments`, `likes`, `static_url`, `caption`, `category`, `createdAt`...): solo aparece en `route_settings.js` cuando se hace `u.posts.push({...})`.
-- Estructura de **CHAT_MESSAGES** (con `txt`, `by: {username, profile_pic, _id}`, `time`): solo en `handler_socket.js` con `room.chats.push({...})`. Nótese que `by` está **denormalizado** dentro del chat — el LLM tiene que decidir cómo modelarlo.
-- Estructura de **NOTIFICATIONS** (con `msg`, `link`, `time`): aparece repetidamente con `notifications.push(...)` en varios handlers.
-- Estructura de **API_KEY_STATS** (`time`, `request`): solo en `route_developer_api.js`.
-- Hay incluso un **typo del repo original** (`fistname` en vez de `firstname` en `route_auth.js`). El LLM tendrá que decidir si lo trata como atributo legítimo o lo reconcilia con `firstname`.
+- **POSTS** (`comments`, `likes`, `static_url`, `caption`...): solo en `route_settings.js` (`u.posts.push({...})`).
+- **CHAT_MESSAGES** (`txt`, `by: {username, profile_pic, _id}`, `time`): solo en `handler_socket.js`. `by` denormalizado — el LLM decide cómo modelarlo.
+- **NOTIFICATIONS** (`msg`, `link`, `time`): `notifications.push(...)` en varios handlers.
+- **API_KEY_STATS** (`time`, `request`): solo en `route_developer_api.js`.
+- **Typo del repo original** (`fistname` vs `firstname` en `route_auth.js`): el LLM tiene que decidir si lo reconcilia.
 
-El prototipo debe funcionar con cualquier input de evidencia documental, no solo con Spruce.
+El prototipo debe funcionar con cualquier evidencia documental, no solo con Spruce.
 
-### Fase experimental previa (completada, vía chat)
+### Fase experimental previa (vía chat, completada)
 
-Se evaluaron varios LLMs con el mismo input (schemas de Spruce):
+Evaluación previa con varios LLMs sobre los schemas de Spruce (GPT-3.5, GPT-5, Claude Opus 4.6, GPT-5.3-Codex). El pipeline multi-paso que mejor funcionó (Claude Opus 4.6 como agente) tenía 4 pasos: leer schemas → analizar → diseñar relacional → DDL Oracle. **Esa secuencia es la referencia del pipeline actual.**
 
-| Modelo          | Modo              | Output                     |
-| --------------- | ----------------- | -------------------------- |
-| GPT-3.5         | Prompt directo    | DDL Oracle + UML           |
-| GPT-5           | Prompt directo    | DDL Oracle + UML           |
-| Claude Opus 4.6 | Prompt directo    | DDL Oracle + UML + índices |
-| Claude Opus 4.6 | Agente (4 tareas) | DDL Oracle completo        |
-| GPT-5.3-Codex   | Agente            | DDL Oracle completo        |
+### Visión completa de la herramienta (futuro)
 
-El pipeline multi-paso que mejores resultados produjo (Claude Opus 4.6 como agente):
+Requisitos de usuario (resumen — el detalle completo vive en la memoria del TFG):
 
-1. Read all MongoDB Schema Models
-2. Analyze Schemas and Relationships
-3. Design normalized relational model
-4. Generate Oracle DDL statements
-
-Esta secuencia de pasos es una referencia para diseñar el pipeline del prototipo.
-
-### Visión completa de la herramienta (futuro, no este prototipo)
-
-Requisitos de usuario de la herramienta final:
-
-RU-1. Suministro del modelo de datos de entrada
-El usuario debe poder proporcionar al sistema el modelo de base de datos desnormalizado que se quiere analizar, a través de distintos mecanismos según el grado de elaboración del material disponible.
-RU-1.1 Carga desde archivo de schemas
-El usuario debe poder seleccionar un único archivo que contenga la definición explícita de los schemas de una base de datos documental (por ejemplo, schemas Mongoose en JavaScript) y entregárselo al sistema como entrada.
-RU-1.2 Carga desde directorio de evidencia heterogénea
-El usuario debe poder proporcionar un conjunto de archivos previamente curados que contengan evidencia heterogénea del modelo documental: schemas explícitos, consultas, operaciones de escritura, ejemplos de documentos, accesos a campos desde código de aplicación, comentarios, etc..) Y obtener un resultado igualmente útil cuando no exista una declaración explicita de schemas.
-
-RU-1.3 Análisis a partir de la URL de un repositorio
-El usuario debe poder proporcionar únicamente la URL pública de un repositorio de código que contenga una aplicación basada en una base de datos documental, sin necesidad de seleccionar manualmente los archivos relevantes ni de preparar ningún material previo.
-RU-2. Análisis del modelo documental
-El usuario debe poder obtener, a partir de la entrada proporcionada, una descripción comprensible del modelo documental subyacente que le permita conocer cómo se ha interpretado su material.
-RU-2.1 Identificación de entidades y atributos
-El usuario debe poder conocer qué entidades (colecciones de documentos) se han identificado en su entrada, así como los atributos que componen cada una y, en la medida de lo posible, sus tipos de datos.
-RU-2.2 Detección de relaciones implícitas
-El usuario debe poder conocer las relaciones entre entidades que se han detectado, distinguiendo entre referencias por identificador, documentos embebidos y arrays anidados, incluso cuando estas relaciones no estuvieran declaradas formalmente en su material.
-RU-2.3 Trazabilidad del análisis
-El usuario debe poder consultar un documento intermedio que explique con qué evidencias se ha llegado a cada entidad, atributo o relación detectados, de modo que pueda validar o discutir el razonamiento del sistema.
-RU-3. Generación del modelo relacional normalizado
-El usuario debe poder obtener, a partir del modelo documental analizado, un modelo relacional normalizado equivalente que le sirva como base de partida para una migración o un rediseño.
-RU-3.1 Diseño de tablas, claves primarias y foráneas
-El usuario debe obtener un modelo relacional con tablas, claves primarias bien definidas y claves foráneas explícitas para las relaciones detectadas.
-RU-3.2 Eliminación de redundancias
-El usuario debe obtener un modelo relacional que minimice las redundancias presentes en el modelo documental original: arrays embebidos normalizados en tablas hijas, valores duplicados en distintos documentos consolidados en tablas independientes y atributos repetidos por denormalización reconciliados en una única columna canónica.
-RU-3.3 Generación de DDL Oracle
-El usuario debe poder obtener el modelo relacional final como un conjunto de sentencias DDL compatibles con Oracle (CREATE TABLE, claves primarias, claves foráneas y restricciones).
-RU-4. Independencia y configuración del proveedor de LLM
-El usuario no debe quedar atado a un único proveedor de LLM, ni a un único modelo dentro de un proveedor.
-RU-4.1 Elección del proveedor
-El usuario debe poder elegir, en el momento de invocar la herramienta, qué proveedor de LLM se utilizará (por ejemplo, Google, Anthropic, OpenAI).
-RU-4.2 Elección del modelo concreto
-El usuario debe poder seleccionar, dentro del proveedor elegido, el modelo concreto a emplear (por ejemplo, distintos modelos de la misma familia).
-RU-4.3 Gestión segura de credenciales
-El usuario debe poder configurar las credenciales (API keys) de los proveedores sin tener que modificar el código de la herramienta y sin que éstas queden registradas en repositorios públicos.
-RU-5. Uso de agentes para análisis de repositorios
-El usuario debe poder delegar en agentes inteligentes la tarea de localizar dentro de un repositorio cuál es la información relevante para reconstruir el modelo documental.
-RU-5.1 Descubrimiento autónomo de archivos relevantes
-El usuario debe poder confiar en que, dada únicamente la URL de un repositorio, los agentes localicen por sí mismos los archivos que contienen evidencia útil del modelo documental, sin necesidad de que el usuario los identifique o los aporte manualmente.
-RU-5.2 Justificación de las decisiones del agente
-El usuario debe poder consultar una traza o explicación de por qué el agente ha seleccionado unos archivos y descartado otros, para poder confiar en su criterio o corregirlo.
-RU-6. Interacción del usuario con el resultado mediante agentes
-El usuario debe poder no sólo recibir un resultado final estático, sino dialogar con el sistema para refinarlo según su criterio.
-RU-6.1 Revisión y modificación guiada del modelo relacional
-Una vez generado el modelo relacional, el usuario debe poder solicitar cambios en lenguaje natural (renombrar entidades, fusionar tablas, dividir una entidad, reinterpretar una relación, etc.), y un agente debe encargarse de aplicar esos cambios manteniendo la coherencia del modelo y del DDL resultante.
-RU-6.2 Iteración hasta resultado satisfactorio
-El usuario debe poder iterar varias rondas de refinamiento con el agente hasta dar por bueno el modelo, sin tener que reiniciar todo el pipeline desde cero en cada cambio.
-RU-7. Interfaz de uso de la herramienta
-El usuario debe poder utilizar la herramienta mediante una interfaz adecuada a su perfil, ya sea técnica o no técnica.
-RU-7.1 Interfaz de línea de comandos (CLI)
-El usuario debe poder utilizar la herramienta desde una interfaz de línea de comandos, de modo que pueda integrarla en pipelines automatizados o utilizarla en entornos sin escritorio gráfico.
-RU-7.2 Interfaz gráfica de usuario (GUI)
-El usuario debe poder utilizar la herramienta desde una interfaz gráfica que le permita cargar la entrada de forma visual, seguir el avance del proceso, inspeccionar los resultados intermedios, visualizar el modelo relacional generado y dialogar con el agente de refinamiento, sin necesidad de conocer la sintaxis de la línea de comandos.
-RU-8. Inspección de los resultados intermedios
-El usuario debe poder inspeccionar todos los artefactos producidos por el sistema durante el proceso, no sólo el DDL final, para entender, depurar y comparar ejecuciones.
-RU-8.1 Acceso a los artefactos por fases
-El usuario debe poder acceder a los resultados de cada fase del proceso (entrada agregada, análisis del modelo documental, diseño relacional, DDL final) como archivos independientes que pueda abrir y consultar.
-RU-8.2 Aislamiento de ejecuciones
-El usuario debe poder lanzar varias ejecuciones sobre distintos casos de prueba sin que los resultados de una sobrescriban los de otra.
-RU-9. Prototipo CLI
-El usuario debe poder disponer de un prototipo en línea de comandos que cubra el flujo completo de la herramienta para los casos de entrada de tipo archivo y directorio curado.
-RU-9.1 Ejecución end-to-end
-El usuario del prototipo debe poder, mediante una única invocación, ejecutar todo el proceso de transformación (lectura, análisis, diseño, DDL) y obtener el DDL Oracle final sobre los datasets de prueba.
-RU-9.2 Validación frente al modelo de referencia
-El usuario debe poder validar el prototipo comparando cualitativamente su salida con el modelo relacional de referencia elaborado manualmente para el repositorio de prueba seleccionado(Spruce).
+- **RU-1** Entrada: archivo (1.1), directorio curado (1.2), URL de repositorio (1.3).
+- **RU-2** Análisis del modelo documental: entidades/atributos (2.1), relaciones implícitas (2.2), trazabilidad (2.3).
+- **RU-3** Modelo relacional normalizado: tablas y FKs (3.1), eliminación de redundancias (3.2), DDL Oracle (3.3).
+- **RU-4** Independencia de proveedor: elección de proveedor (4.1), de modelo (4.2), credenciales seguras (4.3).
+- **RU-5** Agentes para análisis de repos: descubrimiento autónomo (5.1), justificación de decisiones (5.2).
+- **RU-6** Refinamiento interactivo del resultado mediante agente: cambios en lenguaje natural (6.1), iteración (6.2). **No implementado en este prototipo.**
+- **RU-7** Interfaz: CLI (7.1), GUI (7.2 — fuera de scope).
+- **RU-8** Inspección: artefactos por fases (8.1), aislamiento de ejecuciones (8.2).
+- **RU-9** Prototipo CLI end-to-end (9.1) validable cualitativamente contra el UML manual de Spruce (9.2).
 
 ### Contexto profesional del autor
 
-Trabaja con un sistema legacy basado en Oracle (~6000 tablas, Oracle Forms, SQL/PLSQL). Esto motiva el interés práctico en LLMs aplicados al análisis y migración de esquemas complejos, y justifica que el DDL de referencia sea **compatible con Oracle**.
+Trabaja con sistema legacy Oracle (~6000 tablas, Oracle Forms, SQL/PLSQL). Esto motiva el interés práctico y justifica que el DDL de referencia sea **compatible con Oracle**.
 
 ### Documentación complementaria del TFG
 
-Memoria, plantilla y documento de experimentos: (preguntar ubicacion o contenido necesario para tomar decisiones y acceder al contenido)
+Memoria, plantilla y documento de experimentos: (preguntar ubicación o contenido necesario para tomar decisiones).
