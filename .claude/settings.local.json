@@ -20,7 +20,10 @@
       "WebFetch(domain:inference-docs.cerebras.ai)",
       "WebFetch(domain:docs.github.com)",
       "WebFetch(domain:help.mistral.ai)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(command -v pandoc)",
+      "Bash(pandoc --version)",
+      "Bash(echo \"pandoc: OK \\($\\(pandoc --version)"
     ]
   }
 }
