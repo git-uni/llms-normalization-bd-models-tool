@@ -1,0 +1,88 @@
+gantt
+    title Diagrama de Gantt del proyecto
+    dateFormat YYYY-MM-DD
+    axisFormat %d-%b
+    excludes weekends
+
+    section F0. Inicio
+    0.1 Aprobación del tema            :done, t01, 2026-02-02, 2d
+    0.2 Reunión de arranque            :done, t02, after t01, 1d
+    0.3 Borrador de objetivos          :done, t03, after t02, 7d
+
+    section P1. Estudios previos
+    1.1 Literatura LLMs+normalización  :done, t11, 2026-02-16, 15d
+    1.2 Function calling + agentes     :done, t12, after t11, 8d
+    1.3 Análisis Spruce + UML manual   :done, t13, after t11, 4d
+    1.4 Experimento manual 4 modelos   :done, t14, after t13, 12d
+    1.5 Diseño pipeline 4 fases        :done, t15, after t14, 6d
+    1.6 Documento de viabilidad        :done, t16, after t15, 2d
+
+    section P2. Prototipo base pipeline
+    2.1 Esqueleto + CLI click          :done, t21, after t16, 2d
+    2.2 Curado data/spruce/            :done, t22, 2026-04-20, 1d
+    2.3 4 pasos del pipeline           :done, t23, 2026-04-20, 5d
+    2.4 Prompts iniciales              :done, t24, 2026-04-23, 2d
+    2.5 Curado data/spruce-difuso/     :done, t25, 2026-04-27, 2d
+    2.6 Validación end-to-end          :done, t26, 2026-04-29, 2d
+
+    section P3. Abstracción proveedor
+    3.1 Protocol LLMProvider           :done, t31, 2026-04-29, 3d
+    3.2 Registry + factory             :done, t32, after t31, 2d
+    3.3 GoogleProvider                 :done, t33, after t32, 5d
+    3.4 Refactor pipeline              :done, t34, after t33, 2d
+    3.5 Extracción de prompts          :done, t35, after t34, 2d
+    3.6 Config segura credenciales     :done, t36, 2026-05-19, 1d
+    3.7 Validación regresión           :done, t37, after t35, 3d
+
+    section P4. Agente descubrimiento
+    4.1 Diseño bucle agéntico          :done, t41, 2026-05-20, 2d
+    4.2 5 tools + dispatch             :done, t42, after t41, 3d
+    4.3 Clonado + filesystem           :done, t43, after t42, 1d
+    4.4 Árbol BFS cap 2000             :done, t44, after t43, 1d
+    4.5 Observabilidad + retries 5xx   :done, t45, after t42, 1d
+    4.6 Prompt v1 a v5.2               :done, t46, after t44, 5d
+    4.7 Validación Spruce-URL          :done, t47, after t46, 2d
+
+    section P5. Segundo proveedor Groq
+    5.1 GroqProvider                   :done, t51, 2026-05-19, 2d
+    5.2 Caracterización catálogo       :done, t52, after t51, 3d
+    5.3 Default qwen3-32b              :done, t53, after t52, 1d
+    5.4 Validación spruce              :done, t54, after t53, 1d
+
+    section P6. Validación experimental
+    6.1 Diseño experimental            :done, t61, 2026-05-28, 1d
+    6.2 Habitica x Google              :done, t62, after t61, 2d
+    6.3 Frontera Groq x árbol          :active, t63, 2026-05-29, 2d
+    6.4 Descarte Cerebras              :active, t64, 2026-06-02, 1d
+    6.5 Lecciones en CLAUDE.md         :active, t65, 2026-06-02, 1d
+
+    section P7. Interfaz gráfica
+    7.1 Diseño 5 pantallas             :active, t71, 2026-06-03, 2d
+    7.2 Esqueleto CustomTkinter        :t72, after t71, 2d
+    7.3 Conexión con núcleo            :t73, after t72, 3d
+    7.4 Validación manual 3 casos      :t74, after t73, 2d
+
+    section P10. Agente refinamiento
+    10.1 Diseño bucle refinamiento     :crit, t101, 2026-06-16, 1d
+    10.2 Tools edición textual         :crit, t102, after t101, 3d
+    10.3 Prompt sistema                :crit, t103, after t102, 2d
+    10.4 Validación cualitativa        :crit, t104, after t103, 2d
+
+    section P8. Memoria (transversal)
+    8.1 Cap 1 descripción              :done, t81, 2026-02-16, 4d
+    8.2 Cap 3 requisitos               :done, t82, 2026-04-06, 6d
+    8.3 Cap 4 análisis                 :done, t83, 2026-05-01, 8d
+    8.4 Cap 5 diseño                   :done, t84, 2026-05-13, 10d
+    8.5 Cap 6 implementación           :done, t85, 2026-05-28, 5d
+    8.6 Cap 7 pruebas                  :active, t86, 2026-06-03, 4d
+    8.7 Cap 2 planificación            :active, t87, 2026-06-04, 4d
+    8.8 Cap 8 conclusiones             :t88, 2026-06-15, 3d
+    8.9 Cap 9 apéndices                :t89, 2026-06-10, 2d
+    8.10 Figuras (Mermaid -> PNG)      :t810, 2026-06-08, 2d
+    8.12 Revisión final + maquetación  :t812, 2026-06-12, 4d
+
+    section P9. Cierre y defensa
+    9.1 Preparación presentación       :t91, 2026-06-15, 4d
+    9.2 Entrega telemática             :crit, t92, 2026-06-17, 1d
+    9.3 Ensayo                         :t93, 2026-06-19, 2d
+    9.4 Defensa pública                :milestone, t94, 2026-06-25, 0d
