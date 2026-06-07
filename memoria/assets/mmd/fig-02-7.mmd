@@ -1,0 +1,13 @@
+gantt
+    title P4. Agente de descubrimiento
+    dateFormat YYYY-MM-DD
+    axisFormat %d-%b
+    excludes weekends
+
+    4.1 Diseño bucle agéntico          :a1, 2026-05-20, 2d
+    4.2 5 tools + dispatch             :a2, after a1, 3d
+    4.3 Clonado + filesystem           :a3, after a2, 1d
+    4.4 Árbol BFS cap 2000             :a4, after a3, 1d
+    4.5 Observabilidad + retries 5xx   :a5, after a2, 1d
+    4.6 Prompt v1 → v5.2               :a6, after a4, 5d
+    4.7 Validación Spruce-URL          :crit, a7, after a6, 2d

@@ -2,7 +2,7 @@
 
 Este capítulo describe la planificación, ejecución y cierre del proyecto desde la perspectiva de gestión, complementando la perspectiva técnica del resto de la memoria. Su contenido se estructura según las recomendaciones de la asignatura *Dirección y Planificación de Proyectos Informáticos* y la práctica habitual del PMBOK 7.ª edición.
 
-El proyecto se desarrolla en el contexto de un Trabajo de Fin de Grado, con un único recurso técnico (el autor) y dos directores académicos (los tutores). Esta circunstancia condiciona la elaboración de la OBS y simplifica drásticamente la estructura de comunicación, pero no la del plan de riesgos: el carácter experimental del trabajo —dependencia de proveedores externos de LLM, naturaleza estocástica de los resultados— hace que la identificación y el seguimiento de los riesgos sea una de las actividades centrales de la gestión.
+El proyecto se desarrolla en el contexto de un Trabajo de Fin de Grado, con un único recurso técnico (el autor) que asume todos los roles (analista, desarrollador, *tester* y redactor). Esta circunstancia simplifica drásticamente la OBS y la estructura de comunicación, pero no el plan de riesgos: el carácter experimental del trabajo —dependencia de proveedores externos de LLM, naturaleza estocástica de los resultados— hace que la identificación y el seguimiento de los riesgos sean actividades centrales de la gestión.
 
 ## 2.1 Planificación del proyecto
 
@@ -11,9 +11,8 @@ El proyecto se desarrolla en el contexto de un Trabajo de Fin de Grado, con un �
 Los interesados (*stakeholders*) del proyecto, ya identificados en §3.1 desde la perspectiva del sistema, se completan aquí con los actores del proyecto en sí:
 
 - **Autor** (Daniel Uría Edroso, UO282813). Responsable único de análisis, diseño, implementación, validación y redacción.
-- **Tutores** (María José Suárez Cabal y Pablo Suárez-Otero González, Departamento de Informática, Universidad de Oviedo). Responsables de la dirección académica, de la validación intermedia y de la aprobación de los hitos.
 - **Tribunal de defensa**. Responsable de la evaluación final del trabajo.
-- **Usuarios finales potenciales**. Desarrolladores y arquitectos de datos que pudieran adoptar la herramienta en el futuro. No participan en el proyecto pero condicionan decisiones de diseño (RU-6.2 GUI para usuarios no técnicos, RNF-3 usabilidad).
+- **Usuarios finales potenciales**. Desarrolladores y arquitectos de datos que pudieran adoptar la herramienta en el futuro. No participan en el proyecto pero condicionan decisiones de diseño (RU-7.2 GUI para usuarios no técnicos, RNF-3 usabilidad).
 - **Comunidad científico-académica**. Lectores futuros de la memoria si el trabajo se publica o se reutiliza como base de proyectos posteriores.
 - **Proveedores externos de LLM** (Google, Groq). No son interesados en sentido estricto pero condicionan la planificación: cuotas, retiradas de modelos y disponibilidad de la API impactan directamente en el plan de trabajo.
 
@@ -25,7 +24,7 @@ La organización del proyecto es plana y única-recurso, lo que simplifica la OB
 
 ![Figura 2.1. Estructura de descomposición de la organización (OBS)](assets/png/fig-02-1.png)
 
-Aunque la OBS contiene un único recurso humano, distinguir explícitamente sus cuatro **roles** —analista, desarrollador, tester y redactor técnico— resulta útil para el cálculo de costes (§2.1.5) y para la atribución de horas en el seguimiento (§2.2).
+La OBS contiene un único recurso humano. Distinguir explícitamente sus cuatro **roles** —analista, desarrollador, *tester* y redactor técnico— resulta útil para el cálculo de costes (§2.1.5) y para la atribución de horas en el seguimiento (§2.2).
 
 #### Estructura de descomposición del producto (PBS)
 
@@ -35,105 +34,66 @@ El proyecto entrega tres productos diferenciados:
 
 ### 2.1.3 Planificación inicial. WBS y diagrama de Gantt
 
-El proyecto se planifica como una sucesión de paquetes de trabajo (WBS) con un alto grado de paralelismo entre las actividades de redacción de memoria y las de desarrollo de la herramienta. La fase inicial es secuencial (estudios previos → primer prototipo); a partir del primer prototipo, las iteraciones sobre la herramienta y la redacción de los capítulos correspondientes corren en paralelo. La metodología de trabajo es **iterativa** (cada hito técnico se consolida con una revisión con los tutores) más que estrictamente ágil: no hay *sprints* fijos sino entregables identificables.
+El proyecto se descompone en una fase inicial (F0) y nueve paquetes de trabajo (P1–P9) con un alto grado de paralelismo entre las actividades de desarrollo y las de redacción de la memoria. La fase inicial es secuencial (estudios previos → primer prototipo); a partir del primer prototipo, las iteraciones sobre la herramienta y la redacción de los capítulos correspondientes corren en paralelo. La metodología es **iterativa** más que estrictamente ágil: no hay *sprints* fijos sino entregables identificables al cierre de cada paquete.
 
-#### WBS
+La codificación jerárquica `n.m` (con `n` el paquete y `m` la actividad de nivel 3) materializa la trazabilidad entre niveles. Roles asumidos por el único recurso humano (ver OBS §2.1.2): **AN** analista, **DEV** desarrollador, **TST** *tester*, **DOC** redactor técnico. El esfuerzo agregado coincide con el presupuesto inicial (§2.1.5).
 
-La estructura de descomposición del trabajo se organiza en tres niveles. El **nivel 1** agrupa las cuatro fases del ciclo de vida del proyecto: *Inicio*, *Desarrollo* (paquetes P1–P7 y P10), *Documentación y cierre* (P8, P9). El **nivel 2** son los diez paquetes de trabajo (P1–P10) — cada uno con un hito de cierre identificable y un único responsable. El **nivel 3** descompone cada paquete en actividades planificables, con su predecesor lógico, duración estimada en días laborables, fechas planificadas, rol responsable y entregable. La codificación jerárquica `n.m` (con `n` el paquete y `m` la actividad) materializa la trazabilidad entre niveles. El esfuerzo agregado coincide con el presupuesto inicial (§2.1.5).
+#### Índice de paquetes
 
-Roles utilizados en la columna **Resp.**: **AN** analista, **DEV** desarrollador, **TST** *tester*, **DOC** redactor técnico, **TUT** tutores (ver §2.1.2 OBS). Cuando una actividad implica más de un rol se indica el primario y el secundario separados por barra.
+| Cód. | Paquete | Inicio | Fin | Dur. (d) | Resp. | Entregable principal |
+|---|---|---|---|---:|---|---|
+| F0 | Inicio | 2026-02-02 | 2026-02-13 | 10 | AN | Plan inicial |
+| P1 | Estudios previos | 2026-02-16 | 2026-04-15 | 45 | AN | Viabilidad + diseño del *pipeline* |
+| P2 | Prototipo base del *pipeline* | 2026-04-16 | 2026-04-30 | 12 | DEV | End-to-end sobre Spruce |
+| P3 | Abstracción del proveedor LLM | 2026-04-29 | 2026-05-22 | 18 | DEV | CLI multi-proveedor con `GoogleProvider` |
+| P4 | Agente de descubrimiento | 2026-05-20 | 2026-06-02 | 14 | DEV | Selección autónoma sobre Spruce-URL |
+| P5 | Segundo proveedor (Groq) | 2026-05-19 | 2026-05-27 | 7 | DEV | Multi-proveedor operativo |
+| P6 | Validación experimental | 2026-05-28 | 2026-06-02 | 6 | TST | Cobertura UML sobre Habitica |
+| P7 | Interfaz gráfica (GUI) | 2026-06-03 | 2026-06-15 | 9 | DEV | Tres casos validados desde la GUI |
+| P8 | Memoria (transversal) | 2026-02-16 | 2026-06-17 | 88 | DOC | Documento final aprobado |
+| P9 | Cierre y defensa | 2026-06-15 | 2026-06-25 | 8 | AN | Acta de defensa |
 
-| Cód. | Actividad | Pred. | Dur. (d) | Inicio | Fin | Resp. | Entregable |
-|---|---|---|---:|---|---|---|---|
-| **F0** | **Fase 0. Inicio** | — | 10 | 2026-02-02 | 2026-02-13 | AN | Documento de objetivos |
-| 0.1 | Aprobación del tema y nombramiento de dirección académica | — | 2 | 2026-02-02 | 2026-02-03 | AN/TUT | Acta de aceptación |
-| 0.2 | Reunión de arranque y formalización del alcance preliminar | 0.1 | 1 | 2026-02-04 | 2026-02-04 | AN/TUT | Acta de reunión |
-| 0.3 | Borrador inicial de objetivos, alcance y plan de trabajo | 0.2 | 7 | 2026-02-05 | 2026-02-13 | AN | Plan inicial (cap. 1 *draft*) |
-| **P1** | **P1. Estudios previos** | F0 | 45 | 2026-02-16 | 2026-04-15 | AN | Decisión de viabilidad + diseño del *pipeline* |
-| 1.1 | Revisión de literatura sobre LLMs aplicados a normalización y modelado relacional | 0.3 | 15 | 2026-02-16 | 2026-03-06 | AN | Estado del arte |
-| 1.2 | Revisión del estado del arte de *function calling* y agentes con LLM | 1.1 | 8 | 2026-03-09 | 2026-03-18 | AN | Notas técnicas |
-| 1.3 | Selección y análisis del repositorio Spruce como dataset de referencia | 1.1 | 4 | 2026-03-09 | 2026-03-12 | AN | Mapa del repo + UML manual |
-| 1.4 | Experimento manual: extracción de DDL vía interfaz de *chat* con cuatro modelos (GPT-3.5, GPT-5, Claude Opus 4.6, GPT-5.3-Codex) | 1.3 | 12 | 2026-03-19 | 2026-04-03 | AN/TST | Comparativa cuantitativa |
-| 1.5 | Diseño preliminar del *pipeline* multi-paso de cuatro fases | 1.4 | 6 | 2026-04-06 | 2026-04-13 | AN | Diseño del *pipeline* |
-| 1.6 | Documento de viabilidad y decisión *go/no-go* | 1.5 | 2 | 2026-04-14 | 2026-04-15 | AN/TUT | Acta de viabilidad |
-| **P2** | **P2. Prototipo base del *pipeline*** | P1 | 12 | 2026-04-16 | 2026-04-30 | DEV | Ejecución end-to-end sobre Spruce |
-| 2.1 | Esqueleto del proyecto Python y *layout* `normalizer/` (CLI con *click*) | 1.6 | 2 | 2026-04-16 | 2026-04-17 | DEV | Esqueleto del repo |
-| 2.2 | Curado del dataset `data/spruce/` (cuatro *schemas* Mongoose) | 2.1 | 1 | 2026-04-20 | 2026-04-20 | AN | `data/spruce/` |
-| 2.3 | Implementación de los cuatro pasos del *pipeline* (lectura, análisis, diseño, DDL) | 2.1 | 5 | 2026-04-20 | 2026-04-24 | DEV | `pipeline.py` |
-| 2.4 | Redacción inicial de los *prompts* y placeholders `{evidence}/{analysis}/{design}` | 2.3 | 2 | 2026-04-23 | 2026-04-24 | AN/DEV | `prompts/*.md` |
-| 2.5 | Curado del dataset `data/spruce-difuso/` (8 ficheros de servidor) | 2.2 | 2 | 2026-04-27 | 2026-04-28 | AN | `data/spruce-difuso/` |
-| 2.6 | Validación end-to-end sobre los dos datasets y refinamiento de `design.md` (regla de reconciliación de FKs) | 2.4,2.5 | 2 | 2026-04-29 | 2026-04-30 | TST/DEV | Traza de ejecución + `design.md` v2 |
-| **P3** | **P3. Abstracción del proveedor LLM** | P2 | 18 | 2026-04-29 | 2026-05-22 | DEV | CLI multi-proveedor con `GoogleProvider` |
-| 3.1 | Diseño del `Protocol LLMProvider` y de las *dataclasses* neutras (`Message`, `ToolSpec`, `ToolCall`, `ChatResponse`) | 2.3 | 3 | 2026-04-29 | 2026-05-01 | AN/DEV | `providers/base.py` |
-| 3.2 | *Registry* + *factory* `build_provider(for_agent=...)` y dos modelos por proveedor (`DEFAULT_MODELS`, `DEFAULT_AGENT_MODELS`) | 3.1 | 2 | 2026-05-04 | 2026-05-05 | DEV | `providers/__init__.py` |
-| 3.3 | Implementación de `GoogleProvider` (`google-genai` SDK) con `generate()` y `chat()` | 3.2 | 5 | 2026-05-06 | 2026-05-12 | DEV | `providers/google.py` |
-| 3.4 | *Refactor* del *pipeline* para depender únicamente de la abstracción | 3.3 | 2 | 2026-05-13 | 2026-05-14 | DEV | `pipeline.py` desacoplado |
-| 3.5 | Extracción de *prompts* a `normalizer/prompts/*.md` cargados al importar | 3.4 | 2 | 2026-05-15 | 2026-05-18 | DEV | `prompts/__init__.py` |
-| 3.6 | Configuración segura de credenciales (variables de entorno, `.env` gitignored) | 3.3 | 1 | 2026-05-19 | 2026-05-19 | DEV | Documentación de despliegue |
-| 3.7 | Validación de regresión del *pipeline* multi-proveedor | 3.5,3.6 | 3 | 2026-05-20 | 2026-05-22 | TST | Traza de ejecución |
-| **P4** | **P4. Agente de descubrimiento** | P3 | 14 | 2026-05-20 | 2026-06-02 | DEV | Selección autónoma sobre Spruce desde URL |
-| 4.1 | Diseño del bucle agéntico con *tool-use* nativo del SDK | 3.3 | 2 | 2026-05-20 | 2026-05-21 | AN | Diseño en `notes/` |
-| 4.2 | Implementación de las cinco herramientas (`list_dir`, `read_file`, `grep`, `select_evidence`, `done`) y `dispatch()` | 4.1 | 3 | 2026-05-22 | 2026-05-24 | DEV | `discovery/tools.py` |
-| 4.3 | Clonado de repositorios con cache local (`git clone --depth 1`) y validación anti *path-traversal* | 4.2 | 1 | 2026-05-24 | 2026-05-24 | DEV | `discovery/repo.py`, `filesystem.py` |
-| 4.4 | Recorrido del árbol BFS con *cap* 2 000 entradas (`build_tree_summary`) | 4.3 | 1 | 2026-05-25 | 2026-05-25 | DEV | `filesystem.py` |
-| 4.5 | Observabilidad por *stderr* `[mm:ss]` (helper `_log.py`) y reintentos extendidos a 5xx en `GoogleProvider` | 4.2 | 1 | 2026-05-25 | 2026-05-25 | DEV | `_log.py` |
-| 4.6 | Iteración del *prompt* de sistema v1 → v5.2 (principio del hermano, dos pasadas obligatorias, *batching*) | 4.4 | 5 | 2026-05-26 | 2026-06-01 | AN/TST | `discovery_system.md` v5.2 |
-| 4.7 | Validación autónoma sobre Spruce-URL (4/4 *schemas* recuperados, 11/11 entidades en DDL) | 4.6 | 2 | 2026-06-01 | 2026-06-02 | TST | Traza `discovery.md` |
-| **P5** | **P5. Segundo proveedor (Groq)** | P3 | 7 | 2026-05-19 | 2026-05-27 | DEV | Multi-proveedor operativo |
-| 5.1 | Implementación de `GroqProvider` con SDK OpenAI-compatible | 3.3 | 2 | 2026-05-19 | 2026-05-20 | DEV | `providers/groq.py` |
-| 5.2 | Caracterización del catálogo Groq (Qwen3-32B, Llama-4-Scout, *gpt-oss-20b/120b*, `groq/compound-*`) | 5.1 | 3 | 2026-05-21 | 2026-05-25 | TST | Notas en `notes/2026-05-25-groq-provider.md` |
-| 5.3 | Fijado del modelo por defecto del agente Groq a `qwen/qwen3-32b` | 5.2 | 1 | 2026-05-26 | 2026-05-26 | DEV | `DEFAULT_AGENT_MODELS` |
-| 5.4 | Validación end-to-end con Groq sobre `data/spruce/` | 5.3 | 1 | 2026-05-27 | 2026-05-27 | TST | Traza de ejecución |
-| **P6** | **P6. Validación experimental** | P4,P5 | 6 | 2026-05-28 | 2026-06-02 | TST | Cobertura UML satisfactoria sobre Habitica |
-| 6.1 | Diseño experimental: definición de métricas (cobertura UML, número de archivos/iter, *wall-clock*, 429s absorbidos) | 4.7 | 1 | 2026-05-28 | 2026-05-28 | AN/TST | Plan de pruebas |
-| 6.2 | Ejecución sobre Habitica × Google (`gemini-3.1-flash-lite`, run 2026-06-01) | 6.1 | 2 | 2026-05-29 | 2026-06-01 | TST | `out-habitica-2026-06-01/` |
-| 6.3 | Caracterización empírica de la frontera Groq × tamaño del árbol (HTTP 413 con `qwen/qwen3-32b` 6K TPM y Llama-4-Scout 30K TPM) | 6.1 | 2 | 2026-05-29 | 2026-06-01 | TST | Anotaciones en `CLAUDE.md` |
-| 6.4 | Descarte de Cerebras (cap 8 192 *tokens* en *free tier*) | 6.3 | 1 | 2026-06-02 | 2026-06-02 | TST | Comprobación en `notes/` |
-| 6.5 | Consolidación de lecciones aprendidas en `CLAUDE.md` y `notes/` | 6.2,6.3,6.4 | 1 | 2026-06-02 | 2026-06-02 | DOC | `CLAUDE.md` actualizado |
-| **P7** | **P7. Interfaz gráfica (GUI)** | P6 | 9 | 2026-06-03 | 2026-06-15 | DEV | Reproducción manual de los tres casos desde la GUI |
-| 7.1 | Diseño de las cinco pantallas guiadas y *wireframes* | 6.5 | 2 | 2026-06-03 | 2026-06-04 | AN | *Wireframes* |
-| 7.2 | Esqueleto de la GUI con CustomTkinter y navegación entre pantallas | 7.1 | 2 | 2026-06-05 | 2026-06-08 | DEV | Esqueleto de la GUI |
-| 7.3 | Conexión de la GUI con el núcleo (CLI/`pipeline.py`/agente) | 7.2 | 3 | 2026-06-09 | 2026-06-11 | DEV | GUI conectada |
-| 7.4 | Validación manual de los tres casos (`data/spruce/`, `data/spruce-difuso/`, Spruce-URL) | 7.3 | 2 | 2026-06-12 | 2026-06-15 | TST | Trazas de uso |
-| **P10** | **P10. Agente de refinamiento (RU-6)** | P7 | 8 | 2026-06-16 | 2026-06-25 | DEV | Diálogo de refinamiento sobre `04_ddl.sql` |
-| 10.1 | Diseño del bucle agéntico de refinamiento sobre el resultado del *pipeline* | 7.4 | 1 | 2026-06-16 | 2026-06-16 | AN | Diseño en `notes/` |
-| 10.2 | Implementación de las *tools* de edición textual (`replace_text`, `add_text`, `delete_text`) | 10.1 | 3 | 2026-06-17 | 2026-06-19 | DEV | `refinement/tools.py` |
-| 10.3 | Iteración del *prompt* de sistema (RU-6.1 verbos: renombrar, fusionar, dividir) | 10.2 | 2 | 2026-06-22 | 2026-06-23 | AN/DEV | `refinement_system.md` |
-| 10.4 | Validación cualitativa con dos sesiones de refinamiento sobre el DDL de Spruce | 10.3 | 2 | 2026-06-24 | 2026-06-25 | TST | Trazas de refinamiento |
-| **P8** | **P8. Memoria (transversal)** | F0 | 88 | 2026-02-16 | 2026-06-17 | DOC | Documento final aprobado |
-| 8.1 | Capítulo 1. Descripción general del trabajo | 0.3 | 4 | 2026-02-16 | 2026-02-19 | DOC | `cap01.md` |
-| 8.2 | Capítulo 3. Requisitos de usuario | 1.5 | 6 | 2026-04-06 | 2026-04-13 | DOC | `cap03.md` |
-| 8.3 | Capítulo 4. Análisis del sistema | 2.6 | 8 | 2026-05-01 | 2026-05-12 | DOC | `cap04.md` |
-| 8.4 | Capítulo 5. Diseño del sistema | 3.7 | 10 | 2026-05-13 | 2026-05-26 | DOC | `cap05.md` |
-| 8.5 | Capítulo 6. Implementación | 5.4 | 5 | 2026-05-28 | 2026-06-03 | DOC | `cap06.md` |
-| 8.6 | Capítulo 7. Pruebas | 6.5 | 4 | 2026-06-03 | 2026-06-08 | DOC | `cap07.md` |
-| 8.7 | Capítulo 2. Planificación y gestión | 8.5 | 4 | 2026-06-04 | 2026-06-09 | DOC | `cap02.md` |
-| 8.8 | Capítulo 8. Conclusiones y trabajo futuro | 7.4 | 3 | 2026-06-15 | 2026-06-17 | DOC | `cap08.md` |
-| 8.9 | Capítulo 9. Apéndices (hojas de riesgo, glosario, manuales) | 8.7 | 2 | 2026-06-10 | 2026-06-11 | DOC | `cap09.md` |
-| 8.10 | Generación de figuras (Mermaid → PNG vía *build script*) | 8.4 | 2 | 2026-06-08 | 2026-06-09 | DOC | `assets/png/*` |
-| 8.11 | Revisiones intermedias con dirección (4 reuniones de tutoría) | 8.1 | — | 2026-03-01 | 2026-06-15 | TUT/DOC | Actas de revisión |
-| 8.12 | Revisión final ortográfica/gramatical y maquetación a `.docx` | 8.9 | 3 | 2026-06-12 | 2026-06-17 | DOC | `MemoriaTFG.vN.docx` |
-| **P9** | **P9. Cierre y defensa** | P8 | 8 | 2026-06-15 | 2026-06-25 | AN | Acta de defensa |
-| 9.1 | Preparación de la presentación (diapositivas y demo en vivo) | 8.12 | 4 | 2026-06-15 | 2026-06-18 | DOC/AN | `presentacion.pdf` |
-| 9.2 | Entrega telemática del trabajo en la aplicación de TFG | 8.12 | 1 | 2026-06-17 | 2026-06-17 | AN | Justificante de entrega |
-| 9.3 | Ensayo de la defensa con dirección | 9.1 | 2 | 2026-06-19 | 2026-06-22 | AN/TUT | Acta de revisión |
-| 9.4 | Defensa pública ante el tribunal | 9.3 | 1 | 2026-06-25 | 2026-06-25 | AN | Acta de defensa |
+#### Diagrama de Gantt general
 
-#### Comentario del WBS
+La distribución temporal de los nueve paquetes sobre el periodo del proyecto (febrero–junio de 2026) se muestra a continuación. Los paquetes técnicos (P1–P7) corren en serie hasta P3 y a partir de ahí muestran solapamiento por la naturaleza iterativa del trabajo; la memoria (P8) es transversal desde el inicio. El **camino crítico** recorre 0.3 → 1.5 → 1.6 → 2.6 → 3.7 → 4.7 → 6.5 → 7.4 → 8.11 → 9.4; las actividades 4.6 (iteración del *prompt* del agente) y 6.2 (validación sobre Habitica) concentran el riesgo de retraso por su naturaleza experimental, en línea con el riesgo R-04 (§2.1.4). Los solapamientos planificados entre P3 (abstracción) y P5 (Groq) son la principal palanca para acortar el plan general y materializan el principio arquitectónico de que "añadir un proveedor es un *copy-paste*" (cap. 5).
 
-El **camino crítico** del proyecto, en su planificación inicial, recorre 0.3 → 1.5 → 1.6 → 2.6 → 3.7 → 4.7 → 6.5 → 7.4 → 10.4 → 8.12 → 9.4. Las actividades 4.6 (iteración del *prompt* del agente) y 6.2 (validación Habitica) concentran el riesgo de retraso por su naturaleza experimental: el rango observado de archivos seleccionados por el agente (5 a 22 sobre el mismo *input*, riesgo R-04) puede forzar a repetir 4.6 varias veces dentro de su ventana planificada.
+![Figura 2.3. Diagrama de Gantt general del proyecto](assets/png/fig-02-3.png)
 
-Los paquetes técnicos P3 (abstracción) y P5 (Groq) se planifican con cierto solapamiento controlado: la implementación del `GroqProvider` (5.1) puede iniciarse en cuanto la abstracción está estable (3.3), sin esperar al cierre completo de P3. Esta concurrencia es la principal palanca para acortar el plan general y materializa el principio arquitectónico de que "añadir un proveedor es un *copy-paste*" (cap. 5).
+#### Descomposición por paquete
 
-El paquete **P8 (Memoria)** corre en paralelo desde la finalización de F0; los capítulos se redactan en la ventana inmediatamente posterior al cierre del paquete técnico que documentan, salvo el cap. 2 (planificación y gestión), que requiere la traza completa del proyecto y se redacta hacia el final. Las **revisiones de dirección** (8.11) son hitos discretos distribuidos a lo largo del proyecto que no consumen días laborables del autor sino horas del rol TUT, reflejadas en el presupuesto (§2.1.5).
+Los mini-Gantts siguientes detallan las actividades de nivel 3 dentro de cada paquete técnico (P1–P7) y de la memoria (P8). La fase F0 (Inicio) y el paquete P9 (Cierre y defensa) son lo bastante compactos como para describirlos solo en prosa: F0 se reduce a la firma del acta y la redacción del plan inicial (10 días); P9 reúne la preparación de la presentación, la entrega telemática del trabajo el 2026-06-17, un ensayo previo y la defensa pública ante el tribunal el 2026-06-25.
 
-El paquete **P10 (Agente de refinamiento)** está inicialmente planificado tras el cierre de P7, en una ventana muy ajustada que comparte el cierre con la propia defensa (riesgo R-08, sec. 2.1.4). Esa tensión de planificación es precisamente la que materializa el riesgo y motiva el descope en LB-2 (§2.2.2, §2.3.1).
+**P1. Estudios previos.** Sienta las bases conceptuales del proyecto: revisión de literatura sobre LLMs aplicados a normalización, estado del arte de *function calling* y agentes con LLM, análisis del repositorio Spruce como dataset de referencia y experimento manual de extracción de DDL vía interfaz de *chat* con varios modelos comerciales de las familias GPT y similares. Cierra con el diseño preliminar del *pipeline* multi-paso de cuatro fases y el documento de viabilidad (decisión *go/no-go*).
 
-#### Diagrama de Gantt
+![Figura 2.4. Mini-Gantt de P1. Estudios previos](assets/png/fig-02-4.png)
 
-El diagrama de Gantt resume la distribución temporal de los paquetes WBS sobre el periodo del proyecto (febrero–junio de 2026), con las actividades de nivel 3 anidadas dentro de su paquete. Por legibilidad, las actividades de duración inferior a tres días se agregan en su paquete contenedor; el detalle granular de cada actividad se encuentra en la tabla WBS anterior. Los paquetes técnicos (P1–P7, P10) corren en serie hasta P3 y a partir de ahí muestran solapamiento por la naturaleza iterativa del trabajo; la memoria (P8) corre en paralelo desde el inicio.
+**P2. Prototipo base del *pipeline*.** Implementa el esqueleto del proyecto Python (módulo `normalizer`, CLI con *click*) y los cuatro pasos del *pipeline* (lectura, análisis, diseño relacional, generación de DDL Oracle). Cura los dos datasets de prueba (`data/spruce/` con *schemas* Mongoose explícitos y `data/spruce-difuso/` con evidencia heterogénea sin *schemas*) y valida la cobertura UML *end-to-end*. Cierra con el ajuste de `design.md` para incorporar la regla de reconciliación de FKs ante atributos redundantes.
 
-![Figura 2.3. Diagrama de Gantt del proyecto](assets/png/fig-02-3.png)
+![Figura 2.5. Mini-Gantt de P2. Prototipo base del pipeline](assets/png/fig-02-5.png)
+
+**P3. Abstracción del proveedor LLM.** Diseña el `Protocol LLMProvider` y las *dataclasses* neutras (`Message`, `ToolSpec`, `ToolCall`, `ChatResponse`), implementa el *registry* y la *factory* `build_provider(for_agent=...)` con dos modelos por proveedor (`DEFAULT_MODELS` para texto-a-texto, `DEFAULT_AGENT_MODELS` con *function calling*), implementa `GoogleProvider` sobre el SDK `google-genai` y *refactoriza* el *pipeline* para depender únicamente de la abstracción. Extrae los *prompts* a `normalizer/prompts/*.md` para hacerlos intercambiables sin tocar Python.
+
+![Figura 2.6. Mini-Gantt de P3. Abstracción del proveedor LLM](assets/png/fig-02-6.png)
+
+**P4. Agente de descubrimiento.** Diseña e implementa el bucle agéntico con *tool-use* nativo del SDK del proveedor, sus cinco herramientas (`list_dir`, `read_file`, `grep`, `select_evidence`, `done`) y el clonado de repositorios con caché local. Introduce el recorrido del árbol del repositorio en BFS con *cap* a 2 000 entradas (`build_tree_summary`), la observabilidad por *stderr* `[mm:ss]` y los reintentos extendidos a 5xx en `GoogleProvider`. Itera el *prompt* de sistema desde la v1 hasta la v5.2 (principio del hermano, dos pasadas obligatorias, *batching* como regla dura) y cierra con la validación autónoma sobre Spruce-URL — 4/4 *schemas* recuperados y 11/11 entidades en el DDL final.
+
+![Figura 2.7. Mini-Gantt de P4. Agente de descubrimiento](assets/png/fig-02-7.png)
+
+**P5. Segundo proveedor (Groq).** Implementa `GroqProvider` con el SDK OpenAI-compatible, caracteriza empíricamente el catálogo Groq para identificar qué modelos soportan *function calling* sin emisión de *markup* ni *chain-of-thought* no parseable (validados `qwen/qwen3-32b` y `meta-llama/llama-4-scout-17b-16e-instruct`; descartados Llama 3.x, `gpt-oss-20b/120b` y `groq/compound-*`), fija el modelo por defecto del agente Groq a `qwen/qwen3-32b` y valida *end-to-end* sobre `data/spruce/`.
+
+![Figura 2.8. Mini-Gantt de P5. Segundo proveedor (Groq)](assets/png/fig-02-8.png)
+
+**P6. Validación experimental.** Define las métricas del paquete (cobertura UML, archivos seleccionados por iteración, *wall-clock*, 429s absorbidos por el *retry*), ejecuta el *run* completo sobre Habitica × Google (`gemini-3.1-flash-lite`, 2026-06-01), caracteriza la frontera Groq × tamaño del árbol (HTTP 413 con `qwen/qwen3-32b` 6 K TPM y `meta-llama/llama-4-scout` 30 K TPM sobre ~30–50 K *tokens* del árbol de Habitica), descarta Cerebras por el *cap* de contexto en *free tier* y consolida las lecciones aprendidas en el documento maestro de decisiones del proyecto.
+
+![Figura 2.9. Mini-Gantt de P6. Validación experimental](assets/png/fig-02-9.png)
+
+**P7. Interfaz gráfica (GUI).** Diseña las pantallas guiadas y sus *wireframes*, implementa el esqueleto con CustomTkinter y la navegación entre pantallas, conecta la GUI con el núcleo (`pipeline.py` y el agente de descubrimiento) y valida manualmente los tres casos de uso (`data/spruce/`, `data/spruce-difuso/`, Spruce-URL) reproduciendo desde la GUI los resultados obtenidos por CLI.
+
+![Figura 2.10. Mini-Gantt de P7. Interfaz gráfica (GUI)](assets/png/fig-02-10.png)
+
+**P8. Memoria (transversal).** Redacta los nueve capítulos en ventanas inmediatamente posteriores al cierre del paquete técnico que documenta cada uno, salvo el cap. 2 (planificación y gestión), que requiere la traza completa del proyecto y se redacta hacia el final. Incluye la generación de figuras (Mermaid → PNG vía *build script*) y la revisión final ortográfica/gramatical y maquetación a `.docx` con Pandoc, hito que cierra el camino crítico del proyecto antes del paquete P9.
+
+![Figura 2.11. Mini-Gantt de P8. Memoria](assets/png/fig-02-11.png)
 
 ### 2.1.4 Riesgos
 
@@ -150,22 +110,22 @@ Las hojas individuales de cada riesgo, con su descripción completa, indicadores
 
 #### Identificación de riesgos
 
-Se identifican doce riesgos, agrupados en cuatro categorías: dependencia externa, técnico, calidad y gestión.
+Se identifican doce riesgos, agrupados en tres categorías: **dependencia externa**, **técnico** y **calidad**. La planificación inicial no contempla riesgos genéricos de gestión (control de versiones, sobreesfuerzo) sino los específicos del dominio *LLM-as-a-service* que diferencian este proyecto de un desarrollo software clásico: dependencia de proveedores en evolución rápida, no determinismo del modelo, y madurez desigual de las APIs y SDKs.
 
 | ID | Categoría | Descripción resumida |
 |---|---|---|
 | R-01 | Dependencia externa | Colapso de la cuota del *free tier* de Google. |
-| R-02 | Técnico | Frontera entre Groq *free tier* y el tamaño del árbol del repositorio en repositorios medianos. |
+| R-02 | Técnico | Agotar cuota de uso de Groq *free tier* por el tamaño del árbol del repositorio en repositorios medianos. |
 | R-03 | Técnico | Soporte irregular de *function calling* en los modelos *open-weight* hospedados por Groq. |
 | R-04 | Calidad | Alta varianza del agente sobre el mismo *input*. |
 | R-05 | Dependencia externa | Retirada o sustitución de modelos durante el desarrollo. |
-| R-06 | Dependencia externa | Inviabilidad de un tercer proveedor (Cerebras) por cap de contexto en *free tier*. |
-| R-07 | Calidad | Patrón "principal vs secundario" del agente: cerrar el descubrimiento tras leer pocos archivos del directorio de modelos. |
-| R-08 | Gestión | Tiempo limitado para implementar todos los requisitos planificados, en particular el agente de refinamiento. |
-| R-09 | Técnico | Generación de tipos no nativos en Oracle <23 (uso de `BOOLEAN`). |
-| R-10 | Calidad | Diferencia significativa de cobertura entre proveedores sobre el mismo *input*. |
-| R-11 | Gestión | Pérdida de trabajo por falta de control de versiones disciplinado. |
-| R-12 | Dependencia externa | Suspensión o limitación de cuentas de proveedor por uso intensivo en pruebas. |
+| R-06 | Calidad | Diferencia significativa de cobertura entre proveedores sobre el mismo *input*. |
+| R-07 | Dependencia externa | Suspensión o limitación de cuentas de proveedor por uso intensivo en pruebas. |
+| R-08 | Dependencia externa | Cambios estructurales en las políticas de uso de los proveedores LLM (retirada del *free tier*, exigencia de verificación de pago, restricciones de uso académico, retirada simultánea de modelos demo-críticos) que invaliden el modelo de despliegue el día de la demostración pública. |
+| R-09 | Técnico | Cambios incompatibles (*breaking changes*) en los SDKs cliente de los proveedores (`google-genai`, `groq`) entre versiones, en una fase de evolución rápida de su API. |
+| R-10 | Técnico | Reenrutamiento silencioso del alias del modelo (*model aliasing*) por parte del proveedor: el identificador del modelo se mantiene pero el modelo subyacente cambia, alterando *outputs* entre *runs* aparentemente idénticos. |
+| R-11 | Calidad | Sesgo del LLM hacia modelos relacionales convencionales que aplane denormalizaciones legítimas y pierda información presente en el modelo documental original. |
+| R-12 | Calidad | *Drift* del *prompt* del agente: la iteración sobre un dataset concreto (Spruce) optimiza el *prompt* para ese caso y degrada la generalización a otros repositorios. |
 
 #### Registro de riesgos (probabilidad × impacto inicial)
 
@@ -178,19 +138,19 @@ Los valores siguientes corresponden a la evaluación realizada al inicio del pro
 | R-03 | 4 | 3 | 12 | Mitigar | Crítico |
 | R-04 | 5 | 3 | 15 | Aceptar / Mitigar parcial | Crítico |
 | R-05 | 3 | 3 | 9 | Mitigar | Alto |
-| R-06 | 3 | 2 | 6 | Aceptar | Alto |
-| R-07 | 4 | 3 | 12 | Mitigar | Crítico |
-| R-08 | 4 | 4 | 16 | Mitigar | Crítico |
-| R-09 | 2 | 2 | 4 | Aceptar | Moderado |
-| R-10 | 4 | 2 | 8 | Aceptar | Alto |
-| R-11 | 2 | 5 | 10 | Mitigar | Alto |
-| R-12 | 2 | 3 | 6 | Aceptar | Alto |
+| R-06 | 4 | 2 | 8 | Aceptar | Alto |
+| R-07 | 2 | 3 | 6 | Aceptar | Alto |
+| R-08 | 3 | 4 | 12 | Mitigar | Crítico |
+| R-09 | 3 | 3 | 9 | Mitigar | Alto |
+| R-10 | 2 | 2 | 4 | Mitigar | Moderado |
+| R-11 | 4 | 2 | 8 | Mitigar | Alto |
+| R-12 | 3 | 3 | 9 | Mitigar | Alto |
 
 ### 2.1.5 Presupuesto inicial
 
 #### Presupuesto de costes
 
-El proyecto no tiene cliente externo: el coste se calcula como horas de trabajo del autor y de los tutores. La estimación inicial considera 300 horas efectivas del autor distribuidas entre los cuatro roles y unas 24 horas de los tutores en reuniones de tutoría. Los costes por hora se toman del baremo recomendado para TFG por la propia plantilla (líneas 142–144 del extracto oficial), ajustado a tarifas habituales del mercado para perfiles junior en cada rol.
+El proyecto no tiene cliente externo: el coste se calcula como horas de trabajo del autor. La estimación inicial considera 300 horas efectivas distribuidas entre los cuatro roles. Los costes por hora se toman del baremo recomendado para TFG por la propia plantilla (líneas 142–144 del extracto oficial), ajustado a tarifas habituales del mercado para perfiles junior en cada rol.
 
 | Concepto | Horas | €/h | Coste estimado |
 |---|---:|---:|---:|
@@ -198,10 +158,9 @@ El proyecto no tiene cliente externo: el coste se calcula como horas de trabajo 
 | Autor — rol desarrollador (P2–P7) | 140 | 25 | 3 500 € |
 | Autor — rol tester (validación cualitativa) | 30 | 22 | 660 € |
 | Autor — rol redactor técnico (P8) | 50 | 22 | 1 100 € |
-| Tutores — reuniones de dirección | 24 | 60 | 1 440 € |
 | Infraestructura *cloud* (*free tier* Google + Groq) | — | — | 0 € |
 | *Hardware* (equipo propio del autor, amortización despreciable) | — | — | 0 € |
-| **Total estimado** | **324** | | **9 100 €** |
+| **Total estimado** | **300** | | **7 660 €** |
 
 #### Presupuesto de cliente
 
@@ -216,7 +175,7 @@ El seguimiento se materializa mediante tres **líneas base** que registran el es
 | Línea base | Fecha de corte | Estado |
 |---|---|---|
 | **LB-0. Planificación inicial** | 2026-02-15 | WBS, riesgos y presupuesto descritos en §2.1, antes de iniciar el desarrollo. |
-| **LB-1. Línea base intermedia** | 2026-05-25 | Post-implementación del segundo proveedor (Groq) y primera validación experimental del agente sobre Habitica. Decisión de mantener la GUI dentro del alcance y el agente de refinamiento fuera. |
+| **LB-1. Línea base intermedia** | 2026-05-25 | Post-implementación del segundo proveedor (Groq) y primera validación experimental del agente de descubrimiento sobre Habitica. Confirmación de la viabilidad técnica del prototipo. |
 | **LB-2. Línea base de cierre del prototipo** | 2026-06-01 | Cierre técnico de los paquetes P1–P6 y consolidación de las lecciones aprendidas. Inicio del paquete P7 (GUI). |
 
 ### 2.2.2 Bitácora de incidencias del proyecto
@@ -225,7 +184,7 @@ La bitácora siguiente recoge los eventos relevantes acaecidos durante la ejecuc
 
 | Fecha | Evento | Riesgo | Commit / referencia |
 |---|---|---|---|
-| 2026-04-28 | Primer esqueleto del prototipo y `CLAUDE.md` inicial. | — | `d37ce4e`, `83f33f6` |
+| 2026-04-28 | Primer esqueleto del prototipo y borrador inicial del documento maestro de decisiones del proyecto. | — | `d37ce4e`, `83f33f6` |
 | 2026-04-29 | Versión 0.2.0: el proveedor de LLM se puede elegir; *pipeline* desacoplado de Spruce. Datasets `spruce` y `spruce-difuso` consolidados. | — | `9f97ce2`, `867b545`, `4becf01` |
 | 2026-05-24 | Primer *commit* del agente de descubrimiento; *fixes* post-validación. | — | `daf255b`, `8010b0e` |
 | 2026-05-25 | Extracción de *prompts* a `normalizer/prompts/*.md`. | — | `f497393` |
@@ -234,14 +193,13 @@ La bitácora siguiente recoge los eventos relevantes acaecidos durante la ejecuc
 | 2026-05-25 | Fijado modelo por defecto del agente Groq a `qwen/qwen3-32b`. | R-03 (mitigado) | `d623752` |
 | 2026-05-25 | Documentación pública del colapso del *free tier* de Google y catálogo de alternativas. | R-01 (materializado) | `d560863` |
 | 2026-05-25 | Adopción de `gemini-3.1-flash-lite` (500 RPD) como modelo por defecto del agente Google. | R-01 (mitigado) | `1668d91` |
-| 2026-05-25 | Prompt v4 del agente + ampliación de `MAX_ITERS` y `MAX_FILES` a 30. Primera validación en Habitica. | R-04, R-07 | `6f7db5f` |
-| 2026-05-25 | Trace turno-a-turno + prompt v5 (dos pasadas obligatorias + *batching*). | R-04, R-07 | `f5da046` |
-| 2026-05-25 | Sustitución del recorrido DFS por BFS en `build_tree_summary`, con *cap* a 2 000 entradas. | R-02, R-07 | `fce52b2` |
+| 2026-05-25 | Prompt v4 del agente + ampliación de `MAX_ITERS` y `MAX_FILES` a 30. Primera validación en Habitica. | R-04 (mitigado parcial) | `6f7db5f` |
+| 2026-05-25 | Trace turno-a-turno + prompt v5 (dos pasadas obligatorias + *batching*). | R-04 (mitigado parcial) | `f5da046` |
+| 2026-05-25 | Sustitución del recorrido DFS por BFS en `build_tree_summary`, con *cap* a 2 000 entradas. | R-02, R-04 | `fce52b2` |
 | 2026-05-25 | Observabilidad por *stderr* con sello `[mm:ss]`. Reintentos de Google extendidos a 5xx. | RNF-2.2 | `137f416` |
-| 2026-06-01 | Prompt v5.2 (pasada declarativa multi-*stack*). | R-04 | `5897106` |
-| 2026-06-01 | Run completo Habitica × Google: cobertura satisfactoria; frontera Groq confirmada. Consolidación de lecciones. | R-02, R-04 | `eadfc35` |
-| 2026-06-02 | Inicio del paquete P7 (GUI). | R-08 (asumido) | — |
-| 2026-06-04 | Replanificación del alcance: descope explícito del paquete P10 (agente de refinamiento, RU-6) para asegurar la entrega. | R-08 (mitigado) | — |
+| 2026-06-01 | Prompt v5.2 (pasada declarativa multi-*stack*); validación cruzada Spruce + Habitica para acotar el *drift* del *prompt*. | R-04, R-12 | `5897106` |
+| 2026-06-01 | Run completo Habitica × Google: cobertura satisfactoria; frontera Groq confirmada. Consolidación de lecciones. | R-02, R-04, R-06 | `eadfc35` |
+| 2026-06-02 | Inicio del paquete P7 (GUI). | — | — |
 
 ### 2.2.3 Riesgos durante la ejecución
 
@@ -265,7 +223,7 @@ A continuación se detallan, en formato de hoja de riesgo, los cinco riesgos cuy
 | Descripción | El árbol del repositorio que el agente recibe en su primer mensaje supera el *tokens per minute* del *free tier* de Groq sobre repositorios medianos+. `qwen/qwen3-32b` (6 K TPM) y `meta-llama/llama-4-scout-17b-16e-instruct` (30 K TPM) devuelven HTTP 413 sobre el árbol BFS de Habitica (~30–50 K *tokens*). |
 | Categoría | Técnico. |
 | Probabilidad / Impacto / Exposición | 3 / 4 / 12 — Crítico. |
-| Estrategia | Mitigar mediante uso de Google para el agente en repositorios medianos+ y reservar Groq para el *pipeline* texto-a-texto (que sí cabe en TPM). Documentar el *trade-off* en CLAUDE.md y en la memoria. |
+| Estrategia | Mitigar mediante uso de Google para el agente en repositorios medianos+ y reservar Groq para el *pipeline* texto-a-texto (que sí cabe en TPM). Documentar el *trade-off* en la documentación interna del proyecto y en la memoria. |
 | Indicadores | HTTP 413; conteo de *tokens* del árbol antes de invocar. |
 | Estado | **Materializado y aceptado** como límite del *free tier*. Se documenta como ampliación futura el uso del *dev tier* de Cerebras (sin *cap* diario). |
 
@@ -280,58 +238,56 @@ A continuación se detallan, en formato de hoja de riesgo, los cinco riesgos cuy
 | Indicadores | Rango observado de archivos / iteraciones por *run*; cobertura mínima sobre el modelo de referencia. |
 | Estado | **Reducido** pero no eliminado. La defensa del trabajo asume y documenta este límite. |
 
-#### Hoja de riesgo R-08 — Tiempo limitado para todos los requisitos
+#### Hoja de riesgo R-05 — Retirada o sustitución de modelos durante el desarrollo
 
 | Campo | Valor |
 |---|---|
-| Descripción | El alcance inicial del trabajo (RU-1 a RU-9) incluía un agente de refinamiento interactivo con LLM (RU-6 original) y una GUI (RU-7.2 original). El tiempo restante del proyecto, dado el esfuerzo invertido en la validación del agente y en la implementación del segundo proveedor, es insuficiente para entregar ambos a un nivel de calidad defendible. |
-| Categoría | Gestión. |
-| Probabilidad / Impacto / Exposición | 4 / 4 / 16 — Crítico. |
-| Estrategia | Mitigar mediante **descope explícito** del agente de refinamiento, justificado en LB-2 con el acuerdo de la dirección. La GUI se mantiene como cierre del prototipo. El agente de refinamiento se documenta como ampliación A en §8.2. |
-| Indicadores | Estimación de horas restantes; complejidad real de la GUI tras prototipo inicial. |
-| Estado | **Materializado y mitigado** mediante descope. El descope se considera una decisión de proyecto, no una concesión técnica: la abstracción `LLMProvider.chat(messages, tools)` queda diseñada para soportar el agente de refinamiento cuando se aborde. |
+| Descripción | Los proveedores LLM retiran o sustituyen modelos a un ritmo más rápido que el ciclo de vida del proyecto. Un modelo *baseline* del prototipo (Gemma 3 en Google, *gpt-oss* en Groq, etc.) puede dejar de estar disponible antes de la entrega, o un modelo nuevo puede sustituir al anterior con cambios sutiles de comportamiento. |
+| Categoría | Dependencia externa. |
+| Probabilidad / Impacto / Exposición | 3 / 3 / 9 — Alto. |
+| Estrategia | Mitigar mediante (i) abstracción `LLMProvider` que aísla el resto del sistema del cambio (RU-4.2); (ii) variables `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS` centralizadas en `providers/__init__.py` que permiten cambiar el modelo por defecto en una sola línea; (iii) vigilancia activa de los anuncios del proveedor durante la ventana del proyecto. |
+| Indicadores | Cambios anunciados en la página oficial del proveedor; errores `404 model not found`; cambios en los *changelogs* del SDK; mensajes de *deprecation* en *stderr*. |
+| Estado | **Materializado y mitigado.** Gemma 3 retirada en mayo de 2026; sustitución por `gemma-4-31b-it` (pipeline) sin cambios en `pipeline.py` ni en los *prompts*. |
 
-#### Hoja de riesgo R-11 — Pérdida de trabajo por mal control de versiones
+#### Hoja de riesgo R-08 — Cambios estructurales en políticas de uso del proveedor
 
 | Campo | Valor |
 |---|---|
-| Descripción | Riesgo de perder trabajo si el repositorio no se gestiona con disciplina (rebases destructivos, fuerzas-push, archivos no versionados). |
-| Categoría | Gestión. |
-| Probabilidad / Impacto / Exposición | 2 / 5 / 10 — Alto. |
-| Estrategia | Mitigar mediante uso disciplinado de Git desde el primer *commit* (`d37ce4e`), *commits* frecuentes con mensajes descriptivos, ramificación mínima y *backups* implícitos en `origin`. Política explícita en `CLAUDE.md` de no usar opciones destructivas sin autorización. |
-| Indicadores | Tamaño de los *commits*; tiempo entre *commits*; archivos no versionados de larga duración. |
-| Estado | **No materializado.** Política aplicada con éxito. |
+| Descripción | Diferente de R-01 (cuota numérica reducida) y R-07 (suspensión de la cuenta individual): R-08 es un **cambio estructural de política** del proveedor que afecta a todos los usuarios del *free tier* (retirada completa del *tier* gratuito, exigencia de verificación de pago, restricciones geográficas, ToS no compatibles con uso académico, retirada simultánea de los modelos demo-críticos). El escenario crítico es que se materialice el día de la demostración pública del TFG: el sistema funciona durante todo el desarrollo y deja de funcionar justo en la defensa. |
+| Categoría | Dependencia externa. |
+| Probabilidad / Impacto / Exposición | 3 / 4 / 12 — Crítico. La probabilidad no es despreciable porque Google ya ha protagonizado un cambio así en diciembre de 2025 (R-01 materializado); la dependencia simultánea de los dos proveedores reduce pero no elimina la exposición. |
+| Estrategia | Mitigar mediante (i) **snapshot offline** del *run* canónico de Spruce y Habitica grabado con anticipación a la defensa (PNGs del DDL, trazas del agente, *prompts* y *outputs* en disco), utilizable como demo de respaldo sin invocar al proveedor; (ii) preparación de la presentación con un *fallback* claramente comunicable al tribunal si el sistema en vivo no responde; (iii) multi-proveedor reduce la exposición frente a un único cambio de política — la materialización simultánea en Google y Groq es menos probable que en uno solo. |
+| Indicadores | Anuncios oficiales del proveedor; cambios en ToS; foros y subreddits del SDK; cambios bruscos en la respuesta de la API en días previos a la defensa. |
+| Estado | **No materializado** a fecha de cierre del prototipo. Snapshot offline preparado como contingencia para la defensa. |
 
 ## 2.3 Cierre del proyecto
 
 ### 2.3.1 Planificación final
 
-La planificación final coincide en sus paquetes con la planificación inicial salvo por la eliminación del paquete **P10 (Agente de refinamiento)**. La decisión documentada en LB-2 (descope de RU-6) retira P10 del WBS final; las horas reservadas para sus cuatro actividades (10.1–10.4, ~12 días laborables) se redistribuyen a P7 (GUI) y P8 (memoria), donde resultan necesarias.
-
-La diferencia entre lo planificado y lo realizado se concentra en tres áreas:
+La planificación final coincide en sus paquetes con la planificación inicial: no se han añadido ni retirado paquetes del WBS. La diferencia entre lo planificado y lo realizado se concentra en el esfuerzo invertido en tres paquetes técnicos:
 
 - **Paquete P3 (Abstracción de proveedor)** consumió más horas de las previstas (~ +25 %), por la necesidad de iterar sobre la forma de la abstracción para que cupiera `GroqProvider` sin distorsionar `GoogleProvider`. La inversión amortizó con creces: añadir el segundo proveedor (P5) llevó menos de un día.
-- **Paquete P4 (Agente de descubrimiento)** consumió aproximadamente +50 % de las horas previstas por la cantidad de iteraciones del *prompt* necesarias para domar los patrones "principal vs secundario" y la alta varianza del agente. Es la fuente principal del *overrun* del proyecto.
+- **Paquete P4 (Agente de descubrimiento)** consumió aproximadamente +50 % de las horas previstas por la cantidad de iteraciones del *prompt* necesarias para reducir la alta varianza del agente sobre repositorios reales. Es la fuente principal del *overrun* del proyecto.
 - **Paquete P6 (Validación experimental)** se materializó como una serie de *runs* sobre repositorios reales en lugar de como un esfuerzo puntual. Su carácter exploratorio justifica el sobrecoste.
 
-El conjunto del proyecto se cierra dentro del plazo académico de defensa, gracias al descope de R-08 (RU-6).
+El conjunto del proyecto se cierra dentro del plazo académico de defensa absorbiendo el sobrecoste de P4 con horas adicionales del autor (~ +35 h respecto al presupuesto inicial, §2.3.3) y aprovechando los solapamientos planificados entre paquetes técnicos y la memoria.
 
 ### 2.3.2 Informe final de riesgos
 
 | ID | Estado final | Comentario |
 |---|---|---|
 | R-01 | Materializado y mitigado | El cambio a `gemini-3.1-flash-lite` y la implementación de Groq resolvieron la cuota. |
-| R-02 | Materializado y aceptado | Documentada como ampliación futura. |
-| R-03 | Materializado y mitigado | Modelos `qwen/qwen3-32b` y `meta-llama/llama-4-scout` validados; otros descartados. |
-| R-04 | Reducido y aceptado | El rango observado se documenta honestamente. |
-| R-05 | Materializado y mitigado | Gemma 3 retirada en mayo de 2026, sustituida sin pérdida. |
-| R-06 | Aceptado | Cerebras *free tier* confirmado como inviable. |
-| R-07 | Reducido y aceptado | Mitigado por *prompt* v5 y árbol BFS. |
-| R-08 | Materializado y mitigado | Mediante descope de RU-6. |
-| R-09 | Aceptado | `BOOLEAN` se mantiene; documentado como ampliación. |
-| R-10 | Materializado y aceptado | Documentado el *trade-off* Google (calidad) vs Groq (velocidad). |
-| R-11 | No materializado | Política aplicada con éxito. |
-| R-12 | No materializado | Vigilancia razonable. |
+| R-02 | Materializado y aceptado | Documentado el *trade-off* y reservado Groq para el *pipeline* texto-a-texto. |
+| R-03 | Materializado y mitigado | `qwen/qwen3-32b` y `meta-llama/llama-4-scout` validados; Llama 3.x, *gpt-oss-20b/120b* y `groq/compound-*` descartados. |
+| R-04 | Reducido y aceptado | Mitigado con *prompt* v5.2 (dos pasadas obligatorias + *batching*) y árbol BFS *cap* 2 000; rango observado (5–22 archivos) documentado honestamente. |
+| R-05 | Materializado y mitigado | Gemma 3 retirada en mayo de 2026; sustitución por `gemma-4-31b-it` sin pérdida funcional. |
+| R-06 | Materializado y aceptado | Documentado el *trade-off* Google (calidad sobre Habitica) ↔ Groq (velocidad sobre *pipeline* texto-a-texto). |
+| R-07 | No materializado | Sin incidencias de cuenta en ninguno de los dos proveedores durante el proyecto. |
+| R-08 | No materializado | Sin cambios estructurales de política durante la ventana del proyecto. Snapshot offline preparado como contingencia para la defensa. |
+| R-09 | No materializado | Versiones de `google-genai` y `groq` fijadas; un único *bump* de versión durante el proyecto (compatible). |
+| R-10 | No materializado | Sin discrepancias observadas en *runs* idénticos. Mitigado preventivamente fijando IDs de modelo explícitamente versionados cuando disponibles. |
+| R-11 | Reducido | Mitigado en el *prompt* del paso 2 (`analyze.md`) y en la regla de reconciliación de FKs de `design.md`; trazabilidad RU-2.3 permite detección humana del aplanamiento residual. |
+| R-12 | Reducido | Mitigado mediante validación cruzada del *prompt* en dos datasets (`data/spruce/` y Habitica) en cada iteración significativa; *drift* hacia Mongoose explícitamente atacado en *prompt* v5.2. |
 
 ### 2.3.3 Presupuesto final de costes
 
@@ -341,11 +297,10 @@ El conjunto del proyecto se cierra dentro del plazo académico de defensa, graci
 | Autor — rol desarrollador | 175 | 25 | 4 375 € | +35 h |
 | Autor — rol tester | 40 | 22 | 880 € | +10 h |
 | Autor — rol redactor técnico | 70 | 22 | 1 540 € | +20 h |
-| Tutores — reuniones | 26 | 60 | 1 560 € | +2 h |
 | Infraestructura *cloud* | — | — | 0 € | — |
-| **Total final** | **386** | | **10 605 €** | **+62 h / +1 505 €** |
+| **Total final** | **360** | | **9 045 €** | **+60 h / +1 385 €** |
 
-El sobrecoste real (~17 %) es coherente con el *overrun* observado en P4 (agente). El uso exclusivo del *free tier* de los proveedores mantiene los costes de infraestructura en cero.
+El sobrecoste real (~18 %) es coherente con el *overrun* observado en P4 (agente). El uso exclusivo del *free tier* de los proveedores mantiene los costes de infraestructura en cero.
 
 ### 2.3.4 Informe de lecciones aprendidas
 
@@ -363,9 +318,7 @@ Las lecciones aprendidas durante el proyecto, ordenadas por su valor para trabaj
 
 **L6. Observabilidad como inversión temprana.** El registro `[mm:ss]` por la salida de error estándar, instrumentado en el CLI, el *pipeline*, el agente y los proveedores, fue determinante en la depuración del agente y en el diagnóstico de la frontera Groq. Una hora de trabajo amortizada cien veces.
 
-**L7. El descope explícito es preferible a la entrega parcial.** Mantener RU-6 en el alcance habría resultado en una implementación parcial e indefendible. El descope formalizado con la dirección, documentado en la memoria como ampliación A, libera horas para cerrar bien el resto.
-
-**L8. Honestidad estadística defiende mejor que la magnificación.** Presentar el rango observado de cobertura del agente sobre Habitica (5 a 22 archivos) ayuda a la defensa más que un único número favorable; el tribunal valora el rigor metodológico.
+**L7. Honestidad estadística defiende mejor que la magnificación.** Presentar el rango observado de cobertura del agente sobre Habitica (5 a 22 archivos) ayuda a la defensa más que un único número favorable; el tribunal valora el rigor metodológico.
 
 ---
 

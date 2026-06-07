@@ -1,0 +1,10 @@
+gantt
+    title P5. Segundo proveedor (Groq)
+    dateFormat YYYY-MM-DD
+    axisFormat %d-%b
+    excludes weekends
+
+    5.1 GroqProvider                   :a1, 2026-05-19, 2d
+    5.2 Caracterización catálogo Groq  :a2, after a1, 3d
+    5.3 Default qwen3-32b              :a3, after a2, 1d
+    5.4 Validación spruce con Groq     :crit, a4, after a3, 1d

@@ -1,0 +1,13 @@
+gantt
+    title P3. Abstracción del proveedor LLM
+    dateFormat YYYY-MM-DD
+    axisFormat %d-%b
+    excludes weekends
+
+    3.1 Protocol LLMProvider + dataclasses :a1, 2026-04-29, 3d
+    3.2 Registry + factory                 :a2, after a1, 2d
+    3.3 GoogleProvider                     :a3, after a2, 5d
+    3.4 Refactor pipeline                  :a4, after a3, 2d
+    3.5 Extracción prompts a .md           :a5, after a4, 2d
+    3.6 Config segura credenciales         :a6, 2026-05-19, 1d
+    3.7 Validación regresión               :crit, a7, after a5, 3d
