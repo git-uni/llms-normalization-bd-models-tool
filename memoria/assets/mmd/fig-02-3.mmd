@@ -5,20 +5,18 @@ gantt
     excludes weekends
 
     section F0. Inicio
-    0.1 Aprobación del tema            :done, t01, 2026-02-02, 2d
-    0.2 Reunión de arranque            :done, t02, after t01, 1d
-    0.3 Borrador de objetivos          :done, t03, after t02, 7d
+    0.1 Aprobación administrativa      :done, t01, 2026-02-02, 2d
+    0.2 Borrador cap. 1 + alcance      :done, t02, after t01, 8d
 
     section P1. Estudios previos
     1.1 Literatura LLMs+normalización  :done, t11, 2026-02-16, 15d
     1.2 Function calling + agentes     :done, t12, after t11, 8d
     1.3 Análisis Spruce + UML manual   :done, t13, after t11, 4d
-    1.4 Experimento manual 4 modelos   :done, t14, after t13, 12d
+    1.4 Experimento manual con LLMs    :done, t14, after t13, 12d
     1.5 Diseño pipeline 4 fases        :done, t15, after t14, 6d
-    1.6 Documento de viabilidad        :done, t16, after t15, 2d
 
     section P2. Prototipo base pipeline
-    2.1 Esqueleto + CLI click          :done, t21, after t16, 2d
+    2.1 Esqueleto + CLI click          :done, t21, after t15, 2d
     2.2 Curado data/spruce/            :done, t22, 2026-04-20, 1d
     2.3 4 pasos del pipeline           :done, t23, 2026-04-20, 5d
     2.4 Prompts iniciales              :done, t24, 2026-04-23, 2d

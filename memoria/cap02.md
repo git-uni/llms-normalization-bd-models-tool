@@ -42,8 +42,8 @@ La codificación jerárquica `n.m` (con `n` el paquete y `m` la actividad de niv
 
 | Cód. | Paquete | Inicio | Fin | Dur. (d) | Resp. | Entregable principal |
 |---|---|---|---|---:|---|---|
-| F0 | Inicio | 2026-02-02 | 2026-02-13 | 10 | AN | Plan inicial |
-| P1 | Estudios previos | 2026-02-16 | 2026-04-15 | 45 | AN | Viabilidad + diseño del *pipeline* |
+| F0 | Inicio | 2026-02-02 | 2026-02-13 | 10 | AN | Cap. 1 borrador (descripción y alcance) |
+| P1 | Estudios previos | 2026-02-16 | 2026-04-13 | 43 | AN | Diseño del *pipeline* multi-paso |
 | P2 | Prototipo base del *pipeline* | 2026-04-16 | 2026-04-30 | 12 | DEV | End-to-end sobre Spruce |
 | P3 | Abstracción del proveedor LLM | 2026-04-29 | 2026-05-22 | 18 | DEV | CLI multi-proveedor con `GoogleProvider` |
 | P4 | Agente de descubrimiento | 2026-05-20 | 2026-06-02 | 14 | DEV | Selección autónoma sobre Spruce-URL |
@@ -55,15 +55,15 @@ La codificación jerárquica `n.m` (con `n` el paquete y `m` la actividad de niv
 
 #### Diagrama de Gantt general
 
-La distribución temporal de los nueve paquetes sobre el periodo del proyecto (febrero–junio de 2026) se muestra a continuación. Los paquetes técnicos (P1–P7) corren en serie hasta P3 y a partir de ahí muestran solapamiento por la naturaleza iterativa del trabajo; la memoria (P8) es transversal desde el inicio. El **camino crítico** recorre 0.3 → 1.5 → 1.6 → 2.6 → 3.7 → 4.7 → 6.5 → 7.4 → 8.11 → 9.4; las actividades 4.6 (iteración del *prompt* del agente) y 6.2 (validación sobre Habitica) concentran el riesgo de retraso por su naturaleza experimental, en línea con el riesgo R-04 (§2.1.4). Los solapamientos planificados entre P3 (abstracción) y P5 (Groq) son la principal palanca para acortar el plan general y materializan el principio arquitectónico de que "añadir un proveedor es un *copy-paste*" (cap. 5).
+La distribución temporal de los nueve paquetes sobre el periodo del proyecto (febrero–junio de 2026) se muestra a continuación. Los paquetes técnicos (P1–P7) corren en serie hasta P3 y a partir de ahí muestran solapamiento por la naturaleza iterativa del trabajo; la memoria (P8) es transversal desde el inicio. El **camino crítico** recorre 0.2 → 1.5 → 2.6 → 3.7 → 4.7 → 6.5 → 7.4 → 8.11 → 9.4; las actividades 4.6 (iteración del *prompt* del agente) y 6.2 (validación sobre Habitica) concentran el riesgo de retraso por su naturaleza experimental, en línea con el riesgo R-04 (§2.1.4). Los solapamientos planificados entre P3 (abstracción) y P5 (Groq) son la principal palanca para acortar el plan general y materializan el principio arquitectónico de que "añadir un proveedor es un *copy-paste*" (cap. 5).
 
 ![Figura 2.3. Diagrama de Gantt general del proyecto](assets/png/fig-02-3.png)
 
 #### Descomposición por paquete
 
-Los mini-Gantts siguientes detallan las actividades de nivel 3 dentro de cada paquete técnico (P1–P7) y de la memoria (P8). La fase F0 (Inicio) y el paquete P9 (Cierre y defensa) son lo bastante compactos como para describirlos solo en prosa: F0 se reduce a la firma del acta y la redacción del plan inicial (10 días); P9 reúne la preparación de la presentación, la entrega telemática del trabajo el 2026-06-17, un ensayo previo y la defensa pública ante el tribunal el 2026-06-25.
+Los mini-Gantts siguientes detallan las actividades de nivel 3 dentro de cada paquete técnico (P1–P7) y de la memoria (P8). La fase F0 (Inicio) y el paquete P9 (Cierre y defensa) son lo bastante compactos como para describirlos solo en prosa: F0 cubre la aprobación administrativa del tema y la redacción inicial del cap. 1 (descripción general, objetivos y alcance), 10 días; P9 reúne la preparación de la presentación, la entrega telemática del trabajo el 2026-06-17, un ensayo previo y la defensa pública ante el tribunal el 2026-06-25.
 
-**P1. Estudios previos.** Sienta las bases conceptuales del proyecto: revisión de literatura sobre LLMs aplicados a normalización, estado del arte de *function calling* y agentes con LLM, análisis del repositorio Spruce como dataset de referencia y experimento manual de extracción de DDL vía interfaz de *chat* con varios modelos comerciales de las familias GPT y similares. Cierra con el diseño preliminar del *pipeline* multi-paso de cuatro fases y el documento de viabilidad (decisión *go/no-go*).
+**P1. Estudios previos.** Sienta las bases conceptuales del proyecto: revisión de literatura sobre LLMs aplicados a normalización, estado del arte de *function calling* y agentes con LLM, análisis del repositorio Spruce como dataset de referencia y experimento manual de extracción de DDL vía interfaz de *chat* con varios modelos comerciales de las familias GPT y similares. Cierra con el diseño preliminar del *pipeline* multi-paso de cuatro fases, que fija la arquitectura objetivo para P2.
 
 ![Figura 2.4. Mini-Gantt de P1. Estudios previos](assets/png/fig-02-4.png)
 
