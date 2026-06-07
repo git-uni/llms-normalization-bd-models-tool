@@ -87,7 +87,7 @@ Los mini-Gantts siguientes detallan las actividades de nivel 3 dentro de cada pa
 
 ![Figura 2.9. Mini-Gantt de P6. Validación experimental](assets/png/fig-02-9.png)
 
-**P7. Interfaz gráfica (GUI).** Diseña las pantallas guiadas y sus *wireframes*, implementa el esqueleto con CustomTkinter y la navegación entre pantallas, conecta la GUI con el núcleo (`pipeline.py` y el agente de descubrimiento) y valida manualmente los tres casos de uso (`data/spruce/`, `data/spruce-difuso/`, Spruce-URL) reproduciendo desde la GUI los resultados obtenidos por CLI.
+**P7. Interfaz gráfica (GUI).** Diseña las cinco pantallas guiadas (selección de entrada, configuración del proveedor/modelos, ejecución, visualización de artefactos intermedios y exportación), implementa el esqueleto con CustomTkinter y la navegación entre pantallas, conecta la GUI con el núcleo (`pipeline.py` y el agente de descubrimiento) y valida manualmente los tres casos de uso (`data/spruce/`, `data/spruce-difuso/`, Spruce-URL) reproduciendo desde la GUI los resultados obtenidos por CLI.
 
 ![Figura 2.10. Mini-Gantt de P7. Interfaz gráfica (GUI)](assets/png/fig-02-10.png)
 
