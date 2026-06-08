@@ -221,7 +221,7 @@ class ResultScreen(ctk.CTkFrame):
         # lea bien tanto en tema claro como oscuro.
         self._er_canvas = tk.Canvas(
             canvas_frame,
-            bg="#f9fafc" if ctk.get_appearance_mode().lower() != "dark" else "#101418",
+            bg="#eaf0f8" if ctk.get_appearance_mode().lower() != "dark" else "#101418",
             highlightthickness=0
         )
         yscroll = ttk.Scrollbar(

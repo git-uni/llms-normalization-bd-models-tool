@@ -65,7 +65,7 @@ class SqlView(ctk.CTkTextbox):
     def __init__(self, master, **kwargs) -> None:
         kwargs.setdefault("font", ctk.CTkFont(family="Consolas", size=12))
         kwargs.setdefault("wrap", "none")
-        kwargs.setdefault("fg_color", ("#f3f5f8", "#181c20"))  # surface-container-low
+        kwargs.setdefault("fg_color", ("#dfe7f2", "#181c20"))  # surface-container-low
         super().__init__(master, **kwargs)
         pal = _sql_palette()
         tk_text = self._textbox

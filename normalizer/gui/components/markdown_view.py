@@ -37,15 +37,15 @@ def _md_palette() -> dict[str, str]:
             "codeblock_bg": "#181c20",     # surface-container-low
         }
     return {
-        "container_bg": "#f9fafc",
-        "header_bg": "#e8ebf0",
+        "container_bg": "#eaf0f8",
+        "header_bg": "#cedaee",
         "header_fg": "#1f2a3a",
-        "cell_bg": "#f9fafc",
-        "cell_alt_bg": "#f3f5f8",
+        "cell_bg": "#eaf0f8",
+        "cell_alt_bg": "#dfe7f2",
         "cell_fg": "#202838",
-        "border": "#d8dde8",
-        "code_bg": "#e8ebf0",
-        "codeblock_bg": "#f3f5f8",
+        "border": "#a8bcd9",
+        "code_bg": "#cedaee",
+        "codeblock_bg": "#dfe7f2",
     }
 
 
@@ -53,7 +53,7 @@ class MarkdownView(ctk.CTkTextbox):
     def __init__(self, master, **kwargs) -> None:
         kwargs.setdefault("font", ctk.CTkFont(family="Segoe UI", size=13))
         kwargs.setdefault("wrap", "word")
-        kwargs.setdefault("fg_color", ("#f3f5f8", "#181c20"))  # surface-container-low
+        kwargs.setdefault("fg_color", ("#dfe7f2", "#181c20"))  # surface-container-low
         super().__init__(master, **kwargs)
         pal = _md_palette()
         tk_text = self._textbox

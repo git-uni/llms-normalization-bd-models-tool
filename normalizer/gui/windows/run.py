@@ -124,7 +124,7 @@ class RunScreen(ctk.CTkFrame):
 
         # --- Header (surface container highest) ----------------------
         header = ctk.CTkFrame(
-            self, fg_color=("#e8ebf0", "#26292d"), corner_radius=12,
+            self, fg_color=("#cedaee", "#26292d"), corner_radius=12,
         )
         header.pack(fill="x", pady=(0, 12))
         header_inner = ctk.CTkFrame(header, fg_color="transparent")
@@ -142,7 +142,7 @@ class RunScreen(ctk.CTkFrame):
         ctk.CTkLabel(
             title_box, text=f"  {mode_label}  ",
             corner_radius=10,
-            fg_color=("#e2e6ec", "#30343a"),  # surface-container-highest
+            fg_color=("#bdcee5", "#30343a"),  # surface-container-highest
             text_color=("#3a4a6a", "#b8c4dc"),
             font=ctk.CTkFont(size=11, weight="bold"),
             height=24,
@@ -181,7 +181,7 @@ class RunScreen(ctk.CTkFrame):
         # --- Bloque pipeline (surface container, protagonista) ----------
         pipeline_block = ctk.CTkFrame(
             self, corner_radius=12,
-            fg_color=("#eef0f4", "#1c2024"),  # surface-container
+            fg_color=("#dfe7f2", "#1c2024"),  # surface-container
         )
         pipeline_block.pack(fill="both", expand=True, pady=(0, 12))
         pipeline_inner = ctk.CTkFrame(pipeline_block, fg_color="transparent")
@@ -277,7 +277,7 @@ class RunScreen(ctk.CTkFrame):
         self.log_box = ctk.CTkTextbox(
             log_inner, font=ctk.CTkFont(family="Consolas", size=11),
             height=140, wrap="none",
-            fg_color=("#f3f5f8", "#181c20"),  # surface-container-low
+            fg_color=("#e7eef8", "#181c20"),  # surface-container-low
         )
         self.log_box.pack(fill="x")
         self.log_box.configure(state="disabled")

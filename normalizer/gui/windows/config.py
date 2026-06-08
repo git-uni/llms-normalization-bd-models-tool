@@ -18,8 +18,8 @@ import customtkinter as ctk
 # bloque que los contiene, surface-container, para que se "hundan"
 # sutilmente como campos editables) + outline-variant para bordes.
 # Sustituye el default beige cálido de CTk que chocaba con la paleta azul.
-_INPUT_FG = ("#f3f5f8", "#181c20")
-_INPUT_BORDER = ("#cad0d8", "#3a4456")
+_INPUT_FG = ("#e7eef8", "#181c20")
+_INPUT_BORDER = ("#a8bcd9", "#3a4456")
 _INPUT_BUTTON = ("#1f6aa5", "#3a8fd6")  # primary para botones de combo
 
 from normalizer.gui.controller import (
@@ -215,7 +215,7 @@ class ConfigScreen(ctk.CTkFrame):
     def _make_block(self, title: str) -> ctk.CTkFrame:
         block = ctk.CTkFrame(
             self, corner_radius=12,
-            fg_color=("#eef0f4", "#1c2024"),  # surface-container
+            fg_color=("#dfe7f2", "#1c2024"),  # surface-container
         )
         block.pack(fill="x", pady=(0, 12))
         inner = ctk.CTkFrame(block, fg_color="transparent")
