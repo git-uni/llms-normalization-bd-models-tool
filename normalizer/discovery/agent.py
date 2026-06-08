@@ -113,6 +113,19 @@ def discover_from_url(
         )
 
         for call in response.tool_calls:
+            # Chequeo dentro del bucle de tools: si el agente batchea N
+            # `select_evidence`/`read_file`/etc. en una sola respuesta, sin
+            # esto el cancel esperaría a despachar las N. Con esto, se
+            # atiende entre tool y tool — usualmente <1s.
+            if cancel_event is not None and cancel_event.is_set():
+                cancelled = True
+                log("Agente cancelado por el usuario (mid-batch).")
+                state.summary = (
+                    (state.summary or "")
+                    + f"\n\n[Cancelado por el usuario durante el batch "
+                    + f"de la iteración {iters_used}.]"
+                )
+                break
             result = dispatch(call, state, max_files=max_files)
             messages.append(
                 Message(
@@ -122,6 +135,9 @@ def discover_from_url(
                     tool_name=call.name,
                 )
             )
+
+        if cancelled:
+            break
 
         if state.is_done:
             log(

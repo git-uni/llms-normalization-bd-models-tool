@@ -24,6 +24,7 @@ from normalizer.providers import (
     DEFAULT_AGENT_MODELS,
     DEFAULT_MODELS,
     available_providers,
+    build_provider,
 )
 
 
@@ -126,6 +127,13 @@ class ConfigScreen(ctk.CTkFrame):
         self.agent_model_cb = ctk.CTkComboBox(row3, values=[""])
         self.agent_model_cb.pack(side="left", fill="x", expand=True)
 
+        # Texto auxiliar sobre el estado del catálogo (vacío si listado OK,
+        # mensaje gris si no se pudo conectar al proveedor).
+        self.models_status_label = ctk.CTkLabel(
+            block_llm, text="", text_color="gray", anchor="w", wraplength=900,
+        )
+        self.models_status_label.pack(fill="x", pady=(0, 8))
+
         row4 = ctk.CTkFrame(block_llm, fg_color="transparent")
         row4.pack(fill="x")
         ctk.CTkLabel(row4, text="Directorio salida", width=140, anchor="w").pack(
@@ -220,23 +228,75 @@ class ConfigScreen(ctk.CTkFrame):
         self._refresh_agent_model_enabled()
 
     def _on_provider_change(self, value: str, refresh: bool = True) -> None:
-        # Prerrellena modelos por defecto del proveedor seleccionado.
+        # Prerrellena los combos: si la API key del proveedor está
+        # configurada, listamos su catálogo dinámicamente; si no, caemos al
+        # default conocido y avisamos al usuario.
         default_pipeline = DEFAULT_MODELS.get(value, "")
         default_agent = DEFAULT_AGENT_MODELS.get(value, "")
-        # Solo prerrellenamos si el campo está vacío o tenía el default del
-        # proveedor anterior — no pisamos un valor que el usuario haya tecleado.
-        if not self.model_cb.get() or self.model_cb.get() in DEFAULT_MODELS.values():
-            self.model_cb.configure(values=[default_pipeline])
+        pipeline_models, agent_models, status_text = self._fetch_models(value)
+
+        previous_pipeline = self.model_cb.get()
+        previous_agent = self.agent_model_cb.get()
+        all_defaults = set(DEFAULT_MODELS.values()) | set(DEFAULT_AGENT_MODELS.values())
+
+        # Modelo pipeline: respetamos lo que el usuario haya escogido a mano
+        # (cualquier valor que no sea un default conocido); si no, default.
+        self.model_cb.configure(values=pipeline_models or [default_pipeline])
+        if previous_pipeline and previous_pipeline not in all_defaults and previous_pipeline in pipeline_models:
+            self.model_cb.set(previous_pipeline)
+        elif default_pipeline and default_pipeline in (pipeline_models or [default_pipeline]):
             self.model_cb.set(default_pipeline)
-        if (
-            not self.agent_model_cb.get()
-            or self.agent_model_cb.get() in DEFAULT_AGENT_MODELS.values()
-        ):
-            self.agent_model_cb.configure(values=[default_agent])
+        elif pipeline_models:
+            self.model_cb.set(pipeline_models[0])
+        else:
+            self.model_cb.set(default_pipeline)
+
+        # Modelo agente: misma lógica. `CTkComboBox.set()` no surte efecto
+        # si el widget está disabled, así que lo habilitamos durante el
+        # update y restauramos el estado correcto después.
+        previous_state = self.agent_model_cb.cget("state")
+        self.agent_model_cb.configure(state="normal", values=agent_models or [default_agent])
+        if previous_agent and previous_agent not in all_defaults and previous_agent in agent_models:
+            self.agent_model_cb.set(previous_agent)
+        elif default_agent and default_agent in (agent_models or [default_agent]):
             self.agent_model_cb.set(default_agent)
+        elif agent_models:
+            self.agent_model_cb.set(agent_models[0])
+        else:
+            self.agent_model_cb.set(default_agent)
+        self.agent_model_cb.configure(state=previous_state)
+
+        self.models_status_label.configure(text=status_text)
         self._sync_key_field()
+        self._refresh_agent_model_enabled()
         if refresh:
             self._refresh_run_button()
+
+    def _fetch_models(
+        self, provider_name: str
+    ) -> tuple[list[str], list[str], str]:
+        """Lista modelos del proveedor o devuelve fallback con mensaje.
+
+        Crea un provider temporal (solo para listar; la corrida real construye
+        otro en el controller). Si falla — falta de API key o error de red —
+        devuelve listas vacías y un mensaje para mostrar al usuario.
+        """
+        env_key = ENV_KEY_BY_PROVIDER.get(provider_name, "")
+        if env_key and not os.environ.get(env_key):
+            return [], [], (
+                f"Configura la {env_key} para listar el catálogo de modelos "
+                "del proveedor. Mientras tanto, se muestra el modelo por defecto."
+            )
+        try:
+            tmp = build_provider(name=provider_name, model=None)
+            pipeline_models = tmp.list_models(for_agent=False)
+            agent_models = tmp.list_models(for_agent=True)
+        except Exception as e:
+            return [], [], (
+                f"No se pudo listar el catálogo de modelos del proveedor: {e}. "
+                "Se muestra el modelo por defecto."
+            )
+        return pipeline_models, agent_models, ""
 
     def _on_mode_change(self, value: str) -> None:
         mode_map = {"Archivo": "file", "Directorio": "dir", "URL": "url"}

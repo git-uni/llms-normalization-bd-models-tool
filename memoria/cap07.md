@@ -190,9 +190,9 @@ La aplicación valida inmediatamente: el archivo o directorio debe existir, y la
 
 **Bloque 2 — LLM y directorio de salida.** Tres controles desplegables más un selector de directorio:
 
-- **Proveedor**: combo con los valores `google` y `groq`. Al cambiar la selección, los dos combos siguientes se prerrellenan automáticamente con los modelos por defecto del proveedor elegido y el bloque de credenciales se ajusta a la nueva variable de entorno relevante.
+- **Proveedor**: combo con los valores `google` y `groq`. Al cambiar la selección, la aplicación consulta el catálogo de modelos del proveedor (`LLMProvider.list_models()`, que internamente llama a `client.models.list()` del SDK correspondiente) y popula dinámicamente los dos combos siguientes. El modelo por defecto del proveedor queda pre-seleccionado. Si la API key no está configurada o el proveedor responde con error, los combos caen al modelo por defecto y un texto auxiliar gris invita al usuario a introducir la clave para ver el catálogo completo.
 - **Modelo del *pipeline***: combo editable. Acepta cualquier identificador de modelo válido para el proveedor seleccionado.
-- **Modelo del agente**: combo editable. Solo se habilita si la entrada es una URL.
+- **Modelo del agente**: combo editable. Filtra el catálogo a los modelos con soporte verificado de *function-calling* (una *whitelist* corta dentro del *provider*, porque ningún SDK expone este metadato hoy). Solo se habilita si la entrada es una URL.
 - **Directorio de salida**: por defecto, `out-gui-YYYYMMDD-HHMMSS/` en el directorio de trabajo; se puede cambiar con el botón "Examinar...".
 
 **Bloque 3 — Credenciales del proveedor.** Para el proveedor seleccionado, el formulario muestra un campo de texto enmascarado (`••••`) con la clave de API correspondiente:
@@ -204,12 +204,14 @@ Un botón "Ejecutar" en la esquina inferior derecha pasa a la siguiente pantalla
 
 ### 7.3.3 Pantalla 2 — Ejecución y progreso
 
-La segunda pantalla muestra el avance del proceso en tiempo real:
+La segunda pantalla muestra el avance del proceso en tiempo real organizado en cuatro bloques verticales:
 
-- **Barra de progreso por fase**: una secuencia de "*chips*" que se iluminan al arrancar cada fase y se marcan como completados al terminar. En modo URL, las fases son Descubrimiento, Análisis, Diseño y DDL; en modo archivo o directorio, las fases son Análisis, Diseño y DDL.
+- **Cabecera**: título de la pantalla, botón Cancelar a la derecha y una línea de metadatos con el proveedor, modelos seleccionados y directorio de salida, más un reloj que tickea cada segundo (*wall clock*) desde el inicio de la corrida (gracias a `_log.reset_clock()`, que se invoca al lanzar el hilo trabajador para que la primera marca sea `[00:00]`).
+- **Progreso del pipeline** (bloque protagonista): una fila por fase con icono de estado, nombre y texto a la derecha (`pendiente` / `en curso · 0:42` / `completada · 2:14` / `error · 0:05` / `cancelando · 0:18`). La fase activa tiene fondo destacado y su contador de segundos se refresca en vivo. Un pie de bloque resume el avance global: `Fase 2 de 4 · 2:56 transcurridos`. En modo URL las fases son Descubrimiento, Análisis, Diseño y DDL; en modo archivo o directorio, las tres últimas.
 - **Tabla de iteraciones del agente** (solo en modo URL): tabla viva con dos columnas (`Iter`, `Tool calls`) que se actualiza conforme el agente completa cada iteración del bucle.
-- **Panel de *log***: muestra las líneas `[mm:ss] …` emitidas por el núcleo durante la ejecución, con auto-*scroll* al final.
-- **Botón "Cancelar"**: señaliza la cancelación cooperativa al núcleo, que aborta entre fases o iteraciones, escribe la traza de descubrimiento con la evidencia parcial y entrega el control a la pantalla de resultado. Los artefactos ya escritos a disco se preservan (RF-7.3).
+- **Panel de *log***: caja compacta de altura fija con las líneas `[mm:ss] …` emitidas por el núcleo, con auto-*scroll* al final. Permite seguir el detalle bajo demanda sin que el log se coma la pantalla.
+
+El botón **Cancelar** señaliza la cancelación cooperativa al núcleo. Mientras se espera a que termine la llamada al LLM en curso (la cancelación HTTP no es instantánea), el botón pasa a "Cancelando..." deshabilitado, la fase activa cambia al icono `⏸` con color ámbar y un texto auxiliar explica que se está esperando. El núcleo aborta entre fases, entre iteraciones del agente y también entre llamadas a *tools* dentro de un mismo turno del agente, escribe la traza de descubrimiento con la evidencia parcial y entrega el control a la pantalla de resultado. Los artefactos ya escritos a disco se preservan (RF-7.3).
 
 Al terminar (con éxito, cancelación o error), la pantalla transita automáticamente a la pantalla de resultado.
 

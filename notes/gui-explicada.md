@@ -57,7 +57,7 @@ Tres bloques verticales en un único formulario.
 
 **Bloque 1 — Entrada.** `CTkSegmentedButton` con tres opciones (Archivo / Directorio / URL). Según la opción, el botón "Examinar..." abre el selector nativo del SO (`filedialog.askopenfilename` o `askdirectory`) o se deshabilita (URL). La validación de existencia y formato URL es inmediata vía `trace_add("write", ...)`. Si la validación falla, el botón "Ejecutar" queda gris y un texto explica el motivo.
 
-**Bloque 2 — LLM y salida.** `CTkOptionMenu` para el proveedor (poblado dinámicamente con `available_providers()`). Al cambiar el proveedor, los dos `CTkComboBox` editables de modelos se prerrellenan con los *defaults* del proveedor (de `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS`). El combo del modelo del agente solo se habilita si el modo de entrada es URL. El directorio de salida por defecto es `out-gui-YYYYMMDD-HHMMSS/` para que cada corrida tenga su propio *sandbox*.
+**Bloque 2 — LLM y salida.** `CTkOptionMenu` para el proveedor (poblado dinámicamente con `available_providers()`). Al cambiar el proveedor, la pantalla consulta `LLMProvider.list_models(for_agent=False/True)` y popula los dos `CTkComboBox` con el catálogo dinámico del proveedor (`client.models.list()` del SDK correspondiente, gratuito y rápido). El modelo por defecto queda pre-seleccionado. Si la API key no está configurada o el listado falla, los combos caen al *default* y un texto auxiliar gris invita al usuario a introducir la clave. El combo del agente filtra por una *whitelist* corta de modelos verificados con *function-calling* dentro del propio *provider* — ningún SDK expone hoy ese metadato. Solo se habilita si el modo de entrada es URL. El directorio de salida por defecto es `out-gui-YYYYMMDD-HHMMSS/` para que cada corrida tenga su propio *sandbox*.
 
 **Bloque 3 — Credenciales.** Detecta si `GOOGLE_API_KEY` o `GROQ_API_KEY` están en `os.environ`. Si sí, muestra `••••••••` deshabilitado + botón "Cambiar". Si no, campo editable con `show="*"`. Cuando el usuario introduce una clave y pulsa "Ejecutar", `persist_api_key()` (en `controller.py`) la inyecta en `os.environ` y la persiste en `.env` con `dotenv.set_key()`, que añade o reemplaza la línea correspondiente sin tocar el resto del fichero. Como `.env` está en `.gitignore`, no hay riesgo de *leak* al repositorio.
 
@@ -105,6 +105,8 @@ Tres componentes.
 
 **Implementación.** En `normalizer/_log.py` hay una lista `_callbacks: list[Callable[[str], None]]`. Cuando el código llama `log("Pipeline: ANÁLISIS ...")`, esa línea sale por *stderr* y se reenvía a todos los *callbacks* registrados. La GUI registra uno con `register_callback(self._on_log_line)` antes de lanzar el hilo trabajador y hace `unregister_callback` al terminar. El *callback* solo mete la línea en una `queue.Queue`. **No toca *widgets*** — Tkinter no es *thread-safe*.
 
+**Reset del reloj relativo.** Justo antes de `register_callback`, `GuiController.start()` invoca `_log.reset_clock()`. Sin esto, el `_START = time.monotonic()` calculado al **importar** el módulo arrastraría todo el tiempo de configuración (en la GUI puede ser de minutos entre el arranque de la app y la primera ejecución), y la primera marca aparecería como `[02:34]` en lugar de `[00:00]`. La CLI no necesita reset porque el import y la primera línea de log son simultáneas.
+
 ### Mecánica 2 — Hilo trabajador + cola + `after()`
 
 **Problema.** Si llamamos a `run_pipeline()` desde el hilo principal de la GUI, la ventana se congela durante minutos. Si lo llamamos desde otro hilo y ese hilo toca *widgets*, Tkinter falla.
@@ -123,9 +125,14 @@ Tres componentes.
 **Implementación.**
 1. `GuiController` tiene `self._cancel = threading.Event()`.
 2. Lo pasa como argumento opcional `cancel_event` a `run_pipeline()` y `discover_from_url()`.
-3. El núcleo lo comprueba entre fases (`pipeline.py`: tras `01_input.txt`, tras `02_analysis.md`, tras `03_design.md`) y entre iteraciones del bucle del agente (`agent.py`).
+3. El núcleo lo comprueba en **tres puntos**:
+   - Entre fases del pipeline (`pipeline.py`: tras `01_input.txt`, tras `02_analysis.md`, tras `03_design.md`).
+   - Al inicio de cada iteración del bucle del agente (`agent.py`).
+   - **Entre llamadas a *tools* dentro de un mismo turno del agente**: cuando el agente batchea 4-5 `read_file`/`select_evidence` en una sola respuesta, sin este chequeo la cancelación esperaría a despachar todas. Con él, se atiende entre tool y tool — usualmente <1 s.
 4. Si el evento está señalizado, se levanta `PipelineCancelled` (definida en `pipeline.py`).
 5. `GuiController` captura esa excepción y emite un `CancelledEvent` en la cola.
+
+**Feedback visual durante la espera.** La llamada al LLM en curso no se aborta — puede tardar hasta ~1 min. Durante ese intervalo, la pantalla 2 marca el estado de transición: el botón pasa a "Cancelando..." deshabilitado, la fase activa cambia su icono a `⏸` con color ámbar y un texto auxiliar explica que se está esperando a que termine la operación bloqueante. Sin esto el usuario interpretaba que la GUI se había colgado.
 
 **Garantía.** Los artefactos ya escritos a disco se preservan. Si se cancela durante el diseño, en disco quedan `01_input.txt` y `02_analysis.md` listos para inspección. Esto materializa el RF-7.3.
 

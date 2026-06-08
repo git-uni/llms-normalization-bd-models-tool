@@ -7,11 +7,31 @@ objetos del subsistema de proveedor ni del agente (decisión arquitectónica
 §5.2.7 de la memoria).
 """
 
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
 InputMode = Literal["file", "dir", "url"]
+PhaseStatus = Literal["pending", "active", "done", "error", "cancelling"]
+
+
+@dataclass
+class PhaseInfo:
+    """Estado de una fase del pipeline con timestamps para medir duración."""
+
+    name: str
+    status: PhaseStatus = "pending"
+    started_at: float | None = None  # time.monotonic() al pasar a active
+    ended_at: float | None = None    # time.monotonic() al pasar a done/error
+
+    @property
+    def duration_s(self) -> float:
+        """Segundos transcurridos (en curso o totales si ya terminó)."""
+        if self.started_at is None:
+            return 0.0
+        end = self.ended_at if self.ended_at is not None else time.monotonic()
+        return max(0.0, end - self.started_at)
 
 
 @dataclass
@@ -31,6 +51,8 @@ class GuiState:
     finished_ok: bool = False
     log_lines: list[str] = field(default_factory=list)
     agent_turns: list[tuple[int, str]] = field(default_factory=list)
+    phases: list[PhaseInfo] = field(default_factory=list)
+    run_started_at: float | None = None  # wall clock de la corrida actual
 
     @property
     def is_url(self) -> bool:
@@ -43,3 +65,7 @@ class GuiState:
         self.finished_ok = False
         self.log_lines = []
         self.agent_turns = []
+        # phases las inicializa RunScreen según el modo (URL incluye
+        # Descubrimiento; archivo/directorio no).
+        self.phases = []
+        self.run_started_at = time.monotonic()

@@ -17,6 +17,16 @@ from normalizer.providers.base import (
 _MAX_RETRIES = 4
 _FALLBACK_RETRY_DELAY_S = 5.0
 
+# Whitelist de modelos verificados con function-calling para el agente. Groq
+# documenta que "todos los modelos soportan tools", pero en la práctica solo
+# `qwen/qwen3-32b` y `meta-llama/llama-4-scout-17b-16e-instruct` emiten el
+# slot `tool_calls` correctamente — el resto (Llama 3.x, gpt-oss-*, compound)
+# emite markup raro o JSON truncado y la API rechaza con `tool_use_failed`.
+_AGENT_CAPABLE = {
+    "qwen/qwen3-32b",
+    "meta-llama/llama-4-scout-17b-16e-instruct",
+}
+
 
 class GroqProvider:
     name = "groq"
@@ -29,6 +39,27 @@ class GroqProvider:
         # max_retries=0 desactiva el retry interno del SDK para que el nuestro
         # (que respeta el retry-after) sea quien manda.
         self._client = Groq(api_key=api_key, max_retries=0)
+        self._models_cache: dict[bool, list[str]] = {}
+
+    def list_models(self, for_agent: bool = False) -> list[str]:
+        if for_agent in self._models_cache:
+            return self._models_cache[for_agent]
+        ids: list[str] = []
+        response = self._client.models.list()
+        for m in response.data:
+            mid = getattr(m, "id", "") or ""
+            if not mid:
+                continue
+            # `active=False` significa retirado / inaccesible; lo descartamos.
+            active = getattr(m, "active", True)
+            if active is False:
+                continue
+            ids.append(mid)
+        if for_agent:
+            ids = [m for m in ids if m in _AGENT_CAPABLE]
+        ids = sorted(set(ids))
+        self._models_cache[for_agent] = ids
+        return ids
 
     def generate(self, prompt: str) -> str:
         response = self._call_with_retry(

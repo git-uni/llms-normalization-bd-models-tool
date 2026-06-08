@@ -22,6 +22,19 @@ _FALLBACK_RETRY_DELAY_S = 15.0
 # devuelto 500/503 en varias ocasiones durante el pipeline).
 _RETRYABLE_CODES = {429, 500, 502, 503, 504}
 
+# Whitelist de modelos verificados con function-calling para el agente. La
+# API REST de Google **no** expone soporte de tools en `models.list()` ni en
+# `supportedGenerationMethods`: hay que mantener la lista a mano. La familia
+# Gemma no soporta function-calling (solo generate); la familia Gemini sí.
+_AGENT_CAPABLE = {
+    "gemini-3.1-flash-lite",
+    "gemini-3.1-flash",
+    "gemini-3.1-pro",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
+}
+
 
 class GoogleProvider:
     name = "google"
@@ -34,10 +47,37 @@ class GoogleProvider:
                 "Falta GOOGLE_API_KEY (o GEMINI_API_KEY) en el entorno o en .env"
             )
         self._client = genai.Client(api_key=api_key)
+        # Caché del catálogo por (for_agent). list() es síncrono pero cuesta
+        # una petición de red; cachear evita re-llamar al re-renderizar combos.
+        self._models_cache: dict[bool, list[str]] = {}
 
     def generate(self, prompt: str) -> str:
         response = self._call_with_retry(contents=prompt, config=None, op="generate")
         return response.text or ""
+
+    def list_models(self, for_agent: bool = False) -> list[str]:
+        if for_agent in self._models_cache:
+            return self._models_cache[for_agent]
+        ids: list[str] = []
+        for m in self._client.models.list():
+            raw = getattr(m, "name", "") or ""
+            # `client.models.list()` devuelve `models/<id>`; nos quedamos con
+            # el `<id>` para que coincida con lo que aceptan generate_content
+            # y con los identificadores que el usuario espera ver.
+            mid = raw[len("models/") :] if raw.startswith("models/") else raw
+            if not mid:
+                continue
+            methods = getattr(m, "supported_generation_methods", None) or getattr(
+                m, "supportedGenerationMethods", []
+            )
+            if methods and "generateContent" not in methods:
+                continue
+            ids.append(mid)
+        if for_agent:
+            ids = [m for m in ids if m in _AGENT_CAPABLE]
+        ids = sorted(set(ids))
+        self._models_cache[for_agent] = ids
+        return ids
 
     def chat(
         self, messages: list[Message], tools: list[ToolSpec]

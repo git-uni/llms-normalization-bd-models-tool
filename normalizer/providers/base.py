@@ -30,13 +30,32 @@ class ToolCall:
 class Message:
     """Mensaje del historial de chat.
 
-    - `role="tool"` requiere `tool_call_id` (id de la llamada respondida; lo
-      usan OpenAI/Groq/Anthropic) y `tool_name` (nombre de la función; lo usa
-      Gemini, que empareja por nombre en lugar de por id). Conviene rellenar
-      ambos para que el mensaje funcione contra cualquier proveedor.
-    - `role="assistant"` puede traer `tool_calls` además (o en lugar) de texto.
-    - `raw` guarda el objeto original del SDK del proveedor para que el
-      provider pueda reinyectarlo en turnos siguientes sin reconstruirlo.
+    `role` adopta la vocabulary de OpenAI (`system`/`user`/`assistant`/
+    `tool`) como representación interna común; cada provider la traduce a
+    su formato nativo:
+
+    - `role="system"`: instrucción de sistema (p. ej. `DISCOVERY_SYSTEM`).
+      Groq la envía como un mensaje normal con `role="system"`; Google la
+      saca del historial y la pasa fuera de banda como `system_instruction`
+      en la `GenerateContentConfig`.
+    - `role="user"`: turno del usuario / orquestador (en el agente, el
+      primer mensaje con URL + árbol del repo).
+    - `role="assistant"`: turno del modelo. Puede traer `content` de texto,
+      `tool_calls`, o ambos. Groq lo envía tal cual; Google lo emite como
+      `role="model"` en su API — la traducción la hace `_to_gemini_contents`.
+    - `role="tool"`: resultado de ejecutar una tool, reinyectado para que el
+      modelo lo vea en el siguiente turno. Groq tiene rol `tool` nativo y
+      empareja con la llamada por `tool_call_id`. Gemini no tiene rol
+      `tool`: el provider envuelve el resultado en un `role="user"` con un
+      `Part.from_function_response`, y empareja por nombre de función
+      (`tool_name`). Por eso conviene rellenar ambos campos al construir
+      el mensaje — uno u otro se ignora según el provider destino.
+
+    `raw` guarda el objeto original del SDK del proveedor para reinyectarlo
+    en turnos siguientes sin reconstruirlo. Hoy solo lo usa Google con los
+    mensajes `assistant`: preserva metadatos opacos del `Content` devuelto
+    (p. ej. firmas/`thought_signature`) que se perderían al recomponerlo a
+    partir de `content` + `tool_calls`.
     """
 
     role: Role
@@ -63,6 +82,10 @@ class LLMProvider(Protocol):
     - `chat(messages, tools)`: un turno de chat con tool-use opcional. Lo usa
       el agente de descubrimiento. Implementar solo si el proveedor/modelo
       soporta function-calling.
+    - `list_models(for_agent)`: catálogo dinámico de modelos disponibles. La
+      GUI lo consulta para poblar los combos de selección sin tener que
+      mantener listas hardcoded. `for_agent=True` restringe a los modelos
+      verificados con function-calling para el agente de descubrimiento.
     """
 
     name: str
@@ -73,3 +96,5 @@ class LLMProvider(Protocol):
     def chat(
         self, messages: list[Message], tools: list[ToolSpec]
     ) -> ChatResponse: ...
+
+    def list_models(self, for_agent: bool = False) -> list[str]: ...

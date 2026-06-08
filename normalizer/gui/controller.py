@@ -24,7 +24,7 @@ from queue import Empty, Queue
 
 from dotenv import set_key
 
-from normalizer._log import register_callback, unregister_callback
+from normalizer._log import register_callback, reset_clock, unregister_callback
 from normalizer.discovery import discover_from_url
 from normalizer.gui.state import GuiState
 from normalizer.pipeline import PipelineCancelled, run_pipeline
@@ -99,6 +99,9 @@ class GuiController:
             return
         self._cancel.clear()
         self._last_phase = ""
+        # Reinicia el reloj relativo del log: la primera línea de la corrida
+        # debe marcar [00:00], no acumular el tiempo de configuración.
+        reset_clock()
         register_callback(self._on_log_line)
         self._thread = threading.Thread(
             target=self._run, args=(state,), daemon=True

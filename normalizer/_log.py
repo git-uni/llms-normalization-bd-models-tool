@@ -20,6 +20,20 @@ _START = time.monotonic()
 _callbacks: list[Callable[[str], None]] = []
 
 
+def reset_clock() -> None:
+    """Reinicia el reloj relativo a `time.monotonic()` actual.
+
+    La CLI no la llama: su `_START` (calculado al importar el módulo) coincide
+    con el arranque del proceso. La GUI sí: entre el import del módulo y la
+    primera línea de log de una corrida pueden pasar minutos (configurar
+    entrada + credenciales en pantalla 1). Sin este reset, la primera línea
+    marcaría `[mm:ss]` con un offset arbitrario en lugar de `[00:00]`.
+    `GuiController.start()` la invoca antes de registrar su callback.
+    """
+    global _START
+    _START = time.monotonic()
+
+
 def register_callback(cb: Callable[[str], None]) -> None:
     """Registra un *callback* que recibirá cada línea ya formateada.
 
