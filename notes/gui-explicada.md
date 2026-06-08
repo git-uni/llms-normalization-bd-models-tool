@@ -131,13 +131,17 @@ Tres componentes.
 
 ### Mecánica 4 — Diagrama ER auto-generado
 
-**Cadena.** `04_ddl.sql` → `parse_ddl()` → `(tables, fks)` → `build_dot()` → cadena DOT → `graphviz.Source(dot).render()` → PNG → `PIL.Image.open()` → `CTkImage` → `CTkLabel`.
+**Cadena.** `04_ddl.sql` → `parse_ddl()` → `(tables, fks)` → `build_dot()` → `(DOT, engine)` → `graphviz.Source(dot, engine=engine).render()` → PNG → `PIL.Image.open()` → `tk.Canvas` con `ImageTk.PhotoImage` + *scrollbars* XY + controles de zoom.
 
-**Parser** (`ddl_graph.py`): *regex* sobre `CREATE TABLE name (...)`, división del cuerpo por comas a profundidad 0, distinción entre columnas y *constraints*, extracción de claves primarias y foráneas. Validado sobre Spruce-fácil: 11 tablas y 11 FKs correctas.
+**Parser** (`ddl_graph.py`): *regex* sobre `CREATE TABLE name (...)`, división del cuerpo por comas a profundidad 0, distinción entre columnas y *constraints*, extracción de claves primarias y foráneas. Validado sobre Spruce: 11 tablas y 11 FKs correctas; sobre Habitica: 31 tablas y 38 FKs.
 
-**Render**: la lib Python `graphviz` delega al binario `dot` del sistema. Si Graphviz no está instalado, `render_to_png()` devuelve `None` y la pestaña ER muestra instrucciones de instalación por SO. Las demás pestañas siguen funcionando — **fallback gracioso**, no crash.
+**Selección de *layout*** (`_pick_layout`). Heurística según la topología del grafo: si existe una tabla con más de 10 FKs entrantes (un *hub* — caso típico de `Users` en aplicaciones reales) o el grafo tiene más de 20 tablas, se usa el *engine* `sfdp` (*force-directed*), que coloca el *hub* en el centro y distribuye los demás nodos alrededor. Si no, se usa `dot` (*hierarchical*) con `rankdir=LR`, `splines=spline` y `concentrate=true`, que es lo más limpio para grafos modestos. La razón es que `dot` apila aristas paralelas en líneas adyacentes y, cuando un nodo recibe 20+ FKs, el resultado es ilegible.
 
-**Estilo del diagrama.** Cada tabla es un nodo con cabecera azul claro (`#e8f0fe`) y filas con columnas alineadas a la izquierda. Las PKs llevan el prefijo `[PK]`. Las aristas son las FKs con etiqueta `col_origen → col_destino`. Layout `rankdir=LR` con `splines=ortho` (líneas en ángulos rectos).
+**Render**: la lib Python `graphviz` delega al binario `dot` del sistema. En Windows, `_ensure_graphviz_in_path()` localiza el binario en rutas estándar (instalador oficial / winget) y lo añade al PATH del proceso si no estaba — esto evita el caso "lo acabo de instalar pero el proceso ya corriendo no lo ve". Si aun así no está disponible, `render_to_png()` devuelve `None` y la pestaña ER muestra instrucciones de instalación con un botón **Reintentar**; el resto de pestañas siguen funcionando.
+
+**Visor.** La pantalla 3 muestra el PNG dentro de un `tk.Canvas` con *scrollbars* horizontal y vertical (Tkinter nativo, porque `CTkScrollableFrame` solo soporta una orientación) y una barra superior con controles de zoom (−, +, 100%, Ajustar a ventana). `Ctrl + rueda` también hace zoom. Un botón adicional "Abrir en visor externo" delega el PNG al visor del SO para usos que requieran zoom/pan más rápidos.
+
+**Estilo del diagrama.** Cada tabla es un nodo con cabecera azul claro (`#e8f0fe`) y filas con columnas alineadas a la izquierda. Las PKs llevan el prefijo `[PK]`. Las aristas son las FKs con `xlabel="col_origen → col_destino"` (`xlabel` y no `label` porque algunas combinaciones de *engine* + *splines* descartan las etiquetas pegadas a la arista; `xlabel` las flota cerca sin perderlas).
 
 ---
 

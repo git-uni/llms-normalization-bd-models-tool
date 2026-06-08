@@ -57,13 +57,9 @@ class ConfigScreen(ctk.CTkFrame):
             text_color="gray",
         ).pack(anchor="w", pady=(0, 8))
 
-        # Acceso rápido a resultados de una corrida previa (sin re-ejecutar).
+        # Acceso rápido a resultados de una ejecucion previa (sin re-ejecutar).
         quick = ctk.CTkFrame(self, fg_color="transparent")
-        quick.pack(fill="x", pady=(0, 12))
-        ctk.CTkLabel(
-            quick, text="¿Tienes una corrida anterior?",
-            text_color="gray", anchor="w",
-        ).pack(side="left")
+        quick.pack(side="top")
         ctk.CTkButton(
             quick,
             text="Abrir resultados existentes...",
@@ -71,10 +67,10 @@ class ConfigScreen(ctk.CTkFrame):
             fg_color="transparent",
             border_width=1,
             text_color=("gray20", "gray80"),
-            hover_color=("gray85", "gray25"),
+            hover_color=("steelblue2"),
             width=220,
             height=26,
-        ).pack(side="left", padx=8)
+        ).pack(side="left", padx=8, pady=(0, 12))
 
         # Bloque entrada -------------------------------------------------
         block_in = self._make_block("1. Entrada")
@@ -382,7 +378,7 @@ class ConfigScreen(ctk.CTkFrame):
             messagebox.showerror(
                 "Sin resultados",
                 f"El directorio '{out_dir.name}' no contiene '04_ddl.sql'.\n\n"
-                "Selecciona el directorio de una corrida que haya llegado "
+                "Selecciona el directorio de una ejecucion que haya llegado "
                 "hasta la fase de DDL.",
             )
             return
@@ -391,7 +387,7 @@ class ConfigScreen(ctk.CTkFrame):
         s.reset_run()
         s.out_dir = out_dir
         s.finished_ok = True
-        # Inferimos el modo de la corrida por la presencia de 00_discovery/:
+        # Inferimos el modo de la ejecucion por la presencia de 00_discovery/:
         # solo se crea cuando el agente intervino (entrada URL).
         if (out_dir / "00_discovery").exists():
             s.input_mode = "url"

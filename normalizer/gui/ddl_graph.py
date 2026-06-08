@@ -15,6 +15,7 @@ import os
 import platform
 import re
 import shutil
+from collections import Counter
 from pathlib import Path
 
 import graphviz
@@ -105,10 +106,50 @@ def parse_ddl(ddl: str) -> tuple[
     return tables, fks
 
 
-def build_dot(ddl: str) -> str:
+def _pick_layout(
+    n_tables: int, fks: list[tuple[str, str, str, str]]
+) -> tuple[str, dict[str, str]]:
+    """Selecciona engine y atributos de grafo según la topología.
+
+    Si el grafo tiene un *hub* (una tabla con muchas FKs entrantes,
+    típicamente `Users` en aplicaciones reales) el engine jerárquico `dot`
+    apila todas las aristas en paralelo y produce un caos ilegible. En esos
+    casos `sfdp` (force-directed) coloca el hub en el centro y distribuye
+    los demás nodos alrededor — mucho más legible.
+
+    Para grafos modestos sin hub, `dot` con curvas suaves y `concentrate`
+    es lo más limpio y predecible.
+    """
+    max_incoming = max(
+        Counter(to_t for _, _, to_t, _ in fks).values(), default=0
+    )
+    if max_incoming > 10 or n_tables > 20:
+        return "sfdp", {
+            "overlap": "prism",
+            "nodesep": "1.0",
+            "ranksep": "1.0",
+            "splines": "spline",
+            "bgcolor": "transparent",
+            "pad": "0.4",
+        }
+    return "dot", {
+        "rankdir": "LR",
+        "splines": "spline",
+        "concentrate": "true",
+        "nodesep": "0.4",
+        "ranksep": "0.7",
+        "bgcolor": "transparent",
+        "pad": "0.4",
+    }
+
+
+def build_dot(ddl: str) -> tuple[str, str]:
+    """Devuelve `(source DOT, engine)` con el layout adecuado al grafo."""
     tables, fks = parse_ddl(ddl)
+    engine, graph_attr = _pick_layout(len(tables), fks)
     g = graphviz.Digraph(
         "ER",
+        engine=engine,
         node_attr={
             "shape": "plaintext",
             "fontname": "Helvetica",
@@ -119,12 +160,7 @@ def build_dot(ddl: str) -> str:
             "fontsize": "9",
             "color": "#555555",
         },
-        graph_attr={
-            "rankdir": "LR",
-            "splines": "ortho",
-            "bgcolor": "transparent",
-            "pad": "0.4",
-        },
+        graph_attr=graph_attr,
     )
     for tname, cols in tables.items():
         rows = [
@@ -150,11 +186,8 @@ def build_dot(ddl: str) -> str:
     for from_t, from_c, to_t, to_c in fks:
         if to_t not in tables:
             continue
-        # `xlabel` en lugar de `label` porque con `splines: ortho` Graphviz
-        # ignora las etiquetas pegadas a la arista. xlabel las flota cerca
-        # sin perderlas.
         g.edge(from_t, to_t, xlabel=f"{from_c} → {to_c}")
-    return g.source
+    return g.source, engine
 
 
 def _xml(s: str) -> str:
@@ -201,10 +234,10 @@ def render_to_png(ddl: str, out_path_no_ext: Path) -> Path | None:
 
     `out_path_no_ext` se pasa sin la extensión `.png` — `graphviz` la añade.
     """
-    dot = build_dot(ddl)
+    dot, engine = build_dot(ddl)
     _ensure_graphviz_in_path()
     try:
-        result = graphviz.Source(dot).render(
+        result = graphviz.Source(dot, engine=engine).render(
             filename=str(out_path_no_ext), format="png", cleanup=True
         )
         return Path(result)

@@ -100,11 +100,17 @@ class ResultScreen(ctk.CTkFrame):
         design_path = self.out_dir / "03_design.md"
         analysis_path = self.out_dir / "02_analysis.md"
         discovery_path = self.out_dir / "00_discovery" / "discovery.md"
+        
+        if self.gui_state.is_url and discovery_path.exists():
+            mv_disc = MarkdownView(self.tabs.add("Descubrimiento"))
+            mv_disc.render(discovery_path.read_text(encoding="utf-8"))
+            mv_disc.pack(fill="both", expand=True)
 
-        # Diagrama ER — pestaña por defecto.
-        er_tab = self.tabs.add("Diagrama ER")
-        self._build_er_tab(er_tab, ddl_path)
-
+        if analysis_path.exists():
+            mv_analysis = MarkdownView(self.tabs.add("Análisis"))
+            mv_analysis.render(analysis_path.read_text(encoding="utf-8"))
+            mv_analysis.pack(fill="both", expand=True)
+            
         if design_path.exists():
             mv_design = MarkdownView(self.tabs.add("Diseño"))
             mv_design.render(design_path.read_text(encoding="utf-8"))
@@ -115,16 +121,6 @@ class ResultScreen(ctk.CTkFrame):
             sv.render(ddl_path.read_text(encoding="utf-8"))
             sv.pack(fill="both", expand=True)
 
-        if analysis_path.exists():
-            mv_analysis = MarkdownView(self.tabs.add("Análisis"))
-            mv_analysis.render(analysis_path.read_text(encoding="utf-8"))
-            mv_analysis.pack(fill="both", expand=True)
-
-        if self.gui_state.is_url and discovery_path.exists():
-            mv_disc = MarkdownView(self.tabs.add("Descubrimiento"))
-            mv_disc.render(discovery_path.read_text(encoding="utf-8"))
-            mv_disc.pack(fill="both", expand=True)
-
         # Pestaña por defecto: si hay DDL, ER. Si no, la primera disponible.
         if not ddl_path.exists():
             for name in ("Diseño", "Análisis", "Descubrimiento"):
@@ -133,6 +129,12 @@ class ResultScreen(ctk.CTkFrame):
                     break
                 except ValueError:
                     continue
+        
+        # Diagrama ER — pestaña por defecto.
+        er_tab = self.tabs.add("Diagrama ER")
+        self._build_er_tab(er_tab, ddl_path)
+        self.tabs.set("Diagrama ER")
+        
 
     def _build_er_tab(self, parent: ctk.CTkFrame, ddl_path: Path) -> None:
         # Guardamos el parent para que el botón "Reintentar" pueda
