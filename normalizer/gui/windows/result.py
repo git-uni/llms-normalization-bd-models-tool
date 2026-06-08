@@ -85,14 +85,15 @@ class ResultScreen(ctk.CTkFrame):
             fg = ("transparent", "transparent")
             tcol = None
 
-        banner = ctk.CTkFrame(self, fg_color=fg, corner_radius=8)
+        banner = ctk.CTkFrame(self, fg_color=fg, corner_radius=12)
         banner.pack(fill="x")
         lbl = ctk.CTkLabel(
-            banner, text=text, anchor="w", wraplength=950, justify="left"
+            banner, text=text, anchor="w", wraplength=950, justify="left",
+            font=ctk.CTkFont(size=13),
         )
         if tcol is not None:
             lbl.configure(text_color=tcol)
-        lbl.pack(fill="x", padx=14, pady=10)
+        lbl.pack(fill="x", padx=18, pady=14)
 
     def _build_tabs(self) -> None:
         assert self.out_dir is not None

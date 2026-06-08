@@ -192,13 +192,14 @@ class ConfigScreen(ctk.CTkFrame):
         self.run_btn.pack(side="right")
 
     def _make_block(self, title: str) -> ctk.CTkFrame:
-        block = ctk.CTkFrame(self)
+        block = ctk.CTkFrame(self, corner_radius=12)
         block.pack(fill="x", pady=(0, 12))
         inner = ctk.CTkFrame(block, fg_color="transparent")
-        inner.pack(fill="x", padx=14, pady=12)
+        inner.pack(fill="x", padx=18, pady=16)
         ctk.CTkLabel(
-            inner, text=title, font=ctk.CTkFont(size=14, weight="bold"), anchor="w"
-        ).pack(fill="x", pady=(0, 8))
+            inner, text=title,
+            font=ctk.CTkFont(size=15, weight="bold"), anchor="w",
+        ).pack(fill="x", pady=(0, 12))
         return inner
 
     # ------------------------------------------------------------------

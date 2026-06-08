@@ -5,12 +5,38 @@ que respeta la decisión arquitectónica de "composición sobre CTkTextbox"
 (§3.3.1 de la memoria). Soporta los elementos que el pipeline produce en la
 práctica: encabezados (#, ##, ###), listas (-, *), bloques de código con
 triple-backtick, énfasis con `**bold**` y `code en línea`, y tablas en
-formato pipe.
+formato pipe (renderizadas como *widgets reales* embebidos con scroll
+horizontal para que no se rompan en ventanas estrechas).
 """
 
 import re
+import tkinter as tk
+from tkinter import ttk
 
 import customtkinter as ctk
+
+
+def _table_palette() -> dict[str, str]:
+    """Paleta acorde al tema actual de CustomTkinter (light/dark)."""
+    if ctk.get_appearance_mode().lower() == "dark":
+        return {
+            "container_bg": "#1a2230",
+            "header_bg": "#2a3548",
+            "header_fg": "#e8edf5",
+            "cell_bg": "#1e2530",
+            "cell_alt_bg": "#222a36",
+            "cell_fg": "#d8dde8",
+            "border": "#3a4456",
+        }
+    return {
+        "container_bg": "#ffffff",
+        "header_bg": "#eef2fa",
+        "header_fg": "#1f2a3a",
+        "cell_bg": "#ffffff",
+        "cell_alt_bg": "#f6f8fc",
+        "cell_fg": "#202838",
+        "border": "#d8dde8",
+    }
 
 
 class MarkdownView(ctk.CTkTextbox):
@@ -39,24 +65,8 @@ class MarkdownView(ctk.CTkTextbox):
             spacing3=4,
         )
         tk_text.tag_config("bullet", lmargin1=14, lmargin2=28)
-        # Tablas: tres tags coordinados para que header, separador y
-        # cuerpo compartan métrica (Consolas) y se diferencien en peso.
-        tk_text.tag_config(
-            "table_header",
-            font=("Consolas", 12, "bold"),
-            background="#eef2fa",
-            spacing1=2,
-        )
-        tk_text.tag_config(
-            "table_sep",
-            font=("Consolas", 12),
-            foreground="#888888",
-        )
-        tk_text.tag_config(
-            "table_cell",
-            font=("Consolas", 12),
-            background="#fafafa",
-        )
+        # Las tablas ya no usan tags: se renderizan como widgets reales
+        # embebidos con `window_create` (ver `_render_table`).
 
     def render(self, md: str) -> None:
         self.configure(state="normal")
@@ -126,20 +136,20 @@ class MarkdownView(ctk.CTkTextbox):
     _SEPARATOR_CELL_RE = re.compile(r"^:?-{2,}:?$")
 
     def _render_table(self, raw_lines: list[str]) -> None:
-        """Parsea un bloque de tabla pipe-style y lo renderiza alineado.
+        """Parsea un bloque de tabla pipe-style y lo embebe como widget.
 
-        El visor original insertaba las filas tal cual: con `wrap="word"`
-        en el widget las celdas largas envolvían y rompían la alineación
-        de la tabla; los `---` aparecían como texto literal; no había
-        contraste entre encabezado y cuerpo. Aquí parseamos celdas, las
-        alineamos a un ancho fijo (max por columna) y dibujamos un
-        separador unicode entre header y cuerpo.
+        Versión 1 renderizaba con texto monospace alineado, pero el
+        `wrap="word"` del Textbox rompía la alineación cuando la tabla era
+        más ancha que el visor (caso típico con ventana pequeña). Ahora
+        cada tabla se construye como un `tk.Frame` con una grid de
+        `tk.Label` (header + cuerpo con filas alternas, bordes finos), se
+        envuelve en un `tk.Canvas` con scrollbar horizontal y se embebe en
+        el Textbox con `window_create`. Resultado: las tablas anchas se
+        scrollean, no se cortan; las cortas ocupan justo lo necesario.
         """
         rows: list[list[str]] = []
         for raw in raw_lines:
             cells = [c.strip() for c in raw.split("|")]
-            # Las tablas markdown estándar empiezan y terminan en `|`,
-            # así que `split` deja celdas vacías en los extremos.
             if cells and cells[0] == "":
                 cells = cells[1:]
             if cells and cells[-1] == "":
@@ -148,8 +158,6 @@ class MarkdownView(ctk.CTkTextbox):
         if not rows:
             return
 
-        # Detectar fila de separadores (`|---|---|`). Marca el header en
-        # la fila inmediatamente anterior — convención markdown estándar.
         sep_idx: int | None = None
         for idx, cells in enumerate(rows):
             if cells and all(
@@ -162,34 +170,92 @@ class MarkdownView(ctk.CTkTextbox):
         if not data_rows:
             return
 
-        n_cols = max(len(r) for r in data_rows)
-        widths = [0] * n_cols
-        for row in data_rows:
-            for j, cell in enumerate(row):
-                if j < n_cols:
-                    widths[j] = max(widths[j], len(cell))
+        widget = self._build_table_widget(data_rows, has_header=has_header)
+        self._textbox.insert("end", "\n")
+        self._textbox.window_create("end", window=widget)
+        self._textbox.insert("end", "\n\n")
 
-        def _format_row(row: list[str]) -> str:
-            padded = []
+    def _build_table_widget(
+        self, data_rows: list[list[str]], has_header: bool
+    ) -> tk.Frame:
+        pal = _table_palette()
+        n_cols = max(len(r) for r in data_rows)
+
+        # Estructura: outer (visible en el Textbox) → canvas (scrollable)
+        # → inner (la grid de celdas). El canvas se ajusta a la altura
+        # del inner y obtiene scrollbar horizontal abajo si el contenido
+        # supera el ancho disponible.
+        outer = tk.Frame(self._textbox, bg=pal["container_bg"], bd=0)
+        canvas = tk.Canvas(
+            outer, bg=pal["container_bg"], highlightthickness=0, bd=0,
+        )
+        hbar = ttk.Scrollbar(outer, orient="horizontal", command=canvas.xview)
+        canvas.configure(xscrollcommand=hbar.set)
+        inner = tk.Frame(canvas, bg=pal["border"])  # bg=border → líneas de rejilla
+        canvas_window = canvas.create_window(
+            (0, 0), window=inner, anchor="nw",
+        )
+
+        # Render de celdas como tk.Label sobre `inner`. Usamos padx/pady en
+        # `grid()` con bg=border en el frame padre para simular líneas de
+        # rejilla finas (el "padding" muestra el bg del frame de abajo).
+        font_regular = ("Consolas", 11)
+        font_bold = ("Consolas", 11, "bold")
+        WRAPLEN = 380  # px, ≈ 55 chars en Consolas 11
+
+        def _cell(row: int, col: int, text: str, is_header: bool, alt: bool) -> None:
+            bg = (
+                pal["header_bg"] if is_header
+                else (pal["cell_alt_bg"] if alt else pal["cell_bg"])
+            )
+            fg = pal["header_fg"] if is_header else pal["cell_fg"]
+            lbl = tk.Label(
+                inner, text=text or " ",
+                font=font_bold if is_header else font_regular,
+                bg=bg, fg=fg, anchor="w", justify="left",
+                wraplength=WRAPLEN, padx=10, pady=5, bd=0,
+                highlightthickness=0,
+            )
+            lbl.grid(row=row, column=col, sticky="nsew", padx=1, pady=1)
+
+        body_offset = 0
+        if has_header:
+            for j, cell in enumerate(data_rows[0]):
+                _cell(0, j, cell, is_header=True, alt=False)
+            for j in range(len(data_rows[0]), n_cols):
+                _cell(0, j, "", is_header=True, alt=False)
+            body_offset = 1
+
+        body = data_rows[1:] if has_header else data_rows
+        for r, row in enumerate(body):
             for j in range(n_cols):
                 cell = row[j] if j < len(row) else ""
-                padded.append(cell.ljust(widths[j]))
-            return "  " + "  │  ".join(padded) + "  "
+                _cell(
+                    r + body_offset, j, cell,
+                    is_header=False, alt=r % 2 == 1,
+                )
 
-        if has_header:
-            self._textbox.insert(
-                "end", _format_row(data_rows[0]) + "\n", "table_header"
-            )
-            sep_line = "  " + "──┼──".join("─" * w for w in widths) + "──"
-            self._textbox.insert("end", sep_line + "\n", "table_sep")
-            body = data_rows[1:]
-        else:
-            body = data_rows
-        for row in body:
-            self._textbox.insert("end", _format_row(row) + "\n", "table_cell")
-        # Línea en blanco al cerrar la tabla para separar del siguiente
-        # bloque de contenido.
-        self._textbox.insert("end", "\n")
+        # Ajustar canvas a la altura real del contenido y configurar
+        # scrollregion para el scrollbar horizontal.
+        def _on_inner_configure(_event=None):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            req_h = inner.winfo_reqheight()
+            canvas.configure(height=req_h)
+        inner.bind("<Configure>", _on_inner_configure)
+
+        # Mostrar el scrollbar solo si la tabla es más ancha que el visor.
+        def _on_canvas_configure(event):
+            inner_w = inner.winfo_reqwidth()
+            if inner_w > event.width:
+                hbar.grid(row=1, column=0, sticky="ew")
+            else:
+                hbar.grid_remove()
+        canvas.bind("<Configure>", _on_canvas_configure)
+
+        canvas.grid(row=0, column=0, sticky="nsew")
+        outer.grid_rowconfigure(0, weight=1)
+        outer.grid_columnconfigure(0, weight=1)
+        return outer
 
     _INLINE_RE = re.compile(
         r"(\*\*([^*]+)\*\*|`([^`]+)`|\*([^*]+)\*)"

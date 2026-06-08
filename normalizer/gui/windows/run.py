@@ -112,13 +112,18 @@ class RunScreen(ctk.CTkFrame):
         s = self.gui_state
         mode_label = {"file": "archivo único", "dir": "directorio", "url": "URL"}[s.input_mode]
 
-        # --- Header (card destacada) ---------------------------------
+        # Tokens M3-inspired aplicados consistentemente:
+        # - Spacing: 4 / 8 / 12 / 16 / 20 / 24
+        # - Border radius: 12 en todas las cards
+        # - Type scale: Title Large 22 / Title Small 16 / Body Medium 13 / Body Small 11
+
+        # --- Header (surface container highest) ----------------------
         header = ctk.CTkFrame(
             self, fg_color=("#eef2fa", "#1a2230"), corner_radius=12,
         )
         header.pack(fill="x", pady=(0, 12))
         header_inner = ctk.CTkFrame(header, fg_color="transparent")
-        header_inner.pack(fill="x", padx=18, pady=14)
+        header_inner.pack(fill="x", padx=20, pady=18)
 
         # Fila 1: título grande + chip de modo + botón cancelar
         top = ctk.CTkFrame(header_inner, fg_color="transparent")
@@ -133,32 +138,32 @@ class RunScreen(ctk.CTkFrame):
             title_box, text=f"  {mode_label}  ",
             corner_radius=10,
             fg_color=("#dde4f0", "#2a3548"),
-            text_color=("#5a6680", "#a8b4cc"),
+            text_color=("#3a4a6a", "#b8c4dc"),
             font=ctk.CTkFont(size=11, weight="bold"),
-            height=22,
-        ).pack(side="left", padx=(10, 0))
+            height=24,
+        ).pack(side="left", padx=(12, 0))
 
         self.cancel_btn = ctk.CTkButton(
             top, text="Cancelar", command=self._on_cancel,
             fg_color=("#b04040", "#9a3030"),
             hover_color=("#7a2020", "#7a2020"),
-            width=110,
+            width=110, corner_radius=8,
         )
         self.cancel_btn.pack(side="right")
 
         # Fila 2: metadatos con iconos
         meta_row = ctk.CTkFrame(header_inner, fg_color="transparent")
-        meta_row.pack(fill="x", pady=(12, 0))
+        meta_row.pack(fill="x", pady=(16, 0))
 
         def _meta(icon: str, text: str) -> None:
             ctk.CTkLabel(
-                meta_row, text=icon, font=ctk.CTkFont(size=13),
-                text_color=("#6b78a0", "#8a9bc6"),
-            ).pack(side="left", padx=(0, 4))
+                meta_row, text=icon, font=ctk.CTkFont(size=14),
+                text_color=("#5566a0", "#7a8cc6"),
+            ).pack(side="left", padx=(0, 6))
             ctk.CTkLabel(
-                meta_row, text=text, font=ctk.CTkFont(size=12),
-                text_color=("#303848", "#d0d8e8"),
-            ).pack(side="left", padx=(0, 22))
+                meta_row, text=text, font=ctk.CTkFont(size=13),
+                text_color=("#202838", "#d8e0ec"),
+            ).pack(side="left", padx=(0, 24))
 
         _meta("◆", s.provider)
         _meta("▸", s.model or "(default)")
@@ -167,22 +172,22 @@ class RunScreen(ctk.CTkFrame):
         if s.out_dir is not None:
             _meta("▸", f"{s.out_dir.name}/")
 
-        # --- Bloque pipeline (protagonista) --------------------------
-        pipeline_block = ctk.CTkFrame(self, corner_radius=10)
-        pipeline_block.pack(fill="both", expand=True, pady=(0, 10))
+        # --- Bloque pipeline (surface container, protagonista) ----------
+        pipeline_block = ctk.CTkFrame(self, corner_radius=12)
+        pipeline_block.pack(fill="both", expand=True, pady=(0, 12))
         pipeline_inner = ctk.CTkFrame(pipeline_block, fg_color="transparent")
-        pipeline_inner.pack(fill="both", expand=True, padx=16, pady=14)
+        pipeline_inner.pack(fill="both", expand=True, padx=20, pady=18)
 
         title_row = ctk.CTkFrame(pipeline_inner, fg_color="transparent")
-        title_row.pack(fill="x", pady=(0, 12))
+        title_row.pack(fill="x", pady=(0, 16))
         ctk.CTkLabel(
             title_row, text="▣",
-            font=ctk.CTkFont(size=14),
+            font=ctk.CTkFont(size=16),
             text_color=("#1f6aa5", "#3a8fd6"),
-        ).pack(side="left", padx=(0, 6))
+        ).pack(side="left", padx=(0, 8))
         ctk.CTkLabel(
             title_row, text="Progreso del pipeline",
-            font=ctk.CTkFont(size=15, weight="bold"), anchor="w",
+            font=ctk.CTkFont(size=16, weight="bold"), anchor="w",
         ).pack(side="left")
 
         for phase in self.gui_state.phases:
@@ -191,7 +196,7 @@ class RunScreen(ctk.CTkFrame):
         self.pipeline_footer = ctk.CTkLabel(
             pipeline_inner, text="", text_color="gray", anchor="w",
         )
-        self.pipeline_footer.pack(fill="x", pady=(12, 0))
+        self.pipeline_footer.pack(fill="x", pady=(16, 0))
 
         # Texto auxiliar de cancelación, aparece solo cuando hace falta.
         self.cancel_help_label = ctk.CTkLabel(
@@ -203,73 +208,73 @@ class RunScreen(ctk.CTkFrame):
         # --- Bloque iteraciones del agente (solo URL) ----------------
         self.agent_scroll = None
         if self.gui_state.is_url:
-            agent_block = ctk.CTkFrame(self, corner_radius=10)
-            agent_block.pack(fill="x", pady=(0, 10))
+            agent_block = ctk.CTkFrame(self, corner_radius=12)
+            agent_block.pack(fill="x", pady=(0, 12))
             agent_inner = ctk.CTkFrame(agent_block, fg_color="transparent")
-            agent_inner.pack(fill="x", padx=16, pady=12)
+            agent_inner.pack(fill="x", padx=20, pady=16)
 
             agent_title_row = ctk.CTkFrame(agent_inner, fg_color="transparent")
-            agent_title_row.pack(fill="x", pady=(0, 8))
+            agent_title_row.pack(fill="x", pady=(0, 12))
             ctk.CTkLabel(
                 agent_title_row, text="◇",
-                font=ctk.CTkFont(size=14),
+                font=ctk.CTkFont(size=16),
                 text_color=("#1f6aa5", "#3a8fd6"),
-            ).pack(side="left", padx=(0, 6))
+            ).pack(side="left", padx=(0, 8))
             ctk.CTkLabel(
                 agent_title_row, text="Iteraciones del agente",
-                font=ctk.CTkFont(size=15, weight="bold"), anchor="w",
+                font=ctk.CTkFont(size=16, weight="bold"), anchor="w",
             ).pack(side="left")
 
-            self.agent_scroll = ctk.CTkScrollableFrame(agent_inner, height=160)
+            self.agent_scroll = ctk.CTkScrollableFrame(agent_inner, height=170)
             self.agent_scroll.pack(fill="x")
             head = ctk.CTkFrame(self.agent_scroll, fg_color="transparent")
-            head.pack(fill="x")
+            head.pack(fill="x", pady=(0, 4))
             ctk.CTkLabel(
                 head, text="Iter", width=60, anchor="w",
-                font=ctk.CTkFont(weight="bold"),
+                font=ctk.CTkFont(size=11, weight="bold"),
                 text_color="gray",
             ).pack(side="left")
             ctk.CTkLabel(
                 head, text="Tool calls", anchor="w",
-                font=ctk.CTkFont(weight="bold"),
+                font=ctk.CTkFont(size=11, weight="bold"),
                 text_color="gray",
             ).pack(side="left", fill="x", expand=True)
 
-        # --- Bloque log (pequeño, altura fija) -----------------------
-        log_block = ctk.CTkFrame(self, corner_radius=10)
+        # --- Bloque log (altura fija, sin protagonismo) ---------------
+        log_block = ctk.CTkFrame(self, corner_radius=12)
         log_block.pack(fill="x")
         log_inner = ctk.CTkFrame(log_block, fg_color="transparent")
-        log_inner.pack(fill="x", padx=16, pady=12)
+        log_inner.pack(fill="x", padx=20, pady=16)
 
         log_title_row = ctk.CTkFrame(log_inner, fg_color="transparent")
-        log_title_row.pack(fill="x", pady=(0, 6))
+        log_title_row.pack(fill="x", pady=(0, 10))
         ctk.CTkLabel(
             log_title_row, text="▤",
-            font=ctk.CTkFont(size=14),
+            font=ctk.CTkFont(size=16),
             text_color=("#1f6aa5", "#3a8fd6"),
-        ).pack(side="left", padx=(0, 6))
+        ).pack(side="left", padx=(0, 8))
         ctk.CTkLabel(
             log_title_row, text="Log",
-            font=ctk.CTkFont(size=15, weight="bold"), anchor="w",
+            font=ctk.CTkFont(size=16, weight="bold"), anchor="w",
         ).pack(side="left")
 
         self.log_box = ctk.CTkTextbox(
             log_inner, font=ctk.CTkFont(family="Consolas", size=11),
-            height=120, wrap="none",
+            height=140, wrap="none",
         )
         self.log_box.pack(fill="x")
         self.log_box.configure(state="disabled")
 
     def _build_phase_row(self, parent: ctk.CTkFrame, phase: PhaseInfo) -> None:
         row = ctk.CTkFrame(parent, fg_color="transparent", corner_radius=8)
-        row.pack(fill="x", pady=2)
+        row.pack(fill="x", pady=3)
         inner = ctk.CTkFrame(row, fg_color="transparent")
-        inner.pack(fill="x", padx=10, pady=8)
+        inner.pack(fill="x", padx=12, pady=10)
 
         icon = ctk.CTkLabel(
-            inner, text=_ICONS["pending"], width=30,
+            inner, text=_ICONS["pending"], width=32,
             text_color=_ICON_COLORS["pending"],
-            font=ctk.CTkFont(size=18, weight="bold"),
+            font=ctk.CTkFont(size=20, weight="bold"),
         )
         icon.pack(side="left")
         name = ctk.CTkLabel(
@@ -277,9 +282,11 @@ class RunScreen(ctk.CTkFrame):
             font=ctk.CTkFont(size=14, weight="bold"),
             anchor="w",
         )
-        name.pack(side="left", padx=(8, 0))
+        name.pack(side="left", padx=(10, 0))
         status = ctk.CTkLabel(
-            inner, text="pendiente", text_color="gray", anchor="e",
+            inner, text="pendiente",
+            font=ctk.CTkFont(size=13),
+            text_color="gray", anchor="e",
         )
         status.pack(side="right")
         self._phase_widgets[phase.name] = {
