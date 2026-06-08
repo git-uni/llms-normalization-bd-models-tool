@@ -126,6 +126,13 @@ class ResultScreen(ctk.CTkFrame):
                     continue
 
     def _build_er_tab(self, parent: ctk.CTkFrame, ddl_path: Path) -> None:
+        # Guardamos el parent para que el botón "Reintentar" pueda
+        # reconstruir el contenido sin recrear la pestaña entera.
+        self._er_parent = parent
+        self._er_ddl_path = ddl_path
+        self._render_er_into(parent, ddl_path)
+
+    def _render_er_into(self, parent: ctk.CTkFrame, ddl_path: Path) -> None:
         if not ddl_path.exists():
             ctk.CTkLabel(
                 parent,
@@ -175,7 +182,7 @@ class ResultScreen(ctk.CTkFrame):
         msg.pack(expand=True)
         ctk.CTkLabel(
             msg,
-            text="Graphviz no está instalado",
+            text="Graphviz no está disponible",
             font=ctk.CTkFont(size=18, weight="bold"),
         ).pack(pady=(0, 8))
         instr = (
@@ -184,10 +191,25 @@ class ResultScreen(ctk.CTkFrame):
             "  • Windows:  winget install Graphviz.Graphviz\n"
             "  • macOS:    brew install graphviz\n"
             "  • Linux:    sudo apt install graphviz  (o equivalente)\n\n"
-            "Luego, vuelve a lanzar la GUI. Las demás pestañas (Diseño, DDL,\n"
-            "Análisis, Descubrimiento) están disponibles ya."
+            "Si acabas de instalarlo, pulsa Reintentar — la GUI buscará el\n"
+            "binario en las rutas estándar sin necesidad de reiniciar la\n"
+            "terminal. Las demás pestañas funcionan ya."
         )
         ctk.CTkLabel(msg, text=instr, justify="left").pack()
+        ctk.CTkButton(
+            msg, text="Reintentar", command=self._retry_er, width=140
+        ).pack(pady=(14, 0))
+
+    def _retry_er(self) -> None:
+        # Limpia el contenido actual de la pestaña ER y vuelve a intentar
+        # generar el diagrama. Útil cuando el usuario instala Graphviz con
+        # la GUI ya abierta.
+        if not hasattr(self, "_er_parent") or not hasattr(self, "_er_ddl_path"):
+            return
+        for w in self._er_parent.winfo_children():
+            w.destroy()
+        self._er_image_ref = None
+        self._render_er_into(self._er_parent, self._er_ddl_path)
 
     def _build_actions(self) -> None:
         bar = ctk.CTkFrame(self, fg_color="transparent")

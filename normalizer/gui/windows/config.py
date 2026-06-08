@@ -10,7 +10,7 @@ seleccionado.
 
 import os
 from pathlib import Path
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
@@ -55,7 +55,26 @@ class ConfigScreen(ctk.CTkFrame):
             self,
             text="Define la entrada, el proveedor de LLM y las credenciales.",
             text_color="gray",
-        ).pack(anchor="w", pady=(0, 16))
+        ).pack(anchor="w", pady=(0, 8))
+
+        # Acceso rápido a resultados de una corrida previa (sin re-ejecutar).
+        quick = ctk.CTkFrame(self, fg_color="transparent")
+        quick.pack(fill="x", pady=(0, 12))
+        ctk.CTkLabel(
+            quick, text="¿Tienes una corrida anterior?",
+            text_color="gray", anchor="w",
+        ).pack(side="left")
+        ctk.CTkButton(
+            quick,
+            text="Abrir resultados existentes...",
+            command=self._open_existing,
+            fg_color="transparent",
+            border_width=1,
+            text_color=("gray20", "gray80"),
+            hover_color=("gray85", "gray25"),
+            width=220,
+            height=26,
+        ).pack(side="left", padx=8)
 
         # Bloque entrada -------------------------------------------------
         block_in = self._make_block("1. Entrada")
@@ -346,3 +365,37 @@ class ConfigScreen(ctk.CTkFrame):
                 persist_api_key(env_key, typed)
 
         self.app.show_run()
+
+    def _open_existing(self) -> None:
+        # Carga un out_dir de una corrida previa y salta a la pantalla de
+        # resultado sin re-ejecutar el pipeline. Útil cuando el usuario
+        # quiere revisar el DDL o el diagrama ER de una ejecución antigua,
+        # o cuando la GUI se cerró sin haber visto el resultado.
+        path = filedialog.askdirectory(
+            title="Selecciona el directorio de resultados (out-...)"
+        )
+        if not path:
+            return
+        out_dir = Path(path)
+        ddl_path = out_dir / "04_ddl.sql"
+        if not ddl_path.exists():
+            messagebox.showerror(
+                "Sin resultados",
+                f"El directorio '{out_dir.name}' no contiene '04_ddl.sql'.\n\n"
+                "Selecciona el directorio de una corrida que haya llegado "
+                "hasta la fase de DDL.",
+            )
+            return
+
+        s = self.gui_state
+        s.reset_run()
+        s.out_dir = out_dir
+        s.finished_ok = True
+        # Inferimos el modo de la corrida por la presencia de 00_discovery/:
+        # solo se crea cuando el agente intervino (entrada URL).
+        if (out_dir / "00_discovery").exists():
+            s.input_mode = "url"
+        else:
+            s.input_mode = "dir"
+        s.input_value = str(out_dir)
+        self.app.show_result()

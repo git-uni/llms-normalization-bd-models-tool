@@ -11,7 +11,10 @@ y la GUI muestra un mensaje accionable con instrucciones de instalación —
 las demás pestañas del resultado siguen funcionando.
 """
 
+import os
+import platform
 import re
+import shutil
 from pathlib import Path
 
 import graphviz
@@ -159,12 +162,44 @@ def _xml(s: str) -> str:
     )
 
 
+def _ensure_graphviz_in_path() -> bool:
+    """Localiza el binario `dot` y lo añade al PATH del proceso si hace falta.
+
+    En Windows, `winget install Graphviz.Graphviz` actualiza el PATH del
+    sistema pero el proceso ya corriendo conserva el PATH antiguo — el
+    usuario tiene que reabrir la terminal o sufrirá un `ExecutableNotFound`
+    pese a tener Graphviz instalado. Aquí miramos rutas estándar y, si el
+    binario aparece, lo enganchamos al PATH del proceso sin esperar a un
+    reinicio del shell.
+    """
+    if shutil.which("dot"):
+        return True
+    if platform.system() != "Windows":
+        return False
+    # Rutas típicas donde winget o el instalador oficial dejan Graphviz.
+    candidates: list[Path] = [
+        Path(r"C:\Program Files\Graphviz\bin"),
+        Path(r"C:\Program Files (x86)\Graphviz\bin"),
+    ]
+    local_appdata = os.environ.get("LOCALAPPDATA")
+    if local_appdata:
+        packages = Path(local_appdata) / "Microsoft" / "WinGet" / "Packages"
+        if packages.exists():
+            candidates.extend(packages.glob("Graphviz.Graphviz*/bin"))
+    for c in candidates:
+        if (c / "dot.exe").exists():
+            os.environ["PATH"] = str(c) + os.pathsep + os.environ.get("PATH", "")
+            return True
+    return False
+
+
 def render_to_png(ddl: str, out_path_no_ext: Path) -> Path | None:
     """Renderiza el ER a PNG. Devuelve la ruta o None si Graphviz no está.
 
     `out_path_no_ext` se pasa sin la extensión `.png` — `graphviz` la añade.
     """
     dot = build_dot(ddl)
+    _ensure_graphviz_in_path()
     try:
         result = graphviz.Source(dot).render(
             filename=str(out_path_no_ext), format="png", cleanup=True
