@@ -7,8 +7,14 @@ evidencia relevante, copia esa evidencia a `out_dir/00_discovery/evidence/` y
 escribe la traza de decisiones en `out_dir/00_discovery/discovery.md`. Devuelve
 la ruta al directorio de evidencia, que el pipeline existente consume como un
 directorio curado.
+
+El argumento opcional `cancel_event` permite cancelar el bucle desde fuera
+(p. ej. desde la GUI) entre iteraciones: si está señalizado, el agente
+escribe la traza con la evidencia recopilada hasta ese momento y levanta
+`PipelineCancelled`.
 """
 
+import threading
 from pathlib import Path
 
 from normalizer._log import log
@@ -20,6 +26,7 @@ from normalizer.discovery.tools import (
     TurnTrace,
     dispatch,
 )
+from normalizer.pipeline import PipelineCancelled
 from normalizer.prompts import DISCOVERY_SYSTEM
 from normalizer.providers import LLMProvider, Message, ToolCall
 
@@ -34,6 +41,7 @@ def discover_from_url(
     *,
     max_iters: int = MAX_ITERS,
     max_files: int = MAX_FILES,
+    cancel_event: threading.Event | None = None,
 ) -> Path:
     repo_root = clone_repo(url)
     state = DiscoveryState(
@@ -64,7 +72,17 @@ def discover_from_url(
     ]
 
     iters_used = 0
+    cancelled = False
     for i in range(max_iters):
+        if cancel_event is not None and cancel_event.is_set():
+            cancelled = True
+            log("Agente cancelado por el usuario.")
+            state.summary = (
+                (state.summary or "")
+                + "\n\n[Cancelado por el usuario tras "
+                + f"{iters_used} iteración(es).]"
+            )
+            break
         iters_used = i + 1
         response = agent_provider.chat(messages, ALL_TOOLS)
         messages.append(response.assistant_message)
@@ -121,6 +139,8 @@ def discover_from_url(
         )
 
     _write_discovery_md(state, url=url, iters_used=iters_used)
+    if cancelled:
+        raise PipelineCancelled("Cancelado durante el descubrimiento")
     return state.evidence_dir
 
 

@@ -16,8 +16,18 @@ normalizer/
 ├── cli.py                  # CLI Click: --provider, --model, --agent-model, --out-dir
 ├── gui/                    # Interfaz gráfica CustomTkinter (capa de presentación)
 │   ├── __init__.py
+│   ├── __main__.py         # punto de entrada: python -m normalizer.gui
+│   ├── app.py              # NormalizerApp: ventana raíz + navegación entre pantallas
+│   ├── state.py            # GuiState: estado de la sesión (configuración + run)
 │   ├── controller.py       # GuiController: orquesta el núcleo en hilo trabajador
-│   └── windows.py          # Cinco pantallas guiadas + redirección de stderr
+│   ├── ddl_graph.py        # parser DDL → DOT y render del diagrama ER con Graphviz
+│   ├── windows/            # Las tres pantallas guiadas
+│   │   ├── config.py       # ConfigScreen: entrada + proveedor + API key
+│   │   ├── run.py          # RunScreen: progreso por fases + iteraciones del agente
+│   │   └── result.py       # ResultScreen: artefactos + diagrama ER + exportación
+│   └── components/         # Visores reutilizables sobre CTkTextbox
+│       ├── markdown_view.py  # Renderizado de Markdown con tags
+│       └── sql_view.py       # Resaltado de SQL con pygments
 ├── pipeline.py             # run_pipeline + _read_input
 ├── prompts/                # ANALYZE, DESIGN, DDL, DISCOVERY_SYSTEM
 │   ├── __init__.py
@@ -54,7 +64,12 @@ El archivo `pyproject.toml` declara las dependencias mínimas del paquete. Se ha
 | `groq` | ≥ 0.11.0 | SDK oficial de Groq (API OpenAI-compatible). Utilizada únicamente por `providers/groq.py`. |
 | `click` | ≥ 8.1.0 | *Framework* de CLI. Provee el *parser* de argumentos y la generación de ayuda (`--help`). |
 | `python-dotenv` | ≥ 1.0.0 | Carga del fichero `.env` para las credenciales (`GOOGLE_API_KEY`, `GROQ_API_KEY`). |
-| `customtkinter` | ≥ 5.2.0 | *Toolkit* gráfico de la GUI (§5.2.7). |
+| `customtkinter` | ≥ 5.2.0 | *Toolkit* gráfico de la GUI (§5.2.7). Dependencia opcional, agrupada en el extra `[gui]`. |
+| `pygments` | ≥ 2.0 | Tokenización de SQL para el resaltado de sintaxis en la pestaña DDL del resultado. Dependencia opcional `[gui]`. |
+| `graphviz` | ≥ 0.20 | *Wrapper* Python sobre el binario Graphviz. Genera el diagrama ER auto-derivado del DDL final. Dependencia opcional `[gui]`; requiere además el binario Graphviz instalado en el sistema (`winget install Graphviz.Graphviz` / `brew install graphviz` / `apt install graphviz`). Si falta, la pestaña ER muestra instrucciones de instalación sin afectar al resto de pestañas. |
+| `Pillow` | ≥ 10.0 | Carga del PNG del diagrama ER para mostrarlo en la GUI. Dependencia opcional `[gui]`. |
+
+Las dependencias del extra `[gui]` se instalan con `pip install -e .[gui]`. El CLI (`python -m normalizer`) funciona sin ellas, lo que permite a un usuario que solo quiera usar la herramienta desde la línea de comandos evitar la instalación del *toolkit* gráfico y de las librerías de visualización.
 
 El requisito de versión de Python (`requires-python = ">=3.11"`) responde a dos necesidades: (i) la disponibilidad de las funcionalidades modernas del lenguaje que utilizan los SDKs (tipos `dict[str, …]` parametrizados sin importación, *match statements*) y (ii) la compatibilidad con las versiones mínimas que cada SDK declara como soportadas.
 
@@ -101,11 +116,17 @@ La función `resolve_within(repo_root, rel_path)` resuelve cualquier ruta relati
 
 ### 6.1.5 Implementación de la interfaz gráfica
 
-La GUI se implementa en `normalizer/gui/`. La capa de presentación (`gui/windows.py`) instancia las cinco pantallas guiadas descritas en §4.1.3: selección de la entrada, configuración del proveedor y los modelos, ejecución con progreso, visualización de artefactos y exportación. La capa de aplicación (`gui/controller.py`) recibe los eventos de la presentación, valida los argumentos y lanza la ejecución del núcleo en un hilo trabajador independiente del hilo de la interfaz, evitando el bloqueo de la ventana durante las llamadas al LLM.
+La GUI se implementa en `normalizer/gui/`. La capa de presentación (`gui/windows/`) instancia las tres pantallas guiadas descritas en §4.1.3: configuración (entrada + proveedor + credenciales), ejecución con progreso por fases + tabla del agente, y resultado con diagrama ER + artefactos en pestañas. La capa de aplicación (`gui/controller.py`, clase `GuiController`) recibe los eventos de la presentación, valida los argumentos y lanza la ejecución del núcleo en un hilo trabajador independiente del hilo de la interfaz, evitando el bloqueo de la ventana durante las llamadas al LLM.
 
-El **progreso en tiempo real** se materializa redirigiendo `sys.stderr` hacia un *buffer* observable durante el hilo trabajador. Cada línea `[mm:ss] …` emitida por `normalizer/_log.py` se reinyecta como evento en el panel de progreso de la GUI. Esta solución mantiene la lógica de observabilidad centralizada en un único punto y evita duplicar canales de comunicación entre las capas.
+El **progreso en tiempo real** se materializa mediante el sistema de *callbacks* de `normalizer/_log.py` (descrito en §5.2.7): la GUI registra una función con `register_callback()` antes de arrancar el hilo trabajador, y el hilo de la interfaz consume la cola del `GuiController` con `app.after(...)` (Tkinter no es *thread-safe*, por lo que ningún *widget* puede tocarse desde el hilo trabajador). El `RunScreen` parsea las líneas para enriquecer la barra de progreso por fases (`Pipeline: ANÁLISIS …` → fase activa) y la tabla del agente (`[iter NN] -> tool_calls`).
 
-La GUI no implementa ninguna lógica de transformación; solamente invoca `run_pipeline(input_path, provider, out_dir)` y `discover_from_url(url, agent_provider, out_dir)`. Cualquier modificación del *pipeline* o del agente queda automáticamente accesible desde la GUI sin tocar la capa de presentación, lo que materializa el requisito de paridad funcional RF-6.3.
+La **cancelación** se propaga al núcleo mediante un `threading.Event` que se pasa como argumento opcional `cancel_event` a `run_pipeline` y `discover_from_url`. El núcleo lo comprueba entre fases y entre iteraciones del bucle del agente; si está señalizado, levanta `PipelineCancelled` y la GUI captura la excepción para mostrar el estado parcial en la pantalla de resultado.
+
+La **persistencia de credenciales** se delega en `dotenv.set_key`: cuando el usuario introduce una clave nueva en el campo enmascarado de la pantalla de configuración, la aplicación la inyecta en `os.environ` para la sesión actual y la escribe en el `.env` del directorio de trabajo (creándolo si no existe). El fichero `.env` está excluido del control de versiones por `.gitignore`.
+
+La **visualización del modelo** en la pestaña por defecto del resultado se implementa en `gui/ddl_graph.py`. Un parser por *regex* extrae del DDL final las tablas (con sus columnas y claves primarias) y las claves foráneas, monta un grafo Graphviz con un nodo por tabla (estructura HTML interna con encabezado coloreado y filas alineadas a la izquierda) y delega el render a PNG al binario `dot`. Si el binario no está en el `PATH`, la función devuelve `None` y la pestaña ER muestra instrucciones de instalación; el resto de pestañas funciona con normalidad.
+
+La GUI no implementa ninguna lógica de transformación; solamente invoca `run_pipeline(input_path, provider, out_dir, cancel_event)` y `discover_from_url(url, agent_provider, out_dir, cancel_event)`. Cualquier modificación del *pipeline* o del agente queda automáticamente accesible desde la GUI sin tocar la capa de presentación, lo que materializa el requisito de paridad funcional RF-6.3.
 
 ## 6.2 Implementación de las pruebas
 

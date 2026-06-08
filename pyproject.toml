@@ -10,8 +10,17 @@ dependencies = [
     "python-dotenv>=1.0.0",
 ]
 
+[project.optional-dependencies]
+gui = [
+    "customtkinter>=5.2.0",
+    "pygments>=2.0",
+    "graphviz>=0.20",
+    "Pillow>=10.0",
+]
+
 [project.scripts]
 normalizer = "normalizer.cli:main"
+normalizer-gui = "normalizer.gui.app:main"
 
 [build-system]
 requires = ["setuptools>=68"]

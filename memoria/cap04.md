@@ -438,13 +438,11 @@ El argumento `<entrada>` puede ser una ruta (archivo o directorio) o una URL de 
 
 #### Interfaz gráfica de usuario
 
-La GUI se articula en torno a una secuencia de cinco pantallas guiadas, no a una lista de ventanas inconexas, lo que reduce la carga cognitiva para usuarios no técnicos:
+La GUI se articula en torno a una secuencia de tres pantallas guiadas, no a una lista de ventanas inconexas, lo que reduce la carga cognitiva para usuarios no técnicos:
 
-1. **Selección de la entrada.** Selector que admite archivo, directorio o URL, con validación inmediata de la accesibilidad de la fuente.
-2. **Configuración de proveedor y modelo.** Combos para elegir el proveedor (Google, Groq), el modelo del *pipeline* y el modelo del agente, prerrellenados con los valores por defecto del proveedor seleccionado.
-3. **Ejecución y progreso.** Barra de progreso por fase del *pipeline* y, en el modo URL, panel con el avance del agente iteración a iteración (herramientas invocadas, archivos seleccionados).
-4. **Visualización de artefactos.** Pestañas independientes para `02_analysis.md`, `03_design.md`, `04_ddl.sql` y la traza `00_discovery/discovery.md`, con visualización formateada (Markdown renderizado, resaltado de SQL).
-5. **Exportación.** Botón para abrir el directorio de salida en el explorador del sistema y para comprimir todos los artefactos en un único fichero `.zip` exportable.
+1. **Configuración.** Un único formulario que reúne todos los parámetros de la ejecución: selector de entrada (archivo, directorio o URL) con validación inmediata; combos de proveedor y modelos prerrellenados con los valores por defecto; directorio de salida; y un campo enmascarado para la *API key* del proveedor seleccionado que solo se muestra si la variable de entorno correspondiente no está ya definida. Las claves introducidas en la GUI se persisten automáticamente en `.env` (excluido del repositorio por `.gitignore`).
+2. **Ejecución y progreso.** Barra de progreso por fase del *pipeline* (Análisis, Diseño, DDL, más Descubrimiento en el modo URL); en el modo URL, tabla viva con las iteraciones del agente y las herramientas invocadas en cada una; panel de *log* con sello `[mm:ss]`; y un botón Cancelar que detiene la ejecución conservando los artefactos producidos hasta ese momento (RF-7.3).
+3. **Resultado.** Pestañas independientes con los artefactos producidos: un diagrama ER auto-generado a partir del DDL final (parser por *regex* + Graphviz) como pestaña por defecto, seguido del diseño relacional (`03_design.md`) en Markdown renderizado, el DDL (`04_ddl.sql`) con resaltado de sintaxis SQL, el análisis (`02_analysis.md`) en Markdown y, en el modo URL, la traza de descubrimiento (`00_discovery/discovery.md`). Una barra de acciones inferior permite abrir el directorio de salida en el explorador del sistema, exportar todos los artefactos en un único fichero `.zip` o lanzar una nueva ejecución sin cerrar la aplicación.
 
 La paridad funcional con la CLI se garantiza porque la GUI invoca directamente los mismos puntos de entrada del núcleo (`run_pipeline`, `discover_from_url`) que utiliza el módulo de línea de comandos.
 
