@@ -10,12 +10,11 @@ La gestión de riesgos del proyecto sigue las recomendaciones de la norma **ISO 
 
 ### 9.1.2 Categorías y escalas
 
-Los riesgos del proyecto se clasifican en cuatro categorías según su origen:
+Los riesgos del proyecto se clasifican en tres categorías según su origen, todas ellas específicas del dominio *LLM-as-a-service* que diferencia este trabajo de un desarrollo software clásico:
 
-- **Dependencia externa**: riesgos cuya materialización depende de un actor o sistema externo al control del autor (proveedores de LLM, retiradas de modelos, suspensión de cuentas).
-- **Técnico**: riesgos relacionados con la viabilidad técnica de las decisiones adoptadas (compatibilidad de SDKs, fronteras de cuota, soporte irregular de funcionalidades).
-- **Calidad**: riesgos que afectan a la calidad del resultado producido por el sistema (varianza del agente, cobertura inter-proveedor, patrones indeseados).
-- **Gestión**: riesgos relacionados con la planificación, el alcance y los recursos (tiempo limitado, pérdida de trabajo, error de estimación).
+- **Dependencia externa**: riesgos cuya materialización depende de un actor o sistema externo al control del autor (proveedores de LLM, retiradas de modelos, cambios de política, suspensión de cuentas).
+- **Técnico**: riesgos relacionados con la viabilidad técnica de las decisiones adoptadas (compatibilidad de SDKs, fronteras de cuota, soporte irregular de *function calling*, *aliasing* silencioso de modelos).
+- **Calidad**: riesgos que afectan a la calidad del resultado producido por el sistema (varianza del agente, cobertura inter-proveedor, sesgo del LLM, *drift* del *prompt*).
 
 La probabilidad y el impacto se evalúan en una escala 1–5 cualitativa-cuantitativa:
 
@@ -42,7 +41,7 @@ Cada riesgo identificado se documenta con los siguientes campos:
 |---|---|
 | Identificador | Código único R-NN del registro de riesgos. |
 | Descripción | Enunciado claro del riesgo, evitando confundir causa con consecuencia. |
-| Categoría | Una de las cuatro categorías (dependencia externa, técnico, calidad, gestión). |
+| Categoría | Una de las tres categorías (dependencia externa, técnico, calidad). |
 | Probabilidad / Impacto / Exposición | Valoración inicial 1–5 × 1–5 y producto resultante. |
 | Estrategia | Una de las cuatro estrategias canónicas: **evitar**, **mitigar**, **transferir**, **aceptar**. |
 | Plan de mitigación | Acciones concretas a emprender para reducir la probabilidad o el impacto. |
@@ -114,55 +113,7 @@ A continuación se incluyen las doce hojas individuales correspondientes a los r
 | Contingencia | Sustitución del modelo en `DEFAULT_MODELS` y re-validación con `data/spruce/`. |
 | Estado final | Materializado en mayo de 2026 (retirada de Gemma 3 27B); mitigado mediante migración a `gemma-4-31b-it`. |
 
-#### R-06. Inviabilidad de Cerebras como tercer proveedor
-
-| Campo | Valor |
-|---|---|
-| Categoría | Dependencia externa. |
-| Probabilidad / Impacto / Exposición | 3 / 2 / 6 (alto). |
-| Estrategia | Aceptar. |
-| Plan de mitigación | Validación previa del *free tier* (catálogo, RPM, TPM, contexto) antes de comprometer trabajo de implementación. |
-| Indicadores | Contexto máximo de 8 192 *tokens* en *free tier*. |
-| Contingencia | Investigar Z.ai (Ampliación C de §8.2) como alternativa con 128 K de contexto. |
-| Estado final | Aceptado: Cerebras descartado en junio de 2026; Z.ai identificado como sustituto futuro. |
-
-#### R-07. Patrón "principal vs secundario" del agente
-
-| Campo | Valor |
-|---|---|
-| Categoría | Calidad. |
-| Probabilidad / Impacto / Exposición | 4 / 3 / 12 (crítico). |
-| Estrategia | Mitigar. |
-| Plan de mitigación | Inclusión en el *prompt* de sistema del agente del Principio del hermano (RU-5.2, §3.2.5) y de la regla de dos pasadas obligatorias. |
-| Indicadores | Cobertura del UML manual inferior a 80 % con el primer *run*. |
-| Contingencia | Iterar el *prompt*; eventualmente, introducir *nudges* dinámicos (Ampliación G de §8.2). |
-| Estado final | Reducido por el *prompt* v5 (dos pasadas + *batching*); residuo aceptado. |
-
-#### R-08. Tiempo limitado para todos los requisitos planificados
-
-| Campo | Valor |
-|---|---|
-| Categoría | Gestión. |
-| Probabilidad / Impacto / Exposición | 4 / 4 / 16 (crítico). |
-| Estrategia | Mitigar mediante descope explícito. |
-| Plan de mitigación | Acuerdo con la dirección académica en LB-2 (2026-05-25): descope del agente de refinamiento; documentación del componente como Ampliación A de §8.2. |
-| Indicadores | Horas restantes vs horas estimadas para los paquetes pendientes; complejidad real de la GUI tras prototipo inicial. |
-| Contingencia | Descope adicional de la GUI si las horas restantes no alcanzan; documentación del descope como Ampliación. |
-| Estado final | Materializado y mitigado mediante descope de RU-6. |
-
-#### R-09. Tipos no nativos en Oracle <23
-
-| Campo | Valor |
-|---|---|
-| Categoría | Técnico. |
-| Probabilidad / Impacto / Exposición | 2 / 2 / 4 (moderado). |
-| Estrategia | Aceptar. |
-| Plan de mitigación | Documentación explícita de la versión Oracle objetivo en RNF-5.2; descripción del *postprocesador* como Ampliación F de §8.2. |
-| Indicadores | Fallos de ejecución del DDL en instancias de Oracle <23. |
-| Contingencia | Mapeo `BOOLEAN` → `NUMBER(1) CHECK (X IN (0,1))` como *postprocesador* externo. |
-| Estado final | Aceptado: la versión objetivo del DDL es Oracle 23ai. |
-
-#### R-10. Diferencia de cobertura inter-proveedor
+#### R-06. Diferencia de cobertura inter-proveedor
 
 | Campo | Valor |
 |---|---|
@@ -172,31 +123,79 @@ A continuación se incluyen las doce hojas individuales correspondientes a los r
 | Plan de mitigación | Validación cualitativa sobre los dos proveedores; documentación honesta del *trade-off* en §6.2.2 y en §8.1.3. |
 | Indicadores | Cobertura del UML manual significativamente distinta entre proveedores sobre el mismo *input*. |
 | Contingencia | Recomendación por defecto del proveedor con mejor cobertura (Google para *datasets* difusos). |
-| Estado final | Materializado y aceptado; documentado el *trade-off* velocidad ↔ calidad. |
+| Estado final | Materializado y aceptado; documentado el *trade-off* velocidad (Groq sobre el *pipeline* texto-a-texto) ↔ calidad (Google sobre el agente en Habitica). |
 
-#### R-11. Pérdida de trabajo por mal control de versiones
-
-| Campo | Valor |
-|---|---|
-| Categoría | Gestión. |
-| Probabilidad / Impacto / Exposición | 2 / 5 / 10 (alto). |
-| Estrategia | Mitigar. |
-| Plan de mitigación | Uso disciplinado de Git desde el primer *commit*; política explícita en la documentación interna del proyecto de no usar operaciones destructivas sin autorización; *commits* frecuentes con mensajes descriptivos. |
-| Indicadores | Tiempo entre *commits* superior a un día de trabajo; archivos no versionados de larga duración. |
-| Contingencia | Recuperación desde el último *commit* en `origin`. |
-| Estado final | No materializado: la política aplicada con éxito. |
-
-#### R-12. Suspensión de cuentas de proveedor por uso intensivo
+#### R-07. Suspensión o limitación de cuentas de proveedor por uso intensivo
 
 | Campo | Valor |
 |---|---|
 | Categoría | Dependencia externa. |
 | Probabilidad / Impacto / Exposición | 2 / 3 / 6 (alto). |
 | Estrategia | Aceptar. |
-| Plan de mitigación | Cumplimiento de los términos de uso de los proveedores; uso responsable de los *free tiers*; vigilancia razonable. |
+| Plan de mitigación | Cumplimiento de los términos de uso de los proveedores; uso responsable de los *free tiers*; vigilancia razonable durante las campañas de validación. |
 | Indicadores | Notificaciones del proveedor; rechazos de autenticación persistentes. |
 | Contingencia | Migración al otro proveedor disponible. |
 | Estado final | No materializado. |
+
+#### R-08. Cambios estructurales en políticas de uso del proveedor
+
+| Campo | Valor |
+|---|---|
+| Categoría | Dependencia externa. |
+| Probabilidad / Impacto / Exposición | 3 / 4 / 12 (crítico). |
+| Estrategia | Mitigar. |
+| Plan de mitigación | Diferente de R-01 (cuota numérica) y R-07 (cuenta individual): aquí se atacan los cambios estructurales que afectan a todos los usuarios del *free tier* (retirada completa, exigencia de verificación de pago, restricciones de uso académico, retirada simultánea de modelos demo-críticos). Mitigación: *snapshot* offline del *run* canónico sobre Spruce y Habitica (DDL, trazas del agente, *prompts* y *outputs* en disco) grabado con antelación a la defensa, utilizable como demo de respaldo sin invocar al proveedor; *fallback* claramente comunicable al tribunal si el sistema en vivo no responde; multi-proveedor reduce la exposición frente a un único cambio. |
+| Indicadores | Anuncios oficiales del proveedor; cambios en los términos de servicio; foros y *subreddits* del SDK; cambios bruscos en las respuestas de la API en los días previos a la defensa. |
+| Contingencia | Reproducción de la demo desde el *snapshot* offline; comunicación abierta del incidente al tribunal. |
+| Estado final | No materializado a fecha de cierre del prototipo. *Snapshot* offline preparado como contingencia para la defensa. |
+
+#### R-09. Breaking changes en los SDKs cliente
+
+| Campo | Valor |
+|---|---|
+| Categoría | Técnico. |
+| Probabilidad / Impacto / Exposición | 3 / 3 / 9 (alto). |
+| Estrategia | Mitigar. |
+| Plan de mitigación | Los SDKs `google-genai` y `groq` son jóvenes y siguen una cadencia de evolución rápida con riesgo de cambios incompatibles entre versiones. Mitigación mediante *pinning* de versiones en `requirements.txt`, *smoke test* tras cada actualización y aislamiento del SDK detrás de la abstracción `LLMProvider` para localizar el impacto en `providers/*.py`. |
+| Indicadores | Errores `ImportError` / `AttributeError` al actualizar; avisos de *deprecation* en `stderr`; notas de versión del SDK. |
+| Contingencia | Bloqueo de la versión funcional anterior; *rollback* del `requirements.txt`. |
+| Estado final | No materializado: un único *bump* de versión durante el proyecto, compatible. |
+
+#### R-10. Reenrutamiento silencioso del alias del modelo
+
+| Campo | Valor |
+|---|---|
+| Categoría | Técnico. |
+| Probabilidad / Impacto / Exposición | 2 / 2 / 4 (moderado). |
+| Estrategia | Mitigar. |
+| Plan de mitigación | A diferencia de R-05 (retirada formal), aquí el identificador del modelo se mantiene mientras el modelo subyacente cambia silenciosamente (*model aliasing*), alterando *outputs* entre *runs* aparentemente idénticos. Mitigación preventiva fijando IDs de modelo explícitamente versionados cuando el proveedor los ofrece, en lugar de alias genéricos. |
+| Indicadores | Discrepancias en *outputs* entre *runs* con la misma configuración; cambios en los metadatos de la respuesta de la API. |
+| Contingencia | Fijar la versión exacta del modelo en `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS`; re-validación contra la *baseline* de Spruce. |
+| Estado final | No materializado: sin discrepancias observadas en *runs* idénticos durante el proyecto. |
+
+#### R-11. Sesgo del LLM hacia modelos relacionales convencionales
+
+| Campo | Valor |
+|---|---|
+| Categoría | Calidad. |
+| Probabilidad / Impacto / Exposición | 4 / 2 / 8 (alto). |
+| Estrategia | Mitigar. |
+| Plan de mitigación | Los LLMs están mayoritariamente entrenados sobre modelos relacionales y pueden aplanar denormalizaciones legítimas o forzar agrupaciones que pierdan información presente en el modelo documental original. Mitigación en el *prompt* del paso 2 (`analyze.md`) y en la regla de reconciliación de FKs de `design.md` (cap. 2 §2.1.3); trazabilidad RU-2.3 permite detección humana del aplanamiento residual. |
+| Indicadores | Pérdida de campos respecto al UML manual; agrupaciones forzadas; FKs que no respetan la multiplicidad observada. |
+| Contingencia | Revisión cualitativa del DDL frente al modelo documental original; ajuste de los *prompts*. |
+| Estado final | Reducido: aplanamientos detectados y corregidos vía *prompt engineering* durante P4; residuo aceptado. |
+
+#### R-12. *Drift* del *prompt* del agente hacia un dataset concreto
+
+| Campo | Valor |
+|---|---|
+| Categoría | Calidad. |
+| Probabilidad / Impacto / Exposición | 3 / 3 / 9 (alto). |
+| Estrategia | Mitigar. |
+| Plan de mitigación | La iteración del *prompt* del agente sobre un único dataset (Spruce) podría optimizar el *prompt* para ese caso particular y degradar la generalización a otros repositorios. Mitigación mediante validación cruzada en cada iteración significativa: `data/spruce/` (caso de control) y URL pública de Habitica (caso de tamaño realista). El *drift* hacia Mongoose se ataca explícitamente en la pasada declarativa multi-*stack* del *prompt* v5.2. |
+| Indicadores | Caída de cobertura en repositorios fuera del conjunto de iteración. |
+| Contingencia | Reintroducir el dataset divergente en el conjunto de iteración del *prompt*. |
+| Estado final | Reducido mediante la validación cruzada Spruce + Habitica en cada iteración del *prompt*. |
 
 ## 9.2 Referencias bibliográficas
 
