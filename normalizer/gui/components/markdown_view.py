@@ -16,26 +16,36 @@ from tkinter import ttk
 import customtkinter as ctk
 
 
-def _table_palette() -> dict[str, str]:
-    """Paleta acorde al tema actual de CustomTkinter (light/dark)."""
+def _md_palette() -> dict[str, str]:
+    """Paleta surface tonal M3 acorde al tema actual (light/dark).
+
+    Cubre tablas (cell/alt/header/border/container) y tags de código
+    inline (`code`) y de bloque (`codeblock`).
+    """
     if ctk.get_appearance_mode().lower() == "dark":
         return {
-            "container_bg": "#1a2230",
-            "header_bg": "#2a3548",
+            # Tablas
+            "container_bg": "#101418",     # surface
+            "header_bg": "#26292d",        # surface-container-high
             "header_fg": "#e8edf5",
-            "cell_bg": "#1e2530",
-            "cell_alt_bg": "#222a36",
+            "cell_bg": "#101418",          # surface
+            "cell_alt_bg": "#181c20",      # surface-container-low
             "cell_fg": "#d8dde8",
-            "border": "#3a4456",
+            "border": "#3a4456",           # outline-variant
+            # Tags de código
+            "code_bg": "#26292d",          # surface-container-high
+            "codeblock_bg": "#181c20",     # surface-container-low
         }
     return {
-        "container_bg": "#ffffff",
-        "header_bg": "#eef2fa",
+        "container_bg": "#f9fafc",
+        "header_bg": "#e8ebf0",
         "header_fg": "#1f2a3a",
-        "cell_bg": "#ffffff",
-        "cell_alt_bg": "#f6f8fc",
+        "cell_bg": "#f9fafc",
+        "cell_alt_bg": "#f3f5f8",
         "cell_fg": "#202838",
         "border": "#d8dde8",
+        "code_bg": "#e8ebf0",
+        "codeblock_bg": "#f3f5f8",
     }
 
 
@@ -43,7 +53,9 @@ class MarkdownView(ctk.CTkTextbox):
     def __init__(self, master, **kwargs) -> None:
         kwargs.setdefault("font", ctk.CTkFont(family="Segoe UI", size=13))
         kwargs.setdefault("wrap", "word")
+        kwargs.setdefault("fg_color", ("#f3f5f8", "#181c20"))  # surface-container-low
         super().__init__(master, **kwargs)
+        pal = _md_palette()
         tk_text = self._textbox
         tk_text.tag_config("h1", font=("Segoe UI", 20, "bold"), spacing3=8)
         tk_text.tag_config("h2", font=("Segoe UI", 17, "bold"), spacing3=6)
@@ -53,12 +65,12 @@ class MarkdownView(ctk.CTkTextbox):
         tk_text.tag_config(
             "code",
             font=("Consolas", 12),
-            background="#f0f0f0",
+            background=pal["code_bg"],
         )
         tk_text.tag_config(
             "codeblock",
             font=("Consolas", 12),
-            background="#f6f8fa",
+            background=pal["codeblock_bg"],
             lmargin1=12,
             lmargin2=12,
             spacing1=4,
@@ -174,11 +186,12 @@ class MarkdownView(ctk.CTkTextbox):
         self._textbox.insert("end", "\n")
         self._textbox.window_create("end", window=widget)
         self._textbox.insert("end", "\n\n")
+        
 
     def _build_table_widget(
         self, data_rows: list[list[str]], has_header: bool
     ) -> tk.Frame:
-        pal = _table_palette()
+        pal = _md_palette()
         n_cols = max(len(r) for r in data_rows)
 
         # Estructura: outer (visible en el Textbox) → canvas (scrollable)
@@ -187,8 +200,12 @@ class MarkdownView(ctk.CTkTextbox):
         # supera el ancho disponible.
         outer = tk.Frame(self._textbox, bg=pal["container_bg"], bd=0)
         canvas = tk.Canvas(
-            outer, bg=pal["container_bg"], highlightthickness=0, bd=0,
-        )
+                        outer,
+                        width=max(1360, self._textbox.winfo_width() - 20),                       
+                        bg=pal["container_bg"],
+                        highlightthickness=0,
+                        bd=0,
+                        )
         hbar = ttk.Scrollbar(outer, orient="horizontal", command=canvas.xview)
         canvas.configure(xscrollcommand=hbar.set)
         inner = tk.Frame(canvas, bg=pal["border"])  # bg=border → líneas de rejilla
@@ -201,7 +218,7 @@ class MarkdownView(ctk.CTkTextbox):
         # rejilla finas (el "padding" muestra el bg del frame de abajo).
         font_regular = ("Consolas", 11)
         font_bold = ("Consolas", 11, "bold")
-        WRAPLEN = 380  # px, ≈ 55 chars en Consolas 11
+        WRAPLEN = 1080  # px, ≈ 55 chars en Consolas 11
 
         def _cell(row: int, col: int, text: str, is_header: bool, alt: bool) -> None:
             bg = (

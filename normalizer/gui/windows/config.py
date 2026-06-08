@@ -183,7 +183,9 @@ class ConfigScreen(ctk.CTkFrame):
         bottom = ctk.CTkFrame(self, fg_color="transparent")
         bottom.pack(fill="x", pady=(20, 0))
         self.error_label = ctk.CTkLabel(
-            bottom, text="", text_color=("#b30000", "#ff7a7a"), anchor="w"
+            bottom, text="",
+            text_color=("#ba1a1a", "#ffb4ab"),  # error M3
+            anchor="w",
         )
         self.error_label.pack(side="left", fill="x", expand=True)
         self.run_btn = ctk.CTkButton(
@@ -192,7 +194,10 @@ class ConfigScreen(ctk.CTkFrame):
         self.run_btn.pack(side="right")
 
     def _make_block(self, title: str) -> ctk.CTkFrame:
-        block = ctk.CTkFrame(self, corner_radius=12)
+        block = ctk.CTkFrame(
+            self, corner_radius=12,
+            fg_color=("#eef0f4", "#1c2024"),  # surface-container
+        )
         block.pack(fill="x", pady=(0, 12))
         inner = ctk.CTkFrame(block, fg_color="transparent")
         inner.pack(fill="x", padx=18, pady=16)

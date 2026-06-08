@@ -52,22 +52,27 @@ _ICONS: dict[str, str] = {
     "cancelling": "⏸",
 }
 
+# Paleta inspirada en roles M3 (primary, tertiary, error). El seed primary
+# es el azul existente; tertiary es un teal coordinado (no amarillo, que
+# rompía la armonía de la GUI); error es el rojo M3 estándar. Los colores
+# "active" y "done" son tonos de primary; "cancelling" usa tertiary;
+# "error" usa el rol error.
 _ICON_COLORS: dict[str, tuple[str, str]] = {
-    "pending": ("#888888", "#888888"),
-    "active": ("#1f6aa5", "#3a8fd6"),
-    "done": ("#2e7d32", "#4caf50"),
-    "error": ("#b30000", "#ff7a7a"),
-    "cancelling": ("#b07a00", "#e0a040"),
+    "pending": ("#79747e", "#938f99"),       # on-surface-variant
+    "active": ("#1f6aa5", "#9ec3e4"),        # primary
+    "done": ("#1f6aa5", "#9ec3e4"),          # primary (no más verde aislado)
+    "error": ("#ba1a1a", "#ffb4ab"),         # error M3
+    "cancelling": ("#3c6477", "#a4c8d6"),    # tertiary
 }
 
 # Colores de fondo por estado. "transparent" se pasa como string (no tupla)
 # porque CustomTkinter no acepta transparencia dentro de una tupla light/dark.
 _PHASE_ROW_BG: dict[str, str | tuple[str, str]] = {
     "pending": "transparent",
-    "active": ("#e8f0fe", "#1f2a3a"),
+    "active": ("#d6e4f3", "#1f3a52"),        # primary-container suave
     "done": "transparent",
-    "error": ("#fde2e2", "#3a1f1f"),
-    "cancelling": ("#fff4d6", "#3a2f1a"),
+    "error": ("#ffdad6", "#5a1a18"),         # error-container M3
+    "cancelling": ("#d2e6ee", "#244c5f"),    # tertiary-container
 }
 
 
@@ -119,7 +124,7 @@ class RunScreen(ctk.CTkFrame):
 
         # --- Header (surface container highest) ----------------------
         header = ctk.CTkFrame(
-            self, fg_color=("#eef2fa", "#1a2230"), corner_radius=12,
+            self, fg_color=("#e8ebf0", "#26292d"), corner_radius=12,
         )
         header.pack(fill="x", pady=(0, 12))
         header_inner = ctk.CTkFrame(header, fg_color="transparent")
@@ -137,7 +142,7 @@ class RunScreen(ctk.CTkFrame):
         ctk.CTkLabel(
             title_box, text=f"  {mode_label}  ",
             corner_radius=10,
-            fg_color=("#dde4f0", "#2a3548"),
+            fg_color=("#e2e6ec", "#30343a"),  # surface-container-highest
             text_color=("#3a4a6a", "#b8c4dc"),
             font=ctk.CTkFont(size=11, weight="bold"),
             height=24,
@@ -145,8 +150,9 @@ class RunScreen(ctk.CTkFrame):
 
         self.cancel_btn = ctk.CTkButton(
             top, text="Cancelar", command=self._on_cancel,
-            fg_color=("#b04040", "#9a3030"),
-            hover_color=("#7a2020", "#7a2020"),
+            fg_color=("#ba1a1a", "#93000a"),       # error M3
+            hover_color=("#93000a", "#ba1a1a"),    # hover invierte tonos
+            text_color=("#ffffff", "#ffdad6"),     # on-error pair
             width=110, corner_radius=8,
         )
         self.cancel_btn.pack(side="right")
@@ -173,7 +179,10 @@ class RunScreen(ctk.CTkFrame):
             _meta("▸", f"{s.out_dir.name}/")
 
         # --- Bloque pipeline (surface container, protagonista) ----------
-        pipeline_block = ctk.CTkFrame(self, corner_radius=12)
+        pipeline_block = ctk.CTkFrame(
+            self, corner_radius=12,
+            fg_color=("#eef0f4", "#1c2024"),  # surface-container
+        )
         pipeline_block.pack(fill="both", expand=True, pady=(0, 12))
         pipeline_inner = ctk.CTkFrame(pipeline_block, fg_color="transparent")
         pipeline_inner.pack(fill="both", expand=True, padx=20, pady=18)
@@ -199,8 +208,9 @@ class RunScreen(ctk.CTkFrame):
         self.pipeline_footer.pack(fill="x", pady=(16, 0))
 
         # Texto auxiliar de cancelación, aparece solo cuando hace falta.
+        # Color: on-tertiary-container, coordinado con `cancelling` chip.
         self.cancel_help_label = ctk.CTkLabel(
-            pipeline_inner, text="", text_color=("#7a5a1a", "#e0c080"),
+            pipeline_inner, text="", text_color=("#244c5f", "#a4c8d6"),
             anchor="w", wraplength=900,
         )
         self.cancel_help_label.pack(fill="x", pady=(4, 0))
@@ -208,7 +218,10 @@ class RunScreen(ctk.CTkFrame):
         # --- Bloque iteraciones del agente (solo URL) ----------------
         self.agent_scroll = None
         if self.gui_state.is_url:
-            agent_block = ctk.CTkFrame(self, corner_radius=12)
+            agent_block = ctk.CTkFrame(
+                self, corner_radius=12,
+                fg_color=("#eef0f4", "#1c2024"),
+            )
             agent_block.pack(fill="x", pady=(0, 12))
             agent_inner = ctk.CTkFrame(agent_block, fg_color="transparent")
             agent_inner.pack(fill="x", padx=20, pady=16)
@@ -241,7 +254,10 @@ class RunScreen(ctk.CTkFrame):
             ).pack(side="left", fill="x", expand=True)
 
         # --- Bloque log (altura fija, sin protagonismo) ---------------
-        log_block = ctk.CTkFrame(self, corner_radius=12)
+        log_block = ctk.CTkFrame(
+            self, corner_radius=12,
+            fg_color=("#eef0f4", "#1c2024"),
+        )
         log_block.pack(fill="x")
         log_inner = ctk.CTkFrame(log_block, fg_color="transparent")
         log_inner.pack(fill="x", padx=20, pady=16)
@@ -261,6 +277,7 @@ class RunScreen(ctk.CTkFrame):
         self.log_box = ctk.CTkTextbox(
             log_inner, font=ctk.CTkFont(family="Consolas", size=11),
             height=140, wrap="none",
+            fg_color=("#f3f5f8", "#181c20"),  # surface-container-low
         )
         self.log_box.pack(fill="x")
         self.log_box.configure(state="disabled")
@@ -301,6 +318,13 @@ class RunScreen(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _poll(self) -> None:
+        # Guard tras la transición a pantalla de resultado: el widget puede
+        # estar destruido si el usuario pulsó Cancelar y ya saltamos.
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
         for ev in self.controller.drain():
             self._handle_event(ev)
         if self.controller.is_alive():
@@ -466,6 +490,11 @@ class RunScreen(ctk.CTkFrame):
         # El reloj global vive en el footer del bloque pipeline (`X
         # transcurridos`), no en el header — evita tener varios contadores
         # idénticos compitiendo por la atención.
+        try:
+            if not self.winfo_exists():
+                return
+        except Exception:
+            return
         for p in self.gui_state.phases:
             if p.status in ("active", "cancelling"):
                 self._render_phase(p)
@@ -478,20 +507,20 @@ class RunScreen(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _on_cancel(self) -> None:
+        # Cancelación responsiva: marcamos el estado, desvinculamos el
+        # controlador y saltamos a la pantalla de resultado sin esperar a
+        # que la llamada HTTP al LLM termine. El hilo sigue vivo en
+        # background pero no contamina la nueva pantalla; los artefactos
+        # ya escritos a disco están disponibles ya.
         self._cancelling = True
-        self.cancel_btn.configure(state="disabled", text="Cancelando...")
-        self.cancel_help_label.configure(
-            text=(
-                "Esperando a que termine la llamada actual al LLM "
-                "(puede tardar hasta ~1 min). Los artefactos ya escritos "
-                "se conservan en el directorio de salida."
-            )
-        )
+        self.gui_state.cancelled = True
         for p in self.gui_state.phases:
             if p.status == "active":
                 p.status = "cancelling"
+                p.ended_at = p.ended_at or time.monotonic()
                 self._render_phase(p)
-        self.controller.cancel()
+        self.controller.cancel_and_abandon()
+        self._finish_transition()
 
     def _finish_transition(self) -> None:
         self.app.show_result()

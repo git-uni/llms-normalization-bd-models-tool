@@ -17,12 +17,17 @@ from normalizer.gui.state import GuiState
 class NormalizerApp(ctk.CTk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("Normalizer — MongoDB → DDL Oracle")
+        self.title("NormalizerApp")
         self.geometry("1100x780")
         self.minsize(900, 640)
 
         ctk.set_appearance_mode("system")
         ctk.set_default_color_theme("blue")
+
+        # Surface base de la paleta M3 con seed azul: ligeramente teñido
+        # de azul en light, casi neutral en dark. Override del fg_color del
+        # root para que todas las pantallas hereden esta base.
+        self.configure(fg_color=("#f9fafc", "#101418"))
 
         # No usar `state` — Tk hereda un método `state()` para iconificar.
         self.gui_state = GuiState()

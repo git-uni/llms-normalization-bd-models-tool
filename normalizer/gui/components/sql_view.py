@@ -34,22 +34,47 @@ def _tag_for(token_type) -> str:
     return ""
 
 
+def _sql_palette() -> dict[str, str]:
+    """Paleta del resaltado SQL acorde al tema actual (light/dark).
+
+    Inspirada en roles M3: keywords y números en primary, builtins en
+    secondary, strings en tertiary. Sin amarillos sueltos.
+    """
+    if ctk.get_appearance_mode().lower() == "dark":
+        return {
+            "kw": "#9ec3e4",       # primary tone 80
+            "builtin": "#b8c5d5",  # secondary tone 80
+            "op": "#a8a8a8",
+            "str": "#a4c8d6",      # tertiary tone 80
+            "num": "#9ec3e4",
+            "comment": "#8a92a0",
+        }
+    return {
+        "kw": "#0050b3",        # primary tone 40
+        "builtin": "#516a86",   # secondary tone 40
+        "op": "#888888",
+        "str": "#3c6477",       # tertiary tone 40
+        "num": "#0050b3",
+        "comment": "#6a737d",
+    }
+
+
 class SqlView(ctk.CTkTextbox):
     """Textbox de solo lectura que renderiza SQL con resaltado."""
 
     def __init__(self, master, **kwargs) -> None:
         kwargs.setdefault("font", ctk.CTkFont(family="Consolas", size=12))
         kwargs.setdefault("wrap", "none")
+        kwargs.setdefault("fg_color", ("#f3f5f8", "#181c20"))  # surface-container-low
         super().__init__(master, **kwargs)
-        # Configurar tags. Colores escogidos para que funcionen en claro y oscuro.
-        # `tag_config` se delega a la Text widget interna.
+        pal = _sql_palette()
         tk_text = self._textbox
-        tk_text.tag_config("kw", foreground="#0050b3")
-        tk_text.tag_config("builtin", foreground="#7c3aed")
-        tk_text.tag_config("op", foreground="#888888")
-        tk_text.tag_config("str", foreground="#a06800")
-        tk_text.tag_config("num", foreground="#0050b3")
-        tk_text.tag_config("comment", foreground="#6a737d", font=(
+        tk_text.tag_config("kw", foreground=pal["kw"])
+        tk_text.tag_config("builtin", foreground=pal["builtin"])
+        tk_text.tag_config("op", foreground=pal["op"])
+        tk_text.tag_config("str", foreground=pal["str"])
+        tk_text.tag_config("num", foreground=pal["num"])
+        tk_text.tag_config("comment", foreground=pal["comment"], font=(
             "Consolas", 12, "italic",
         ))
 

@@ -41,6 +41,10 @@ class ResultScreen(ctk.CTkFrame):
         self._er_canvas: tk.Canvas | None = None
         self._er_zoom: float = 1.0
         self._er_zoom_label: ctk.CTkLabel | None = None
+        # Debounce del redraw para que zooms rápidos no encolen N resizes
+        # caros — sobre el ER de Habitica (2896x2578 px) el resize LANCZOS
+        # tardaba 2s+ por iteración, ahora usamos BILINEAR + debounce.
+        self._er_redraw_job: str | None = None
 
         self._build()
 
@@ -67,19 +71,21 @@ class ResultScreen(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _build_banner(self) -> None:
+        # Paleta M3: error-container para fallo, tertiary-container para
+        # cancelado, primary-container para éxito. Sin amarillos sueltos.
         s = self.gui_state
         if s.error_message:
             text = f"Error durante {s.error_phase or '?'}: {s.error_message}"
-            fg = ("#fde2e2", "#5a1f1f")
-            tcol = ("#7a1a1a", "#ffcaca")
+            fg = ("#ffdad6", "#5a1a18")   # error-container
+            tcol = ("#410002", "#ffdad6")  # on-error-container
         elif s.cancelled:
-            text = "Ejecución cancelada por el usuario. Los artefactos producidos hasta el momento están disponibles abajo."
-            fg = ("#fff4d6", "#5a4a1f")
-            tcol = ("#7a5a1a", "#ffeac0")
+            text = "Ejecución cancelada por el usuario. Los artefactos producidos hasta el momento están disponibles abajo (la última llamada al LLM puede seguir terminando en background)."
+            fg = ("#d2e6ee", "#244c5f")   # tertiary-container
+            tcol = ("#0e2a3a", "#d2e6ee")  # on-tertiary-container
         elif s.finished_ok:
             text = f"DDL generado en {self.out_dir}"
-            fg = ("#e2f5e9", "#1f4a2a")
-            tcol = ("#1a5a2a", "#caffd1")
+            fg = ("#d6e4f3", "#1f3a52")   # primary-container suave
+            tcol = ("#082942", "#d6e4f3")  # on-primary-container
         else:
             text = "Resultado"
             fg = ("transparent", "transparent")
@@ -174,7 +180,7 @@ class ResultScreen(ctk.CTkFrame):
             ctk.CTkLabel(
                 parent,
                 text=f"No se pudo cargar la imagen ER:\n{e}",
-                text_color=("#b30000", "#ff7a7a"),
+                text_color=("#ba1a1a", "#ffb4ab"),  # error M3
             ).pack(expand=True)
 
     def _build_er_viewer(self, parent: ctk.CTkFrame) -> None:
@@ -214,7 +220,9 @@ class ResultScreen(ctk.CTkFrame):
         # Fondo blanco para que el PNG (que tiene fondo transparente) se
         # lea bien tanto en tema claro como oscuro.
         self._er_canvas = tk.Canvas(
-            canvas_frame, bg="white", highlightthickness=0
+            canvas_frame,
+            bg="#f9fafc" if ctk.get_appearance_mode().lower() != "dark" else "#101418",
+            highlightthickness=0
         )
         yscroll = ttk.Scrollbar(
             canvas_frame, orient="vertical", command=self._er_canvas.yview
@@ -237,24 +245,29 @@ class ResultScreen(ctk.CTkFrame):
         self._redraw_er()
 
     def _redraw_er(self) -> None:
+        self._er_redraw_job = None
         if (
             self._er_pil_image is None
             or self._er_canvas is None
         ):
             return
+        try:
+            if not self._er_canvas.winfo_exists():
+                return
+        except Exception:
+            return
         w, h = self._er_pil_image.size
         zw, zh = max(1, int(w * self._er_zoom)), max(1, int(h * self._er_zoom))
-        img = self._er_pil_image.resize((zw, zh), Image.LANCZOS)
+        # BILINEAR es ~10x más rápido que LANCZOS y la diferencia es
+        # imperceptible para un diagrama ER con líneas y texto. LANCZOS
+        # sobre 2896×2578 (Habitica) tardaba 2-3 s por resize.
+        img = self._er_pil_image.resize((zw, zh), Image.BILINEAR)
         self._er_photo_ref = ImageTk.PhotoImage(img)
         self._er_canvas.delete("all")
         self._er_canvas.create_image(
             0, 0, anchor="nw", image=self._er_photo_ref
         )
         self._er_canvas.configure(scrollregion=(0, 0, zw, zh))
-        if self._er_zoom_label is not None:
-            self._er_zoom_label.configure(
-                text=f"zoom: {int(self._er_zoom * 100)}%"
-            )
 
     def _zoom_er(self, factor: float) -> None:
         # Limitar a un rango razonable para evitar resize gigantes.
@@ -262,7 +275,23 @@ class ResultScreen(ctk.CTkFrame):
 
     def _set_er_zoom(self, zoom: float) -> None:
         self._er_zoom = max(0.1, min(5.0, zoom))
-        self._redraw_er()
+        # La etiqueta de zoom se actualiza inmediatamente para que el
+        # usuario reciba feedback aunque el redraw esté debounced.
+        if self._er_zoom_label is not None:
+            try:
+                self._er_zoom_label.configure(
+                    text=f"zoom: {int(self._er_zoom * 100)}%"
+                )
+            except Exception:
+                pass
+        # Debounce: si llegan varios clicks rápidos en +/+, descartamos
+        # los redraws intermedios y solo hacemos el último.
+        if self._er_redraw_job is not None:
+            try:
+                self.after_cancel(self._er_redraw_job)
+            except Exception:
+                pass
+        self._er_redraw_job = self.after(80, self._redraw_er)
 
     def _fit_er_to_window(self) -> None:
         if self._er_pil_image is None or self._er_canvas is None:
