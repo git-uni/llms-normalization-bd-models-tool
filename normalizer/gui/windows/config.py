@@ -14,6 +14,14 @@ from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
+# Paleta para inputs: surface-container-low (un nivel por debajo del
+# bloque que los contiene, surface-container, para que se "hundan"
+# sutilmente como campos editables) + outline-variant para bordes.
+# Sustituye el default beige cálido de CTk que chocaba con la paleta azul.
+_INPUT_FG = ("#f3f5f8", "#181c20")
+_INPUT_BORDER = ("#cad0d8", "#3a4456")
+_INPUT_BUTTON = ("#1f6aa5", "#3a8fd6")  # primary para botones de combo
+
 from normalizer.gui.controller import (
     ENV_KEY_BY_PROVIDER,
     persist_api_key,
@@ -91,6 +99,7 @@ class ConfigScreen(ctk.CTkFrame):
             self.input_row,
             textvariable=self._input_value_var,
             placeholder_text="Selecciona un archivo...",
+            fg_color=_INPUT_FG, border_color=_INPUT_BORDER,
         )
         self.input_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self.browse_btn = ctk.CTkButton(
@@ -116,7 +125,11 @@ class ConfigScreen(ctk.CTkFrame):
         ctk.CTkLabel(row2, text="Modelo pipeline", width=140, anchor="w").pack(
             side="left"
         )
-        self.model_cb = ctk.CTkComboBox(row2, values=[""])
+        self.model_cb = ctk.CTkComboBox(
+            row2, values=[""],
+            fg_color=_INPUT_FG, border_color=_INPUT_BORDER,
+            button_color=_INPUT_BUTTON, button_hover_color=_INPUT_BUTTON,
+        )
         self.model_cb.pack(side="left", fill="x", expand=True)
 
         row3 = ctk.CTkFrame(block_llm, fg_color="transparent")
@@ -124,7 +137,11 @@ class ConfigScreen(ctk.CTkFrame):
         ctk.CTkLabel(row3, text="Modelo agente", width=140, anchor="w").pack(
             side="left"
         )
-        self.agent_model_cb = ctk.CTkComboBox(row3, values=[""])
+        self.agent_model_cb = ctk.CTkComboBox(
+            row3, values=[""],
+            fg_color=_INPUT_FG, border_color=_INPUT_BORDER,
+            button_color=_INPUT_BUTTON, button_hover_color=_INPUT_BUTTON,
+        )
         self.agent_model_cb.pack(side="left", fill="x", expand=True)
 
         # Texto auxiliar sobre el estado del catálogo (vacío si listado OK,
@@ -140,9 +157,10 @@ class ConfigScreen(ctk.CTkFrame):
             side="left"
         )
         self._out_dir_var = ctk.StringVar()
-        ctk.CTkEntry(row4, textvariable=self._out_dir_var).pack(
-            side="left", fill="x", expand=True, padx=(0, 8)
-        )
+        ctk.CTkEntry(
+            row4, textvariable=self._out_dir_var,
+            fg_color=_INPUT_FG, border_color=_INPUT_BORDER,
+        ).pack(side="left", fill="x", expand=True, padx=(0, 8))
         ctk.CTkButton(
             row4, text="Examinar...", width=110, command=self._browse_out_dir
         ).pack(side="left")
@@ -161,6 +179,7 @@ class ConfigScreen(ctk.CTkFrame):
             textvariable=self._api_key_var,
             show="*",
             placeholder_text="Pega aquí tu API key...",
+            fg_color=_INPUT_FG, border_color=_INPUT_BORDER,
         )
         self.key_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self.change_key_btn = ctk.CTkButton(
