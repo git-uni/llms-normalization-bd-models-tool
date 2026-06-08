@@ -109,15 +109,35 @@ class RunScreen(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _build(self) -> None:
-        # --- Header --------------------------------------------------
-        header = ctk.CTkFrame(self, fg_color="transparent")
-        header.pack(fill="x", pady=(0, 10))
+        s = self.gui_state
+        mode_label = {"file": "archivo único", "dir": "directorio", "url": "URL"}[s.input_mode]
 
-        top = ctk.CTkFrame(header, fg_color="transparent")
+        # --- Header (card destacada) ---------------------------------
+        header = ctk.CTkFrame(
+            self, fg_color=("#eef2fa", "#1a2230"), corner_radius=12,
+        )
+        header.pack(fill="x", pady=(0, 12))
+        header_inner = ctk.CTkFrame(header, fg_color="transparent")
+        header_inner.pack(fill="x", padx=18, pady=14)
+
+        # Fila 1: título grande + chip de modo + botón cancelar
+        top = ctk.CTkFrame(header_inner, fg_color="transparent")
         top.pack(fill="x")
+        title_box = ctk.CTkFrame(top, fg_color="transparent")
+        title_box.pack(side="left")
         ctk.CTkLabel(
-            top, text="Ejecución", font=ctk.CTkFont(size=24, weight="bold")
+            title_box, text="Ejecución",
+            font=ctk.CTkFont(size=22, weight="bold"),
         ).pack(side="left")
+        ctk.CTkLabel(
+            title_box, text=f"  {mode_label}  ",
+            corner_radius=10,
+            fg_color=("#dde4f0", "#2a3548"),
+            text_color=("#5a6680", "#a8b4cc"),
+            font=ctk.CTkFont(size=11, weight="bold"),
+            height=22,
+        ).pack(side="left", padx=(10, 0))
+
         self.cancel_btn = ctk.CTkButton(
             top, text="Cancelar", command=self._on_cancel,
             fg_color=("#b04040", "#9a3030"),
@@ -126,32 +146,44 @@ class RunScreen(ctk.CTkFrame):
         )
         self.cancel_btn.pack(side="right")
 
-        s = self.gui_state
-        meta_line = f"{s.provider} · {s.model or '(default)'}"
-        if s.is_url and s.agent_model:
-            meta_line += f" · agente: {s.agent_model}"
-        if s.out_dir is not None:
-            meta_line += f" · {s.out_dir.name}/"
-        ctk.CTkLabel(
-            header, text=meta_line, text_color="gray", anchor="w",
-        ).pack(fill="x", pady=(4, 0))
+        # Fila 2: metadatos con iconos
+        meta_row = ctk.CTkFrame(header_inner, fg_color="transparent")
+        meta_row.pack(fill="x", pady=(12, 0))
 
-        self.clock_label = ctk.CTkLabel(
-            header, text="wall clock: 00:00", text_color="gray", anchor="w",
-        )
-        self.clock_label.pack(fill="x")
+        def _meta(icon: str, text: str) -> None:
+            ctk.CTkLabel(
+                meta_row, text=icon, font=ctk.CTkFont(size=13),
+                text_color=("#6b78a0", "#8a9bc6"),
+            ).pack(side="left", padx=(0, 4))
+            ctk.CTkLabel(
+                meta_row, text=text, font=ctk.CTkFont(size=12),
+                text_color=("#303848", "#d0d8e8"),
+            ).pack(side="left", padx=(0, 22))
+
+        _meta("◆", s.provider)
+        _meta("▸", s.model or "(default)")
+        if s.is_url and s.agent_model:
+            _meta("▸", f"agente: {s.agent_model}")
+        if s.out_dir is not None:
+            _meta("▸", f"{s.out_dir.name}/")
 
         # --- Bloque pipeline (protagonista) --------------------------
-        pipeline_block = ctk.CTkFrame(self)
+        pipeline_block = ctk.CTkFrame(self, corner_radius=10)
         pipeline_block.pack(fill="both", expand=True, pady=(0, 10))
         pipeline_inner = ctk.CTkFrame(pipeline_block, fg_color="transparent")
-        pipeline_inner.pack(fill="both", expand=True, padx=14, pady=12)
+        pipeline_inner.pack(fill="both", expand=True, padx=16, pady=14)
 
+        title_row = ctk.CTkFrame(pipeline_inner, fg_color="transparent")
+        title_row.pack(fill="x", pady=(0, 12))
         ctk.CTkLabel(
-            pipeline_inner, text="PROGRESO DEL PIPELINE",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color="gray", anchor="w",
-        ).pack(fill="x", pady=(0, 10))
+            title_row, text="▣",
+            font=ctk.CTkFont(size=14),
+            text_color=("#1f6aa5", "#3a8fd6"),
+        ).pack(side="left", padx=(0, 6))
+        ctk.CTkLabel(
+            title_row, text="Progreso del pipeline",
+            font=ctk.CTkFont(size=15, weight="bold"), anchor="w",
+        ).pack(side="left")
 
         for phase in self.gui_state.phases:
             self._build_phase_row(pipeline_inner, phase)
@@ -171,15 +203,23 @@ class RunScreen(ctk.CTkFrame):
         # --- Bloque iteraciones del agente (solo URL) ----------------
         self.agent_scroll = None
         if self.gui_state.is_url:
-            agent_block = ctk.CTkFrame(self)
+            agent_block = ctk.CTkFrame(self, corner_radius=10)
             agent_block.pack(fill="x", pady=(0, 10))
             agent_inner = ctk.CTkFrame(agent_block, fg_color="transparent")
-            agent_inner.pack(fill="x", padx=14, pady=10)
+            agent_inner.pack(fill="x", padx=16, pady=12)
+
+            agent_title_row = ctk.CTkFrame(agent_inner, fg_color="transparent")
+            agent_title_row.pack(fill="x", pady=(0, 8))
             ctk.CTkLabel(
-                agent_inner, text="ITERACIONES DEL AGENTE",
-                font=ctk.CTkFont(size=13, weight="bold"),
-                text_color="gray", anchor="w",
-            ).pack(fill="x", pady=(0, 6))
+                agent_title_row, text="◇",
+                font=ctk.CTkFont(size=14),
+                text_color=("#1f6aa5", "#3a8fd6"),
+            ).pack(side="left", padx=(0, 6))
+            ctk.CTkLabel(
+                agent_title_row, text="Iteraciones del agente",
+                font=ctk.CTkFont(size=15, weight="bold"), anchor="w",
+            ).pack(side="left")
+
             self.agent_scroll = ctk.CTkScrollableFrame(agent_inner, height=160)
             self.agent_scroll.pack(fill="x")
             head = ctk.CTkFrame(self.agent_scroll, fg_color="transparent")
@@ -187,22 +227,32 @@ class RunScreen(ctk.CTkFrame):
             ctk.CTkLabel(
                 head, text="Iter", width=60, anchor="w",
                 font=ctk.CTkFont(weight="bold"),
+                text_color="gray",
             ).pack(side="left")
             ctk.CTkLabel(
                 head, text="Tool calls", anchor="w",
                 font=ctk.CTkFont(weight="bold"),
+                text_color="gray",
             ).pack(side="left", fill="x", expand=True)
 
         # --- Bloque log (pequeño, altura fija) -----------------------
-        log_block = ctk.CTkFrame(self)
+        log_block = ctk.CTkFrame(self, corner_radius=10)
         log_block.pack(fill="x")
         log_inner = ctk.CTkFrame(log_block, fg_color="transparent")
-        log_inner.pack(fill="x", padx=14, pady=10)
+        log_inner.pack(fill="x", padx=16, pady=12)
+
+        log_title_row = ctk.CTkFrame(log_inner, fg_color="transparent")
+        log_title_row.pack(fill="x", pady=(0, 6))
         ctk.CTkLabel(
-            log_inner, text="LOG",
-            font=ctk.CTkFont(size=13, weight="bold"),
-            text_color="gray", anchor="w",
-        ).pack(fill="x", pady=(0, 4))
+            log_title_row, text="▤",
+            font=ctk.CTkFont(size=14),
+            text_color=("#1f6aa5", "#3a8fd6"),
+        ).pack(side="left", padx=(0, 6))
+        ctk.CTkLabel(
+            log_title_row, text="Log",
+            font=ctk.CTkFont(size=15, weight="bold"), anchor="w",
+        ).pack(side="left")
+
         self.log_box = ctk.CTkTextbox(
             log_inner, font=ctk.CTkFont(family="Consolas", size=11),
             height=120, wrap="none",
@@ -406,11 +456,9 @@ class RunScreen(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _tick(self) -> None:
-        # Wall clock del header.
-        if self.gui_state.run_started_at is not None:
-            wall = time.monotonic() - self.gui_state.run_started_at
-            self.clock_label.configure(text=f"wall clock: {_format_mmss(wall)}")
-        # Refrescar duración de la fase activa / cancelling.
+        # El reloj global vive en el footer del bloque pipeline (`X
+        # transcurridos`), no en el header — evita tener varios contadores
+        # idénticos compitiendo por la atención.
         for p in self.gui_state.phases:
             if p.status in ("active", "cancelling"):
                 self._render_phase(p)
