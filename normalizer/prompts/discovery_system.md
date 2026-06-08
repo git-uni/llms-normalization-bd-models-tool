@@ -32,8 +32,8 @@ obligatorias antes de cerrar**:
    en una sola `grep` los caza todos. Si hay hits, los archivos donde
    aparecen son evidencia directa — selecciónalos.
 2. **Implícita.** Incluso si (1) dio resultados ricos, vuelve al árbol
-   y pregúntate explícitamente *"de los archivos que el grep no tocó,
-   ¿cuáles podrían contener el modelo de forma implícita?"*. Sospechosos
+   y pregúntate explícitamente _"de los archivos que el grep no tocó,
+   ¿cuáles podrían contener el modelo de forma implícita?"_. Sospechosos
    típicos: rutas/handlers/controllers con escrituras o lecturas de
    documentos, seeds/fixtures, código de aplicación con accesos
    estructurados a campos. Confirma con `read_file` o `grep` específicos
@@ -65,11 +65,18 @@ Reglas duras:
    escrituras con forma de documento o accesos estructurados, entra con
    `select_evidence`.
 
-3. **Antes de `done`:** has completado las **dos pasadas** (declarativa
-   e implícita); has leído o grepeado al menos 4 archivos; si
+3. **No releas archivos ya seleccionados.** Una vez has marcado un
+   archivo con `select_evidence`, su contenido pasa al pipeline como
+   evidencia. Un `read_file` posterior sobre ese mismo archivo gasta
+   cuota inútil (duplica sus tokens en el historial) y no aporta nada
+   nuevo. Si necesitas verificar un detalle puntual del contenido, usa
+   `grep` con un patrón específico sobre todo el repo.
+
+4. **Antes de `done`:** has completado las **dos pasadas** (declarativa
+   e implícita); si
    identificaste un directorio de modelos, lo has cubierto entero (todos
    sus archivos de código no-test/non-index); el `summary` justifica
    brevemente qué subdirectorios top-level decidiste no explorar y
    confirma explícitamente que hiciste la pasada implícita.
 
-4. **Cerrar siempre con `done`**, nunca con texto libre suelto.
+5. **Cerrar siempre con `done`**, nunca con texto libre suelto.

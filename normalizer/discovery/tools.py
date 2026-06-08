@@ -206,7 +206,7 @@ def dispatch(call: ToolCall, state: DiscoveryState, max_files: int) -> str:
     if call.name == "list_dir":
         return _do_list_dir(state.repo_root, args.get("path", ""))
     if call.name == "read_file":
-        return _do_read_file(state.repo_root, args.get("path", ""))
+        return _do_read_file(state.repo_root, state, args.get("path", ""))
     if call.name == "grep":
         return _do_grep(
             state.repo_root,
@@ -259,7 +259,18 @@ def _do_list_dir(repo_root: Path, rel_path: str) -> str:
     return "\n".join(lines) if lines else "(directorio vacío tras el filtrado)"
 
 
-def _do_read_file(repo_root: Path, rel_path: str) -> str:
+def _do_read_file(
+    repo_root: Path, state: DiscoveryState, rel_path: str
+) -> str:
+    # Releer un archivo que ya marcaste como evidencia no aporta nada nuevo
+    # — su contenido ya entra al pipeline — y gasta cuota duplicando los
+    # tokens del archivo en el historial. Cortamos antes de leer del disco.
+    if state.already_selected(rel_path):
+        return (
+            f"Ya seleccionado como evidencia: '{rel_path}'. Su contenido "
+            "pasa al pipeline; no necesitas releerlo. Si quieres verificar "
+            "un detalle puntual, usa `grep` con un patrón específico."
+        )
     try:
         target = resolve_within(repo_root, rel_path)
     except ValueError as e:
