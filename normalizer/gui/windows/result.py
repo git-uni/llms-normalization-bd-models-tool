@@ -13,11 +13,12 @@ import os
 import platform
 import shutil
 import subprocess
+import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog
+from tkinter import filedialog, ttk
 
 import customtkinter as ctk
-from PIL import Image
+from PIL import Image, ImageTk
 
 from normalizer.gui.components.markdown_view import MarkdownView
 from normalizer.gui.components.sql_view import SqlView
@@ -31,7 +32,15 @@ class ResultScreen(ctk.CTkFrame):
         self.app = app
         self.gui_state: GuiState = app.gui_state
         self.out_dir: Path | None = self.gui_state.out_dir
-        self._er_image_ref: ctk.CTkImage | None = None  # mantener viva
+        # Estado del visor ER. Las referencias a la imagen y el PhotoImage
+        # tienen que sobrevivir al método que las crea, si no Tkinter las
+        # libera y aparece un cuadro en blanco.
+        self._er_pil_image: Image.Image | None = None
+        self._er_png_path: Path | None = None
+        self._er_photo_ref: ImageTk.PhotoImage | None = None
+        self._er_canvas: tk.Canvas | None = None
+        self._er_zoom: float = 1.0
+        self._er_zoom_label: ctk.CTkLabel | None = None
 
         self._build()
 
@@ -154,28 +163,135 @@ class ResultScreen(ctk.CTkFrame):
             return
 
         try:
-            img = Image.open(png)
-            w, h = img.size
-            # Encajar en una zona razonable preservando aspect ratio.
-            max_w, max_h = 1000, 580
-            scale = min(max_w / w, max_h / h, 1.0)
-            target = (int(w * scale), int(h * scale))
-            ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=target)
-            self._er_image_ref = ctk_img
-            container = ctk.CTkScrollableFrame(parent)
-            container.pack(fill="both", expand=True)
-            ctk.CTkLabel(container, image=ctk_img, text="").pack(pady=8)
-            ctk.CTkLabel(
-                parent,
-                text=f"Generado en: {png.name}",
-                text_color="gray",
-            ).pack(side="bottom", pady=(2, 0))
+            self._er_pil_image = Image.open(png)
+            self._er_png_path = png
+            self._er_zoom = 1.0
+            self._build_er_viewer(parent)
         except Exception as e:
             ctk.CTkLabel(
                 parent,
                 text=f"No se pudo cargar la imagen ER:\n{e}",
                 text_color=("#b30000", "#ff7a7a"),
             ).pack(expand=True)
+
+    def _build_er_viewer(self, parent: ctk.CTkFrame) -> None:
+        # Toolbar de zoom.
+        toolbar = ctk.CTkFrame(parent, fg_color="transparent")
+        toolbar.pack(fill="x", pady=(0, 6))
+        ctk.CTkButton(
+            toolbar, text="−", width=34, command=lambda: self._zoom_er(0.8)
+        ).pack(side="left", padx=(0, 4))
+        ctk.CTkButton(
+            toolbar, text="+", width=34, command=lambda: self._zoom_er(1.25)
+        ).pack(side="left", padx=(0, 4))
+        ctk.CTkButton(
+            toolbar, text="100%", width=60,
+            command=lambda: self._set_er_zoom(1.0),
+        ).pack(side="left", padx=(0, 4))
+        ctk.CTkButton(
+            toolbar, text="Ajustar a ventana", width=150,
+            command=self._fit_er_to_window,
+        ).pack(side="left", padx=(0, 4))
+        self._er_zoom_label = ctk.CTkLabel(
+            toolbar, text="zoom: 100%", text_color="gray"
+        )
+        self._er_zoom_label.pack(side="left", padx=8)
+        ctk.CTkButton(
+            toolbar, text="Abrir en visor externo", width=180,
+            command=self._open_er_external,
+        ).pack(side="right")
+
+        # Canvas con scrollbars XY. Usamos tk.Canvas + ttk.Scrollbar porque
+        # CTkScrollableFrame solo permite una orientación a la vez.
+        canvas_frame = ctk.CTkFrame(parent)
+        canvas_frame.pack(fill="both", expand=True)
+        canvas_frame.grid_rowconfigure(0, weight=1)
+        canvas_frame.grid_columnconfigure(0, weight=1)
+
+        # Fondo blanco para que el PNG (que tiene fondo transparente) se
+        # lea bien tanto en tema claro como oscuro.
+        self._er_canvas = tk.Canvas(
+            canvas_frame, bg="white", highlightthickness=0
+        )
+        yscroll = ttk.Scrollbar(
+            canvas_frame, orient="vertical", command=self._er_canvas.yview
+        )
+        xscroll = ttk.Scrollbar(
+            canvas_frame, orient="horizontal", command=self._er_canvas.xview
+        )
+        self._er_canvas.configure(
+            xscrollcommand=xscroll.set, yscrollcommand=yscroll.set
+        )
+        self._er_canvas.grid(row=0, column=0, sticky="nsew")
+        yscroll.grid(row=0, column=1, sticky="ns")
+        xscroll.grid(row=1, column=0, sticky="ew")
+
+        # Ctrl+rueda → zoom; rueda sola → scroll vertical (Tk lo hace solo).
+        self._er_canvas.bind(
+            "<Control-MouseWheel>", self._on_er_mouse_zoom
+        )
+
+        self._redraw_er()
+
+    def _redraw_er(self) -> None:
+        if (
+            self._er_pil_image is None
+            or self._er_canvas is None
+        ):
+            return
+        w, h = self._er_pil_image.size
+        zw, zh = max(1, int(w * self._er_zoom)), max(1, int(h * self._er_zoom))
+        img = self._er_pil_image.resize((zw, zh), Image.LANCZOS)
+        self._er_photo_ref = ImageTk.PhotoImage(img)
+        self._er_canvas.delete("all")
+        self._er_canvas.create_image(
+            0, 0, anchor="nw", image=self._er_photo_ref
+        )
+        self._er_canvas.configure(scrollregion=(0, 0, zw, zh))
+        if self._er_zoom_label is not None:
+            self._er_zoom_label.configure(
+                text=f"zoom: {int(self._er_zoom * 100)}%"
+            )
+
+    def _zoom_er(self, factor: float) -> None:
+        # Limitar a un rango razonable para evitar resize gigantes.
+        self._set_er_zoom(self._er_zoom * factor)
+
+    def _set_er_zoom(self, zoom: float) -> None:
+        self._er_zoom = max(0.1, min(5.0, zoom))
+        self._redraw_er()
+
+    def _fit_er_to_window(self) -> None:
+        if self._er_pil_image is None or self._er_canvas is None:
+            return
+        cw = self._er_canvas.winfo_width()
+        ch = self._er_canvas.winfo_height()
+        if cw < 50 or ch < 50:
+            # Canvas aún no realizado: reintentar en el próximo tick.
+            self.after(100, self._fit_er_to_window)
+            return
+        iw, ih = self._er_pil_image.size
+        self._set_er_zoom(min(cw / iw, ch / ih))
+
+    def _on_er_mouse_zoom(self, event) -> None:
+        # En Windows, event.delta es múltiplo de 120; arriba positivo.
+        factor = 1.1 if event.delta > 0 else (1 / 1.1)
+        self._zoom_er(factor)
+
+    def _open_er_external(self) -> None:
+        if self._er_png_path is None or not self._er_png_path.exists():
+            return
+        path = str(self._er_png_path.resolve())
+        system = platform.system()
+        try:
+            if system == "Windows":
+                os.startfile(path)
+            elif system == "Darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except Exception:
+            pass
 
     def _build_graphviz_missing(self, parent: ctk.CTkFrame) -> None:
         msg = ctk.CTkFrame(parent, fg_color="transparent")
@@ -208,7 +324,10 @@ class ResultScreen(ctk.CTkFrame):
             return
         for w in self._er_parent.winfo_children():
             w.destroy()
-        self._er_image_ref = None
+        self._er_photo_ref = None
+        self._er_pil_image = None
+        self._er_canvas = None
+        self._er_zoom_label = None
         self._render_er_into(self._er_parent, self._er_ddl_path)
 
     def _build_actions(self) -> None:

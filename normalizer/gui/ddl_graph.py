@@ -150,7 +150,10 @@ def build_dot(ddl: str) -> str:
     for from_t, from_c, to_t, to_c in fks:
         if to_t not in tables:
             continue
-        g.edge(from_t, to_t, label=f" {from_c} → {to_c} ")
+        # `xlabel` en lugar de `label` porque con `splines: ortho` Graphviz
+        # ignora las etiquetas pegadas a la arista. xlabel las flota cerca
+        # sin perderlas.
+        g.edge(from_t, to_t, xlabel=f"{from_c} → {to_c}")
     return g.source
 
 
