@@ -282,7 +282,7 @@ El sistema debe permitir elegir el proveedor y el modelo de LLM en cada ejecuci�
 
 ##### RF-5.1 Abstracción de proveedor
 
-El sistema debe definir una interfaz uniforme de proveedor de LLM con dos operaciones: una para generación de texto a partir de un *prompt* (`generate`) y otra para diálogo con herramientas (`chat`). El *pipeline* y el agente deben usar exclusivamente esta interfaz, sin importar SDKs específicos de proveedor.
+El sistema debe definir una interfaz uniforme de proveedor de LLM con dos operaciones obligatorias del núcleo: una para generación de texto a partir de un *prompt* (`generate`) y otra para diálogo con herramientas (`chat`). El *pipeline* y el agente deben usar exclusivamente esta interfaz, sin importar SDKs específicos de proveedor. La interfaz expone adicionalmente una operación auxiliar (`list_models`) que la GUI consume para mantener el selector de modelos sincronizado con el catálogo actual del proveedor sin requerir intervención en el código.
 
 | Atributo | Valor |
 |---|---|
@@ -440,7 +440,7 @@ El argumento `<entrada>` puede ser una ruta (archivo o directorio) o una URL de 
 
 La GUI se articula en torno a una secuencia de tres pantallas guiadas, no a una lista de ventanas inconexas, lo que reduce la carga cognitiva para usuarios no técnicos:
 
-1. **Configuración.** Un único formulario que reúne todos los parámetros de la ejecución: selector de entrada (archivo, directorio o URL) con validación inmediata; combos de proveedor y modelos prerrellenados con los valores por defecto; directorio de salida; y un campo enmascarado para la *API key* del proveedor seleccionado que solo se muestra si la variable de entorno correspondiente no está ya definida. Las claves introducidas en la GUI se persisten automáticamente en `.env` (excluido del repositorio por `.gitignore`).
+1. **Configuración.** Un único formulario que reúne todos los parámetros de la ejecución: selector de entrada (archivo, directorio o URL) con validación inmediata; combo de proveedor y combos de modelos del *pipeline* y del agente poblados dinámicamente desde el catálogo del proveedor seleccionado (vía `LLMProvider.list_models()`), con el modelo por defecto pre-seleccionado y *fallback* a ese valor si no hay clave configurada; directorio de salida; y un campo enmascarado para la *API key* del proveedor seleccionado que solo se muestra si la variable de entorno correspondiente no está ya definida. Las claves introducidas en la GUI se persisten automáticamente en `.env` (excluido del repositorio por `.gitignore`).
 2. **Ejecución y progreso.** Barra de progreso por fase del *pipeline* (Análisis, Diseño, DDL, más Descubrimiento en el modo URL); en el modo URL, tabla viva con las iteraciones del agente y las herramientas invocadas en cada una; panel de *log* con sello `[mm:ss]`; y un botón Cancelar que detiene la ejecución conservando los artefactos producidos hasta ese momento (RF-7.3).
 3. **Resultado.** Pestañas independientes con los artefactos producidos: un diagrama ER auto-generado a partir del DDL final (parser por *regex* + Graphviz) como pestaña por defecto, seguido del diseño relacional (`03_design.md`) en Markdown renderizado, el DDL (`04_ddl.sql`) con resaltado de sintaxis SQL, el análisis (`02_analysis.md`) en Markdown y, en el modo URL, la traza de descubrimiento (`00_discovery/discovery.md`). Una barra de acciones inferior permite abrir el directorio de salida en el explorador del sistema, exportar todos los artefactos en un único fichero `.zip` o lanzar una nueva ejecución sin cerrar la aplicación.
 

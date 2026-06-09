@@ -1,0 +1,44 @@
+classDiagram
+    class LLMProvider {
+        <<Protocol>>
+        +generate(prompt) str
+        +chat(messages, tools) ChatResponse
+        +list_models(for_agent) list~str~
+    }
+    class GoogleProvider {
+        +generate(prompt) str
+        +chat(messages, tools) ChatResponse
+        +list_models(for_agent) list~str~
+    }
+    class GroqProvider {
+        +generate(prompt) str
+        +chat(messages, tools) ChatResponse
+        +list_models(for_agent) list~str~
+    }
+    class Message {
+        +role: Role
+        +content: str
+        +tool_calls: list~ToolCall~
+        +tool_call_id: str
+        +tool_name: str
+    }
+    class ToolSpec {
+        +name: str
+        +description: str
+        +parameters: dict
+    }
+    class ToolCall {
+        +id: str
+        +name: str
+        +arguments: dict
+    }
+    class ChatResponse {
+        +assistant_message: Message
+        +text: str
+        +tool_calls: list~ToolCall~
+    }
+    LLMProvider <|.. GoogleProvider
+    LLMProvider <|.. GroqProvider
+    ChatResponse --> Message
+    ChatResponse --> ToolCall
+    Message --> ToolCall

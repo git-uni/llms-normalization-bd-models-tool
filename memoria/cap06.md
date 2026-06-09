@@ -12,7 +12,7 @@ El repositorio del proyecto se organiza alrededor de un único paquete Python (`
 normalizer/
 ├── __init__.py
 ├── __main__.py             # python -m normalizer → cli.main
-├── _log.py                 # log(msg) por stderr con sello [mm:ss]
+├── _log.py                 # log(msg) por stderr con sello [mm:ss] + callbacks + reset_clock
 ├── cli.py                  # CLI Click: --provider, --model, --agent-model, --out-dir
 ├── gui/                    # Interfaz gráfica CustomTkinter (capa de presentación)
 │   ├── __init__.py
@@ -26,8 +26,8 @@ normalizer/
 │   │   ├── run.py          # RunScreen: progreso por fases + iteraciones del agente
 │   │   └── result.py       # ResultScreen: artefactos + diagrama ER + exportación
 │   └── components/         # Visores reutilizables sobre CTkTextbox
-│       ├── markdown_view.py  # Renderizado de Markdown con tags
-│       └── sql_view.py       # Resaltado de SQL con pygments
+│       ├── markdown_view.py  # Renderizado de Markdown con tags + tablas como widgets reales embebidos
+│       └── sql_view.py       # Resaltado de SQL con pygments (paleta tema-aware)
 ├── pipeline.py             # run_pipeline + _read_input
 ├── prompts/                # ANALYZE, DESIGN, DDL, DISCOVERY_SYSTEM
 │   ├── __init__.py

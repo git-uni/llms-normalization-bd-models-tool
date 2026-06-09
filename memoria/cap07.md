@@ -230,7 +230,7 @@ En la barra inferior, tres acciones cierran el ciclo: "Abrir directorio" lanza e
 ### 7.3.5 Recomendaciones de uso para usuarios no técnicos
 
 - Comenzar con el ejemplo `data/spruce/` para familiarizarse con el flujo antes de aplicar la herramienta a un proyecto propio.
-- En el modo URL, repositorios grandes pueden tardar varios minutos: la barra de progreso del agente y la traza turno-a-turno permiten seguir el avance.
+- En el modo URL, repositorios grandes pueden tardar varios minutos: la tabla de iteraciones del agente y la traza turno-a-turno permiten seguir el avance.
 - Aunque las credenciales se pueden introducir directamente en la pantalla 1, también se pueden colocar en el fichero `.env` antes de arrancar la herramienta; la aplicación las carga al inicio en ambos casos.
 - La privacidad del contenido enviado al proveedor de LLM es responsabilidad del usuario: no utilizar la herramienta con código fuente confidencial sin autorización del titular (RNF-4.4).
 
