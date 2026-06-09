@@ -59,6 +59,8 @@ Tres bloques verticales en un único formulario.
 
 **Bloque 1 — Entrada.** `CTkSegmentedButton` con tres opciones (Archivo / Directorio / URL). Según la opción, el botón "Examinar..." abre el selector nativo del SO (`filedialog.askopenfilename` o `askdirectory`) o se deshabilita (URL). La validación de existencia y formato URL es inmediata vía `trace_add("write", ...)`. Si la validación falla, el botón "Ejecutar" queda gris y un texto explica el motivo.
 
+Sobre el bloque hay un **enlace discreto "Abrir resultados existentes..."** que dispara `_open_existing()`: pide un directorio `out-*/`, valida que tenga al menos `04_ddl.sql`, detecta si tuvo descubrimiento (presencia de `00_discovery/`) y salta directamente a la pantalla de resultado sin re-ejecutar el pipeline. Útil para revisar diagramas ER o exportar a ZIP corridas antiguas sin gastar cuota.
+
 **Bloque 2 — LLM y salida.** `CTkOptionMenu` para el proveedor (poblado dinámicamente con `available_providers()`). Al cambiar el proveedor, la pantalla consulta `LLMProvider.list_models(for_agent=False/True)` y popula los dos `CTkComboBox` con el catálogo dinámico del proveedor (`client.models.list()` del SDK correspondiente, gratuito y rápido). El modelo por defecto queda pre-seleccionado. Si la API key no está configurada o el listado falla, los combos caen al *default* y un texto auxiliar gris invita al usuario a introducir la clave. El combo del agente filtra por una *whitelist* corta de modelos verificados con *function-calling* dentro del propio *provider* — ningún SDK expone hoy ese metadato. Solo se habilita si el modo de entrada es URL. El directorio de salida por defecto es `out-gui-YYYYMMDD-HHMMSS/` para que cada corrida tenga su propio *sandbox*.
 
 **Bloque 3 — Credenciales.** Detecta si `GOOGLE_API_KEY` o `GROQ_API_KEY` están en `os.environ`. Si sí, muestra `••••••••` deshabilitado + botón "Cambiar". Si no, campo editable con `show="*"`. Cuando el usuario introduce una clave y pulsa "Ejecutar", `persist_api_key()` (en `controller.py`) la inyecta en `os.environ` y la persiste en `.env` con `dotenv.set_key()`, que añade o reemplaza la línea correspondiente sin tocar el resto del fichero. Como `.env` está en `.gitignore`, no hay riesgo de *leak* al repositorio.
@@ -97,7 +99,7 @@ Tres componentes.
 
 ---
 
-## 5. Las cuatro mecánicas técnicas clave
+## 5. Las seis mecánicas técnicas clave
 
 ### Mecánica 1 — Captura de progreso vía *callback* (no redirección de *stderr*)
 
@@ -211,16 +213,16 @@ normalizer/gui/
 ├── __init__.py             — expone main() para conveniencia de importación
 ├── __main__.py             — punto de entrada: `python -m normalizer.gui`
 ├── app.py                  — NormalizerApp (CTk root) + navegación entre pantallas
-├── state.py                — dataclass GuiState con toda la sesión
-├── controller.py           — GuiController + ENV_KEY_BY_PROVIDER + persist_api_key
-├── ddl_graph.py            — parser DDL → DOT + render PNG con fallback
+├── state.py                — dataclass GuiState + PhaseInfo (timestamps por fase)
+├── controller.py           — GuiController + eventos (Log/Done/Cancelled/Error) + ENV_KEY_BY_PROVIDER + resolve_default_out_dir + persist_api_key
+├── ddl_graph.py            — parse_ddl + _pick_layout (dot vs sfdp) + _ensure_graphviz_in_path + render_to_png
 ├── windows/
-│   ├── config.py           — ConfigScreen (pantalla 1)
+│   ├── config.py           — ConfigScreen (pantalla 1) con _open_existing + tokens de paleta de inputs
 │   ├── run.py              — RunScreen (pantalla 2)
-│   └── result.py           — ResultScreen (pantalla 3)
+│   └── result.py           — ResultScreen (pantalla 3) con visor ER (zoom + scroll XY + debounce)
 └── components/
-    ├── markdown_view.py    — MarkdownView sobre CTkTextbox con tags Tkinter
-    └── sql_view.py         — SqlView sobre CTkTextbox con pygments
+    ├── markdown_view.py    — MarkdownView (tags Tkinter + tablas como widgets reales embebidos)
+    └── sql_view.py         — SqlView sobre pygments con paleta tema-aware
 ```
 
 **Sobre la separación `windows/` vs `components/`:** `windows/` contiene contenedores de pantalla completa con lógica de orquestación (lanzan el *controller*, gestionan navegación). `components/` contiene *widgets* reutilizables que solo saben renderizar un *input*.
@@ -259,7 +261,7 @@ normalizer/gui/
 2. **Directorio**: `data/spruce-difuso/` → 7-11 entidades según el modelo.
 3. **URL**: `https://github.com/dan-divy/spruce` → tabla del agente actualizándose en vivo en pantalla 2.
 4. **Cancelación**: durante el caso URL, pulsar Cancelar en mitad del descubrimiento. Verificar que `00_discovery/evidence/` está en disco y que el panel termina con "Cancelado".
-5. **Key inválida**: invalidar temporalmente `GOOGLE_API_KEY` en `.env`. Esperar `CTkMessagebox` rojo con la fase y el mensaje.
+5. **Key inválida**: invalidar temporalmente `GOOGLE_API_KEY` en `.env`. Esperar la transición a la pantalla de resultado con un banner en *error-container* que indica la fase de origen y el mensaje del proveedor.
 6. **Graphviz ausente**: sin instalarlo, la pestaña ER muestra las instrucciones. Para activarlo: `winget install Graphviz.Graphviz` (Windows), `brew install graphviz` (macOS), `apt install graphviz` (Linux).
 
 ---

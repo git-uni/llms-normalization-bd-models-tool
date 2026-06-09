@@ -93,7 +93,7 @@ El código del sistema se organiza en un único paquete Python, `normalizer`, di
 | `normalizer.prompts` | Almacén de los *prompts* del sistema en formato Markdown (un fichero por *prompt*) y rutinas de carga. |
 | `normalizer.discovery` | Agente de descubrimiento sobre repositorios remotos: bucle de `chat`, gestión del estado (`DiscoveryState`), definición y despacho de las herramientas (`ALL_TOOLS`, `dispatch`), clonado del repositorio y construcción del árbol filtrado. |
 | `normalizer.providers` | Abstracción del proveedor de LLM (`LLMProvider`) e implementaciones concretas (`GoogleProvider`, `GroqProvider`), junto con las estructuras de datos neutras (`Message`, `ToolSpec`, `ToolCall`, `ChatResponse`) y la *factory* de instanciación dinámica (`build_provider`). |
-| `normalizer._log` | Utilidad de registro estructurado: emite eventos por la salida de error estándar con un sello de tiempo relativo al arranque del proceso (`[mm:ss]`). |
+| `normalizer._log` | Utilidad de registro estructurado: emite eventos por la salida de error estándar con un sello de tiempo relativo al arranque del proceso (`[mm:ss]`). Expone además un registro de *callbacks* (`register_callback`, `unregister_callback`) que la GUI consume para reinyectar cada línea como evento de su cola, y `reset_clock` para reiniciar el sello al inicio de cada corrida de la GUI sin afectar a la CLI. |
 
 Esta organización refleja directamente los grandes bloques de la arquitectura: `cli` y `gui` ejercen de capa de presentación, `pipeline` y `discovery` constituyen el núcleo, y `providers`, `prompts` y `_log` son los servicios de soporte transversales.
 
