@@ -58,7 +58,8 @@ La instalación se realiza en cuatro pasos, desde una terminal abierta en el dir
 | `RuntimeError: Falta GOOGLE_API_KEY` | La variable de entorno no está cargada, el `.env` no se está leyendo o la clave no se ha pegado correctamente. | Verificar que el `.env` está en la raíz del proyecto, no contiene espacios alrededor del `=` y la clave es válida en el portal del proveedor. |
 | `git: command not found` | Git no está instalado o no está en el `PATH`. | Instalar Git desde [https://git-scm.com](https://git-scm.com) y reabrir la terminal. |
 | `pip install -e .` falla con error de versión | Versión de Python anterior a 3.11. | Instalar Python ≥ 3.11 desde [https://python.org](https://python.org). |
-| `customtkinter` no se instala (al arrancar la GUI) | Falta la dependencia opcional para la GUI. | Ejecutar `pip install customtkinter`. |
+| `customtkinter` no se instala (al arrancar la GUI) | Falta la dependencia opcional para la GUI. | Ejecutar `pip install -e .[gui]` (instala todo el extra de una vez). |
+| La pestaña Diagrama ER muestra "Graphviz no disponible" | El binario `dot` de Graphviz no está instalado o no está accesible en el `PATH` del proceso actual. | Instalar con `winget install Graphviz.Graphviz` (Windows), `brew install graphviz` (macOS) o `sudo apt install graphviz` (Linux) y pulsar "Reintentar" desde la propia pestaña; la aplicación detecta el binario en las rutas estándar sin necesidad de reiniciar. |
 
 ## 7.2 Manual de usuario CLI
 
@@ -202,6 +203,8 @@ La aplicación valida inmediatamente: el archivo o directorio debe existir, y la
 
 Un botón "Ejecutar" en la esquina inferior derecha pasa a la siguiente pantalla cuando todos los campos obligatorios están completos.
 
+En la cabecera de la pantalla, un enlace discreto "Abrir resultados existentes..." permite cargar un directorio `out-*/` de una corrida anterior y saltar directamente a la pantalla de resultado sin re-ejecutar el *pipeline*. Útil para revisar el diagrama ER o exportar a ZIP corridas antiguas sin volver a consumir cuota del proveedor.
+
 ### 7.3.3 Pantalla 2 — Ejecución y progreso
 
 La segunda pantalla muestra el avance del proceso en tiempo real organizado en cuatro bloques verticales:
@@ -219,8 +222,8 @@ Al terminar (con éxito, cancelación o error), la pantalla transita automática
 
 La pantalla final muestra un banner con el estado de la ejecución (éxito, cancelación o error con la fase de origen y el mensaje) y un panel con pestañas que presentan los artefactos producidos:
 
-- **Diagrama ER** (pestaña por defecto): diagrama entidad-relación auto-generado a partir del DDL final. El parser interno extrae las tablas (con sus columnas y claves primarias marcadas) y las claves foráneas, construye un grafo Graphviz y lo renderiza como PNG. Si el binario Graphviz no está disponible en el sistema, la pestaña muestra instrucciones de instalación específicas para cada sistema operativo, sin afectar al resto de pestañas.
-- **Diseño** (`03_design.md`): Markdown renderizado con encabezados, listas, tablas y resaltado en línea (bold, código, énfasis).
+- **Diagrama ER** (pestaña por defecto): diagrama entidad-relación auto-generado a partir del DDL final. El parser interno extrae las tablas (con sus columnas y claves primarias marcadas) y las claves foráneas, construye un grafo Graphviz y lo renderiza como PNG. El *layout* se selecciona automáticamente según la topología (jerárquico para grafos modestos; *force-directed* cuando hay un nodo concentrador). El visor permite *zoom* con los controles `−`, `+`, `100 %`, "Ajustar a ventana" o `Ctrl + rueda`, *scroll* horizontal y vertical, y un botón "Abrir en visor externo" que delega el PNG al visor del sistema operativo. Si el binario Graphviz no está disponible en el sistema, la pestaña muestra instrucciones de instalación específicas para cada sistema operativo y un botón "Reintentar" que vuelve a probar tras instalarlo, sin necesidad de cerrar la aplicación; el resto de pestañas funciona con normalidad.
+- **Diseño** (`03_design.md`): Markdown renderizado con encabezados, listas, tablas (embebidas como *widgets* reales con *scroll* horizontal independiente cuando exceden el ancho del visor) y resaltado en línea (bold, código, énfasis).
 - **DDL** (`04_ddl.sql`): texto con resaltado de sintaxis SQL (palabras clave, literales, comentarios, operadores) gracias a `pygments`.
 - **Análisis** (`02_analysis.md`): Markdown renderizado.
 - **Descubrimiento** (`00_discovery/discovery.md`, solo en modo URL): Markdown renderizado.

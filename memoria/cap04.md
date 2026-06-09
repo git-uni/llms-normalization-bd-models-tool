@@ -358,7 +358,7 @@ El sistema debe ofrecer un punto de entrada CLI que acepte, como mínimo, los si
 
 ##### RF-6.2 Interfaz gráfica de usuario (GUI)
 
-El sistema debe ofrecer una GUI que permita, sin uso de la línea de comandos: seleccionar la fuente de entrada (archivo, directorio o URL); configurar el proveedor, el modelo del *pipeline* y el modelo del agente; lanzar la ejecución y seguir su progreso en tiempo real; visualizar los artefactos intermedios; y exportar el resultado final a un directorio elegido por el usuario.
+El sistema debe ofrecer una GUI que permita, sin uso de la línea de comandos: seleccionar la fuente de entrada (archivo, directorio o URL); configurar el proveedor, el modelo del *pipeline* y el modelo del agente; lanzar la ejecución y seguir su progreso en tiempo real; visualizar los artefactos intermedios; exportar los artefactos como un único fichero `.zip` o abrir el directorio de salida en el explorador del sistema; y recuperar corridas anteriores sin re-ejecutar el *pipeline* abriendo un directorio `out-*/` previo.
 
 | Atributo | Valor |
 |---|---|
@@ -398,7 +398,7 @@ Los errores devueltos por el proveedor de LLM (autenticación, cuota agotada, mo
 
 ##### RF-7.2 Observabilidad por fases
 
-El sistema debe emitir, por la salida de error estándar, eventos breves con sello de tiempo relativo al arranque del proceso (`[mm:ss]`) en los puntos clave de la ejecución: inicio del CLI, inicio y fin de cada fase del *pipeline*, clonado del repositorio, cada iteración del agente con un resumen compacto de las invocaciones, y los reintentos del proveedor.
+El sistema debe emitir, por la salida de error estándar, eventos breves con sello de tiempo relativo al arranque del proceso (`[mm:ss]`) en los puntos clave de la ejecución: inicio del CLI, inicio y fin de cada fase del *pipeline*, clonado del repositorio, cada iteración del agente con un resumen compacto de las invocaciones, y los reintentos del proveedor. En la GUI, el reloj relativo se reinicia al inicio de cada corrida (las corridas suceden en el mismo proceso pero el usuario espera ver `[00:00]` en la primera línea de cada una), mientras que en la CLI coincide con el arranque del proceso.
 
 | Atributo | Valor |
 |---|---|
