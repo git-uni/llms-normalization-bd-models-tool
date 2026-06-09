@@ -8,11 +8,13 @@ Documento vivo para defender la interfaz gráfica (RU-7.2) ante el tribunal del 
 
 CustomTkinter es un *toolkit* moderno construido sobre Tkinter que reemplaza los widgets nativos por widgets propios con esquinas redondeadas, *hover effects*, soporte de tema oscuro/claro automático según el sistema operativo y tipografías limpias (Segoe UI en Windows, Helvetica en macOS). Visualmente está más cerca de Discord o de los paneles de configuración modernos que del Tkinter clásico.
 
-Las decisiones de estilo concretas:
-- Fondo gris oscuro o gris muy claro según el tema del SO.
-- Botones azules con esquinas redondeadas; rojos para acciones destructivas (Cancelar).
+Las decisiones de estilo concretas siguen una **paleta surface tonal inspirada en Material Design 3** con seed azul (ver §5 Mecánica 6):
+
+- Familia surface azul tenido en light, surface oscuro neutro en dark.
+- Cards `surface-container` con esquinas redondeadas de 12 px, jerarquía tonal por elevación (header más alto, bloques medios, visores más bajos).
+- Botones azules (rol *primary*) para acciones; rojos M3 (`#ba1a1a / #93000a`, rol *error*) para Cancelar.
 - Transiciones suaves al pulsar (*hover state* automático).
-- Banner de estado en la pantalla de resultado con código de colores: verde (OK), amarillo (cancelado), rojo (error).
+- Banner de estado en la pantalla de resultado con paleta M3: **primary-container** (azul, éxito), **tertiary-container** (teal, cancelado), **error-container** (rosado, error). Sin amarillos sueltos.
 
 Esta descripción está alineada con la justificación de la elección en cap03 §3.3.1 de la memoria ("aspecto moderno y consistente entre plataformas").
 
@@ -63,26 +65,28 @@ Tres bloques verticales en un único formulario.
 
 ### Pantalla 2 — Ejecución (`gui/windows/run.py`)
 
-Tres áreas verticales.
+Cuatro bloques verticales con el **bloque del pipeline como protagonista** (la primera versión los daba apilados sin jerarquía; ahora el pipeline ocupa el espacio dominante).
 
-**Chips de fase.** Una fila horizontal de etiquetas redondeadas. En modo URL: `Descubrimiento | Análisis | Diseño | DDL`. En modo archivo o directorio: `Análisis | Diseño | DDL`. Cada *chip* cambia de color: gris (pendiente) → azul (activa) → verde (completada). Sustituye a una barra de progreso tradicional porque las fases son discretas y de duración impredecible (una llamada al LLM puede tardar 26s o 3min).
+**Header (`surface-container-high`).** Card con título "Ejecución" + chip con el modo de entrada (archivo / directorio / URL) + botón Cancelar a la derecha. Debajo, una fila de metadatos con iconos unicode (`◆ proveedor`, `▸ modelo pipeline`, `▸ modelo agente` si URL, `▸ out_dir/`).
 
-**Tabla de iteraciones del agente** (solo modo URL). `CTkScrollableFrame` con dos columnas (`Iter | Tool calls`). Se rellena en vivo cada vez que llega un evento `[iter NN] -> ...` por el *callback*.
+**Bloque "Progreso del pipeline" (`surface-container`).** Una fila por fase (no más chips horizontales): cada fila tiene icono de estado (`○` pendiente, `●` activa, `✓` completada, `✗` error, `⏸` cancelling), nombre de la fase y duración en vivo (`en curso · 0:42`, `completada · 2:14`). La fase activa tiene fondo destacado (rol *primary-container*) y su contador refresca cada segundo. Footer del bloque con `Fase X de Y · MM:SS transcurridos`. En modo URL hay 4 fases (Descubrimiento, Análisis, Diseño, DDL); en archivo/directorio, 3 (sin Descubrimiento).
 
-**Panel de *log*.** `CTkTextbox` con auto-*scroll* al final. Recibe todas las líneas `[mm:ss]` — el mismo flujo que se ve por *stderr* en la CLI.
+**Bloque "Iteraciones del agente"** (solo modo URL). `CTkScrollableFrame` con dos columnas (`Iter | Tool calls`). Se rellena en vivo cada vez que llega un evento `[iter NN] -> ...` por el *callback*.
 
-**Botón Cancelar.** Llama a `controller.cancel()`, que señaliza el `threading.Event` que el núcleo comprueba entre fases e iteraciones.
+**Bloque "Log" (`surface-container`, altura fija).** `CTkTextbox` compacto con `wrap="none"` y auto-*scroll* al final. Recibe todas las líneas `[mm:ss]` — el mismo flujo que se ve por *stderr* en la CLI. Pequeño porque ya no es protagonista: las fases del pipeline llevan ese papel.
+
+**Botón Cancelar.** Llama a `controller.cancel_and_abandon()` y salta inmediatamente a la pantalla de resultado (ver §5 Mecánica 3) — no espera a que termine la llamada al LLM en curso.
 
 ### Pantalla 3 — Resultado (`gui/windows/result.py`)
 
 Tres componentes.
 
-**Banner superior.** Cambia de color según el estado: verde (`finished_ok`, "DDL generado en …"), amarillo (`cancelled`, "Cancelada por el usuario. Los artefactos parciales están disponibles abajo"), rojo (`error_message`, "Error durante {fase}: {mensaje}").
+**Banner superior.** Cambia de color según el estado siguiendo roles M3 de container: **primary-container** (`#d6e4f3 / #1f3a52`, éxito, "DDL generado en …"), **tertiary-container** (`#d2e6ee / #244c5f`, cancelado, con texto explicativo de que la última llamada al LLM puede seguir terminando en background), **error-container** (`#ffdad6 / #5a1a18`, error con la fase y el mensaje).
 
 **`CTkTabview` con artefactos.** Hasta cinco pestañas:
 1. **Diagrama ER** (pestaña por defecto): generación bajo demanda (detalle en §5).
-2. **Diseño**: `03_design.md` renderizado por `MarkdownView`.
-3. **DDL**: `04_ddl.sql` con resaltado de sintaxis SQL vía `pygments`.
+2. **Diseño**: `03_design.md` renderizado por `MarkdownView`. **Tablas embebidas como widgets reales** (no más texto monospace que se rompía con `wrap="word"`): cada tabla markdown es un `tk.Frame` con grid de `tk.Label`, header en bold, cuerpo con filas alternas, bordes finos. Si la tabla excede el ancho del visor, aparece scrollbar horizontal **solo para esa tabla**, no para el documento entero.
+3. **DDL**: `04_ddl.sql` con resaltado de sintaxis SQL vía `pygments`. Paleta tema-aware: keywords y números en *primary*, strings en *tertiary*, builtins en *secondary*, comentarios en *on-surface-variant*.
 4. **Análisis**: `02_analysis.md` renderizado por `MarkdownView`.
 5. **Descubrimiento**: `00_discovery/discovery.md` (solo en modo URL).
 
@@ -118,23 +122,28 @@ Tres componentes.
 
 `_poll` detecta cuándo termina el hilo (`thread.is_alive() == False`), drena lo que queda y transiciona a la pantalla 3 con `app.after(600, self._finish_transition)` — los 600 ms permiten al usuario ver el último estado antes del cambio de pantalla.
 
-### Mecánica 3 — Cancelación cooperativa
+### Mecánica 3 — Cancelación cooperativa **en el núcleo** + UI responsiva con *abandonment*
 
-**Problema.** Si el usuario pulsa "Cancelar" durante una llamada a `provider.generate()`, no se puede matar la conexión HTTP a mitad — el SDK no lo soporta. Sí se puede abortar entre fases.
+**Problema.** Si el usuario pulsa "Cancelar" durante una llamada a `provider.generate()`, no se puede matar la conexión HTTP a mitad — los SDKs de Google y Groq son síncronos y bloqueantes. Sí se puede abortar **entre** llamadas. Pero hacer que la UI espere ~1 min a que termine la llamada actual da la sensación de cuelgue, aunque técnicamente esté esperando.
 
-**Implementación.**
-1. `GuiController` tiene `self._cancel = threading.Event()`.
-2. Lo pasa como argumento opcional `cancel_event` a `run_pipeline()` y `discover_from_url()`.
-3. El núcleo lo comprueba en **tres puntos**:
+**Implementación en dos planos.**
+
+**Plano A — Cancelación cooperativa del núcleo (RF-7.3):**
+1. `GuiController` tiene `self._cancel = threading.Event()` que pasa como `cancel_event` a `run_pipeline()` y `discover_from_url()`.
+2. El núcleo lo comprueba en **tres puntos**:
    - Entre fases del pipeline (`pipeline.py`: tras `01_input.txt`, tras `02_analysis.md`, tras `03_design.md`).
    - Al inicio de cada iteración del bucle del agente (`agent.py`).
-   - **Entre llamadas a *tools* dentro de un mismo turno del agente**: cuando el agente batchea 4-5 `read_file`/`select_evidence` en una sola respuesta, sin este chequeo la cancelación esperaría a despachar todas. Con él, se atiende entre tool y tool — usualmente <1 s.
-4. Si el evento está señalizado, se levanta `PipelineCancelled` (definida en `pipeline.py`).
-5. `GuiController` captura esa excepción y emite un `CancelledEvent` en la cola.
+   - **Entre llamadas a *tools* dentro de un mismo turno del agente**: cuando el agente batchea 4-5 `read_file`/`select_evidence` en una sola respuesta, sin este chequeo la cancelación esperaría a despachar todas.
+3. Si el evento está señalizado, se levanta `PipelineCancelled` (definida en `pipeline.py`).
 
-**Feedback visual durante la espera.** La llamada al LLM en curso no se aborta — puede tardar hasta ~1 min. Durante ese intervalo, la pantalla 2 marca el estado de transición: el botón pasa a "Cancelando..." deshabilitado, la fase activa cambia su icono a `⏸` con color ámbar y un texto auxiliar explica que se está esperando a que termine la operación bloqueante. Sin esto el usuario interpretaba que la GUI se había colgado.
+**Plano B — UI responsiva con `cancel_and_abandon()`:**
+1. Al pulsar Cancelar, `RunScreen._on_cancel()` llama a `controller.cancel_and_abandon()`.
+2. Ese método señaliza el `cancel_event`, marca el controlador como `_abandoned = True` y **desregistra el *callback* del log inmediatamente**. Cualquier evento posterior del hilo trabajador (`LogLineEvent`, `DoneEvent`, etc.) se descarta en `_on_log_line` y `_run` mediante chequeos `if self._abandoned: return`.
+3. La pantalla **transita a `ResultScreen` sin esperar al hilo**. El usuario ya está revisando los artefactos parciales en disco mientras el hilo huérfano —`daemon=True`— termina la llamada al LLM en background y muere solo.
 
-**Garantía.** Los artefactos ya escritos a disco se preservan. Si se cancela durante el diseño, en disco quedan `01_input.txt` y `02_analysis.md` listos para inspección. Esto materializa el RF-7.3.
+**Garantía.** Los artefactos ya escritos a disco se preservan (la cancelación cooperativa garantiza que `_read_input`, `02_analysis.md` o `03_design.md` quedan completos si ya estaban). El hilo huérfano no contamina futuras corridas (los eventos quedan descartados; la siguiente `GuiController.start()` resetea `_abandoned = False` y registra un *callback* nuevo).
+
+**Por qué no `ctypes.PyThreadState_SetAsyncExc`** (la única forma de "matar" un hilo Python real). Es frágil, mal documentada y no aborta la llamada HTTP, que sigue en una capa C nativa. La política de *abandonment* es más limpia y suficiente para el caso de demo: el coste del hilo huérfano es despreciable (1 thread daemon que muere en ≤1 min).
 
 ### Mecánica 4 — Diagrama ER auto-generado
 
@@ -148,7 +157,50 @@ Tres componentes.
 
 **Visor.** La pantalla 3 muestra el PNG dentro de un `tk.Canvas` con *scrollbars* horizontal y vertical (Tkinter nativo, porque `CTkScrollableFrame` solo soporta una orientación) y una barra superior con controles de zoom (−, +, 100%, Ajustar a ventana). `Ctrl + rueda` también hace zoom. Un botón adicional "Abrir en visor externo" delega el PNG al visor del SO para usos que requieran zoom/pan más rápidos.
 
-**Estilo del diagrama.** Cada tabla es un nodo con cabecera azul claro (`#e8f0fe`) y filas con columnas alineadas a la izquierda. Las PKs llevan el prefijo `[PK]`. Las aristas son las FKs con `xlabel="col_origen → col_destino"` (`xlabel` y no `label` porque algunas combinaciones de *engine* + *splines* descartan las etiquetas pegadas a la arista; `xlabel` las flota cerca sin perderlas).
+**Rendimiento del zoom.** Sobre el diagrama de Habitica (2896×2578 px) el `LANCZOS` original tardaba 2-3 s por *resize*, lo que hacía cada click `+/−` lento. Dos optimizaciones:
+- **`Image.BILINEAR` en lugar de `LANCZOS`**: ~10× más rápido y la pérdida de calidad es imperceptible para un grafo con líneas y texto.
+- **Debounce de 80 ms con `after_cancel`**: clicks rápidos consecutivos descartan los *redraws* intermedios y solo el último ejecuta. La etiqueta de zoom sí se actualiza inmediatamente para feedback, aunque el render esté *debounced*.
+
+**Estilo del diagrama.** Cada tabla es un nodo con cabecera en *primary-container* claro y filas con columnas alineadas a la izquierda. Las PKs llevan el prefijo `[PK]`. Las aristas son las FKs con `xlabel="col_origen → col_destino"` (`xlabel` y no `label` porque algunas combinaciones de *engine* + *splines* descartan las etiquetas pegadas a la arista; `xlabel` las flota cerca sin perderlas).
+
+### Mecánica 5 — Catálogo dinámico de modelos
+
+**Problema.** En la primera iteración los modelos disponibles por proveedor estaban hardcoded en `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS`. El catálogo de los proveedores cambia mensualmente; cerrarlo dentro del provider no tiene sentido cuando los SDKs ya exponen `client.models.list()`.
+
+**Implementación.**
+1. El protocolo `LLMProvider` define `list_models(for_agent: bool = False) -> list[str]`.
+2. `GoogleProvider` y `GroqProvider` consultan `client.models.list()` (gratis, ~100 ms). Filtran por capacidades del SDK (`generateContent` en Google, `active=True` en Groq).
+3. Para `for_agent=True`, intersección con una **whitelist mínima por proveedor** de modelos verificados con *function-calling* (Gemini family en Google; `qwen/qwen3-32b` y `llama-4-scout` en Groq). Ningún SDK expone hoy el metadato "soporta tools".
+4. Caché por instancia: las llamadas repetidas no vuelven a la red.
+5. La pantalla de configuración llama `_fetch_models(provider)` al cambiar de proveedor. Si la API key no está o el listado falla, los combos caen al *default* y un texto auxiliar gris invita al usuario a introducir la clave para ver el catálogo completo.
+
+**Defaults preservados.** `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS` siguen siendo necesarios para la CLI (cuando no se pasa `--model`/`--agent-model`) y para pre-seleccionar el modelo en la GUI tras listar.
+
+### Mecánica 6 — Paleta surface tonal M3
+
+**Problema.** CustomTkinter trae el *theme* "blue" por defecto, que mezcla grises neutrales en los contenedores con beige cálido en los inputs (`CTkEntry`, `CTkComboBox`). Convivían con las cards azules que añadí, dando sensación de "fondos sin armonía" y tonos amarillentos.
+
+**Solución.** Aplicar una **paleta surface tonal derivada del seed primary azul (`#1f6aa5`)** a todos los contenedores y inputs, siguiendo los roles M3 (consultados con la skill `material-3` instalada en `~/.claude/skills/material-3`). El sistema:
+
+| Rol M3 | Light | Dark | Uso |
+|---|---|---|---|
+| `surface` | `#eaf0f8` | `#101418` | Root, canvas ER |
+| `surface-container-low` | `#dfe7f2` | `#181c20` | Visores `MarkdownView`/`SqlView`, inputs, code blocks |
+| `surface-container` | `#dfe7f2` | `#1c2024` | Cards de bloque (pipeline, agente, log, bloques pantalla 1) |
+| `surface-container-high` | `#cedaee` | `#26292d` | Header pantalla 2, header de tablas markdown, tag `code` inline |
+| `surface-container-highest` | `#bdcee5` | `#30343a` | Chip de modo |
+| `outline-variant` | `#a8bcd9` | `#3a4456` | Bordes de inputs, separadores |
+
+Los **estados** siguen roles container del sistema: *primary-container* (activo, éxito), *tertiary-container* (cancelado), *error-container* (error). **Sin amarillos sueltos** — antes había varios (`#a06800` strings SQL, `#7c3aed` builtin, `#fff4d6` warning cancelado, default beige de CTkEntry). Reemplazos:
+
+- Strings SQL → *tertiary* (`#3c6477 / #a4c8d6`).
+- Builtin SQL → *secondary* (`#516a86 / #b8c5d5`).
+- Botón Cancelar → rol *error* M3 (`#ba1a1a / #93000a` con `on-error` blanco).
+- Banner cancelado → *tertiary-container*.
+
+**Detalle técnico.** El `fg_color` del root `CTk` se pasa en `super().__init__(fg_color=…)`. `self.configure(fg_color=...)` post-init no actualiza siempre el background de la ventana raíz — quirk conocido de CTk.
+
+**Honestidad para defensa.** La skill `material-3` está orientada a Jetpack Compose y web. Aporta **principios y tokens** (escala 4/8/12/16/20/24, jerarquía surface, pairs `on-X`), no componentes M3 en CustomTkinter. El techo del *toolkit* sigue siendo CTk: no hay sombras reales, animaciones complejas ni `MaterialTheme`. La paleta unificada da coherencia visual; saltar a Material 3 nativo requeriría cambiar de framework (Flet o equivalente).
 
 ---
 
@@ -179,11 +231,14 @@ normalizer/gui/
 
 ## 7. Cambios mínimos al núcleo
 
-| Archivo | Líneas añadidas | Por qué |
+| Archivo | Qué añade | Por qué |
 |---|---|---|
-| `normalizer/_log.py` | ~15 | `register_callback` / `unregister_callback`. CLI sigue idéntica. |
-| `normalizer/pipeline.py` | ~12 | `PipelineCancelled` + `_check_cancel()` + parámetro opcional `cancel_event` en `run_pipeline`. |
-| `normalizer/discovery/agent.py` | ~10 | Importa `PipelineCancelled`, añade `cancel_event` opcional, comprueba antes de cada iteración del bucle. |
+| `normalizer/_log.py` | `register_callback` / `unregister_callback` + `reset_clock`. | La GUI consume el flujo de log; `reset_clock()` reinicia el `_START` para que cada corrida arranque en `[00:00]` (sin él, la GUI arrastraba el tiempo desde el import del módulo). CLI no llama `reset_clock`, su comportamiento es idéntico. |
+| `normalizer/pipeline.py` | `PipelineCancelled` + `_check_cancel()` + parámetro opcional `cancel_event` en `run_pipeline`. | Cancelación cooperativa entre fases. |
+| `normalizer/discovery/agent.py` | Importa `PipelineCancelled`, añade `cancel_event` opcional, comprueba al inicio de la iteración y **entre tools del mismo turno**. | Granularidad fina del *cancel* en el bucle del agente. |
+| `normalizer/discovery/tools.py` | `_do_read_file` evita relectura de archivos ya seleccionados con `select_evidence`. | Ahorra cuota: releer un archivo ya marcado como evidencia duplica tokens en el historial. |
+| `normalizer/providers/base.py` | `list_models(for_agent: bool = False) -> list[str]` en el `Protocol`. | API uniforme para que la GUI liste catálogos dinámicamente. |
+| `normalizer/providers/google.py` y `groq.py` | Implementación de `list_models()` con caché por instancia + whitelist mínima de modelos *agent-capable*. | Catálogo dinámico desde el SDK + filtro de capacidad cuando el SDK no lo expone. |
 
 **El CLI no se tocó.** `cli.py` está exactamente como antes. Añadir la GUI no rompe el camino CLI existente — punto que probablemente el tribunal comprobará.
 
@@ -224,3 +279,9 @@ normalizer/gui/
 **"¿Cómo se reconcilia que la GUI dependa de `customtkinter` pero el CLI no?"** Mediante el extra opcional `[gui]` en `pyproject.toml`. `pip install -e .` instala solo lo necesario para el CLI; `pip install -e .[gui]` añade `customtkinter`, `pygments`, `graphviz` (lib Python) y `Pillow`. La capa de núcleo (`pipeline.py`, `discovery/`, `providers/`) no importa ninguno de los paquetes de la GUI.
 
 **"¿Qué garantiza la paridad funcional CLI / GUI (RF-6.3)?"** Que la GUI no reimplementa lógica: importa `run_pipeline`, `discover_from_url` y los catálogos de `providers` exactamente igual que la CLI. Las pruebas de sistema descritas en cap05 §5.3.3 ejercitan la GUI a través de `GuiController` sin interfaz visual, validando que el flujo es el mismo.
+
+**"Dijiste que la cancelación es cooperativa pero ahora la GUI se salta a la pantalla de resultado inmediatamente, ¿no es contradictorio?"** No: la cancelación del **núcleo** sigue siendo cooperativa (RF-7.3) y necesaria para que los artefactos parciales se preserven correctamente en disco. La GUI usa `cancel_and_abandon()` para **desacoplar la UI del hilo trabajador** — el hilo sigue cancelándose ordenadamente, pero la UI no espera a que termine la llamada HTTP en curso. El hilo huérfano es `daemon=True` y muere solo. El usuario ve el resultado inmediatamente, los artefactos están bien y el coste técnico es despreciable.
+
+**"¿Por qué aplicar Material Design 3 si CustomTkinter no es Material?"** La skill `material-3` aporta **tokens y principios** (escala tipográfica, sistema surface tonal, *pairs* `on-X`/`X`, jerarquía de elevación por color en lugar de sombras), no componentes M3. Aplicarlos a CTk da coherencia visual (paleta unificada, espaciado en escala 4/8/12/16/20/24) sin pretender que CTk renderice como Flutter Material. El techo del *toolkit* sigue siendo CTk; la decisión de no cambiar de framework está documentada en cap03 §3.3.1.
+
+**"¿Cómo está poblado el combo de modelos? ¿Y si el catálogo del proveedor cambia?"** Dinámicamente: la pantalla 1 invoca `LLMProvider.list_models()` al cambiar de proveedor, que internamente llama a `client.models.list()` del SDK (gratis, ~100 ms). Los catálogos `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS` se mantienen únicamente como defaults pre-seleccionados, no como listas cerradas. La whitelist `_AGENT_CAPABLE` por *provider* filtra los modelos con *function-calling* verificado para el combo del agente — esta sí es manual porque ningún SDK expone hoy ese metadato.

@@ -92,12 +92,14 @@ class GuiController:
         self._cancel = threading.Event()
         self._thread: threading.Thread | None = None
         self._last_phase = ""
+        self._abandoned = False
 
     def start(self, state: GuiState) -> None:
         """Lanza el núcleo en un hilo trabajador. No bloquea."""
         if self.is_alive():
             return
         self._cancel.clear()
+        self._abandoned = False
         self._last_phase = ""
         # Reinicia el reloj relativo del log: la primera línea de la corrida
         # debe marcar [00:00], no acumular el tiempo de configuración.
@@ -111,6 +113,22 @@ class GuiController:
     def cancel(self) -> None:
         """Señaliza la cancelación. El núcleo aborta entre fases/iteraciones."""
         self._cancel.set()
+
+    def cancel_and_abandon(self) -> None:
+        """Pulsa cancel y desvincula este controlador del hilo trabajador.
+
+        La llamada HTTP al LLM en curso no se puede abortar (los SDKs son
+        síncronos y bloqueantes), pero la UI no tiene por qué esperarla:
+        marcamos el controlador como abandonado para que el hilo —cuando
+        termine— no contamine la pantalla siguiente ni futuras corridas,
+        y desregistramos el *callback* del log inmediatamente. El hilo
+        sigue vivo como `daemon` y muere con el proceso o cuando la
+        llamada HTTP termine; los artefactos ya escritos a disco se
+        conservan.
+        """
+        self._cancel.set()
+        self._abandoned = True
+        unregister_callback(self._on_log_line)
 
     def is_alive(self) -> bool:
         """`True` mientras el hilo trabajador está vivo."""
@@ -129,6 +147,8 @@ class GuiController:
     def _on_log_line(self, line: str) -> None:
         # Se llama desde el hilo trabajador (el de _log.log). Solo encolamos;
         # ningún widget se toca aquí (Tkinter no es thread-safe).
+        if self._abandoned:
+            return
         self._update_phase_from_line(line)
         self._queue.put(LogLineEvent(line))
 
@@ -176,19 +196,22 @@ class GuiController:
                 out_dir=out_dir,
                 cancel_event=self._cancel,
             )
-            self._queue.put(DoneEvent(out_dir=out_dir))
+            if not self._abandoned:
+                self._queue.put(DoneEvent(out_dir=out_dir))
         except PipelineCancelled:
-            self._queue.put(CancelledEvent(out_dir=out_dir))
+            if not self._abandoned:
+                self._queue.put(CancelledEvent(out_dir=out_dir))
         except Exception as e:
             # Traceback completo a stderr para depuración (queda en el log
             # del usuario); a la UI solo el resumen + la fase.
             traceback.print_exc()
-            self._queue.put(
-                ErrorEvent(
-                    phase=self._last_phase or "Inicialización",
-                    message=str(e) or e.__class__.__name__,
-                    out_dir=out_dir,
+            if not self._abandoned:
+                self._queue.put(
+                    ErrorEvent(
+                        phase=self._last_phase or "Inicialización",
+                        message=str(e) or e.__class__.__name__,
+                        out_dir=out_dir,
+                    )
                 )
-            )
         finally:
             unregister_callback(self._on_log_line)
