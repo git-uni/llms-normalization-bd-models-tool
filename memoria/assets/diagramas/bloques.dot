@@ -1,0 +1,37 @@
+digraph bloques {
+    rankdir=LR; compound=true; bgcolor="white"; pad=0.5;
+    nodesep=0.45; ranksep=1.6; fontname="Helvetica";
+    labelloc="t"; fontsize=20;
+    label="Diagrama de bloques general del sistema";
+    node [fontname="Helvetica", fontsize=12, shape=box, style="filled,rounded", color="#333333"];
+    edge [fontname="Helvetica", fontsize=11, color="#444444"];
+
+    subgraph cluster_ui {
+        label="Interfaces"; style="filled,rounded"; fillcolor="#eef2f7"; color="#9fb3c8";
+        CLI [label="CLI", fillcolor="#dbe7f3"];
+        GUI [label="GUI", fillcolor="#dbe7f3"];
+    }
+    subgraph cluster_core {
+        label="Núcleo"; style="filled,rounded"; fillcolor="#eaf0fb"; color="#8fa9d6";
+        PIPE [label="Pipeline\n(4 fases)", fillcolor="#cdddf6"];
+        DISC [label="Agente de\ndescubrimiento", fillcolor="#cdddf6"];
+    }
+    subgraph cluster_sup {
+        label="Soporte"; style="filled,rounded"; fillcolor="#f3eef9"; color="#b69fd0";
+        PROV   [label="LLMProvider", fillcolor="#f7d7dc"];
+        PROMPT [label="Prompts (.md)", fillcolor="#e6dcf3"];
+        PERS   [label="Persistencia\n(out-dir/ · caché)", shape=folder, fillcolor="#ffe9b3"];
+        LOGB   [label="Observabilidad\n(_log)", fillcolor="#dfe7ef"];
+    }
+    subgraph cluster_ext {
+        label="Sistemas externos"; style="filled,rounded"; fillcolor="#eef0f2"; color="#aaaaaa";
+        LLM [label="API de LLM", shape=cylinder, fillcolor="#e9ecef", color="#888888"];
+        GIT [label="Repositorio Git", shape=cylinder, fillcolor="#e9ecef", color="#888888"];
+    }
+
+    // Solo las relaciones principales, a nivel de bloque.
+    CLI  -> PIPE [ltail=cluster_ui,   lhead=cluster_core, label="invoca"];
+    PIPE -> PROV [ltail=cluster_core, lhead=cluster_sup,  label="usa los servicios"];
+    PROV -> LLM  [label="HTTPS"];
+    DISC -> GIT  [label="git clone"];
+}

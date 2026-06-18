@@ -1,0 +1,33 @@
+flowchart LR
+    subgraph Interfaces
+        CLI[CLI]
+        GUI[GUI]
+    end
+    subgraph Nucleo[Núcleo]
+        PIPE[Pipeline de 4 fases]
+        DISC[Agente de descubrimiento]
+    end
+    subgraph Soporte
+        PROV[Abstracción LLMProvider]
+        TOOLS[Tool-dispatcher]
+        PROMPTS[Subsistema de prompts]
+        OUT[(out-dir / artefactos)]
+        LOG[Observabilidad]
+    end
+    LLM[(API de LLM externa)]
+    GIT[(Repositorio Git público)]
+
+    CLI -->|invocación| PIPE
+    GUI -->|invocación| PIPE
+    CLI --> DISC
+    GUI --> DISC
+    DISC -->|clone + listado| GIT
+    DISC -->|tool calls| TOOLS
+    PIPE -->|carga de prompts| PROMPTS
+    PIPE -->|generate| PROV
+    DISC -->|chat con tools| PROV
+    PROV -->|HTTPS| LLM
+    PIPE -->|persistencia| OUT
+    DISC -->|persistencia| OUT
+    PIPE -.-> LOG
+    DISC -.-> LOG

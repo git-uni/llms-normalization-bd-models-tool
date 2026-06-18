@@ -1,12 +1,12 @@
-# Capítulo 8. Conclusiones y Ampliaciones
+# Capítulo 9. Conclusiones y Ampliaciones
 
-Este capítulo cierra la memoria con una auto-evaluación del trabajo realizado frente a los requisitos del capítulo 3 y con la enumeración de las líneas de ampliación que el propio proyecto deja abiertas. Las conclusiones se centran en lo que efectivamente se ha aportado y en las lecciones —técnicas y metodológicas— que sintetizan la experiencia del proyecto; las ampliaciones recogen mejoras y extensiones identificadas durante el desarrollo.
+Este capítulo cierra la memoria con una auto-evaluación del trabajo realizado frente a los requisitos del capítulo 4 y con la enumeración de las líneas de ampliación que el propio proyecto deja abiertas. Las conclusiones se centran en lo que efectivamente se ha aportado y en las lecciones —técnicas y metodológicas— que sintetizan la experiencia del proyecto; las ampliaciones recogen mejoras y extensiones identificadas durante el desarrollo.
 
-## 8.1 Conclusiones
+## 9.1 Conclusiones
 
-### 8.1.1 Cumplimiento de los requisitos de usuario
+### 9.1.1 Cumplimiento de los requisitos de usuario
 
-La tabla siguiente resume el grado de cobertura de cada uno de los ocho requisitos de usuario enunciados en el capítulo 3 frente a la evidencia observable en el sistema entregado.
+La tabla siguiente resume el grado de cobertura de cada uno de los ocho requisitos de usuario enunciados en el capítulo 4 frente a la evidencia observable en el sistema entregado.
 
 | Requisito | Cobertura | Evidencia |
 |---|---|---|
@@ -21,9 +21,9 @@ La tabla siguiente resume el grado de cobertura de cada uno de los ocho requisit
 | RU-7 Inspección de los resultados intermedios | Total | Cuatro artefactos del *pipeline* + traza del agente en directorios `--out-dir` aislados. |
 | RU-8 Prototipo | Total | Validación cualitativa sobre los tres modos de entrada y desde ambas interfaces. |
 
-La evaluación de los requisitos del sistema (RFs y RNFs del capítulo 4) sigue el mismo patrón: cada RF se traza a una decisión arquitectónica del capítulo 5 (§5.1.5) y a su materialización en un módulo del capítulo 6 (§6.1.1); cada RNF se acredita con la inspección del código y, cuando aplica, con las mediciones de §6.2.2.
+La evaluación de los requisitos del sistema (RFs y RNFs del capítulo 5) sigue el mismo patrón: cada RF se traza a una decisión arquitectónica del capítulo 6 (§6.1.5) y a su materialización en un módulo del capítulo 7 (§7.1.1); cada RNF se acredita con la inspección del código y, cuando aplica, con las mediciones de §7.2.2.
 
-### 8.1.2 Resultados cuantitativos
+### 9.1.2 Resultados cuantitativos
 
 La cobertura del sistema sobre los *datasets* de referencia es la siguiente:
 
@@ -32,25 +32,25 @@ La cobertura del sistema sobre los *datasets* de referencia es la siguiente:
 - **URL pública de Spruce** (modo URL, agente activo): cobertura **11/11** del UML con un agente Gemini que selecciona los cuatro *schemas* declarativos del repositorio en cinco iteraciones.
 - **URL pública de Habitica** (modo URL, validación cualitativa adicional): 31 tablas generadas, recuperando el modelo `User` descompuesto en 13 tablas y las familias `Tasks`, `Groups`, `Challenges`, `Messages`, `Webhooks`, `Subscriptions`, `Transactions` y `Tags`. No se recuperan `Coupon`, `Blocker`, `IapPurchaseReceipt`, `NewsPost`, `EmailUnsubscription`, `PushDevice` ni `Inbox`. La cobertura es satisfactoria como caso de tamaño realista pero no completa.
 
-Sobre tres ejecuciones independientes del agente sobre Habitica con la misma configuración se observaron rangos de 5 a 22 archivos seleccionados. El sistema documenta de forma intencional este rango en lugar de un único número favorable, alineándose con la lección L7 ("honestidad estadística") del capítulo 2.
+Sobre tres ejecuciones independientes del agente sobre Habitica con la misma configuración se observaron rangos de 5 a 22 archivos seleccionados. El sistema documenta de forma intencional este rango en lugar de un único número favorable, alineándose con la lección L7 ("honestidad estadística") del capítulo 3.
 
-### 8.1.3 Reflexión sobre el techo del modelo
+### 9.1.3 Reflexión sobre el techo del modelo
 
-Una de las conclusiones más relevantes del trabajo, ya formulada como lección L1 del capítulo 2, es que **la capacidad del modelo elegido pone un techo a lo que el *prompt* puede lograr**. Sobre el mismo *prompt*, la jerarquía observada de modelos para el agente con *function calling* es:
+Una de las conclusiones más relevantes del trabajo, ya formulada como lección L1 del capítulo 3, es que **la capacidad del modelo elegido pone un techo a lo que el *prompt* puede lograr**. Sobre el mismo *prompt*, la jerarquía observada de modelos para el agente con *function calling* es:
 
 `Gemini 3.1 Flash Lite` > `Qwen3-32B` > `Llama 4 Scout` ≫ `Llama 3.x` / `gpt-oss`
 
 Esta jerarquía se traduce directamente en cobertura sobre el modelo de referencia: sobre Spruce, todos los modelos hasta `Llama 4 Scout` cierran el caso; sobre Habitica, solo Gemini lo aborda con éxito. La consecuencia metodológica del trabajo es que **invertir tiempo en *prompt engineering* tiene rendimientos decrecientes una vez se exprime el modelo elegido**, y que la mejora de la cobertura a partir de cierto punto requiere subir de modelo (con el coste correspondiente, si no es gratuito) o asumir el residuo de varianza.
 
-### 8.1.4 Reflexión sobre el coste y la dependencia del *free tier*
+### 9.1.4 Reflexión sobre el coste y la dependencia del *free tier*
 
 La adopción inicial de un único proveedor (Google) resultó frágil tras el recorte de cuotas de diciembre de 2025. La incorporación del segundo proveedor (Groq) fue posterior y se motivó como mitigación del riesgo R-01. Esta experiencia confirma que, en proyectos académicos o de investigación que se apoyan en proveedores externos, **la abstracción multi-proveedor es una decisión arquitectónica con valor de gestión de riesgo**, no solo de elegancia técnica.
 
-### 8.1.5 Reflexión final
+### 9.1.5 Reflexión final
 
 Más allá del cumplimiento de los requisitos, el trabajo ha aportado tres elementos que el autor considera contribuciones genuinas para futuros proyectos similares: (i) una abstracción **`LLMProvider`** cuyas dos operaciones del núcleo (`generate` y `chat`) han probado ser suficientes para dos SDKs con paradigmas distintos (Google con `Content/Part`, Groq con formato OpenAI), ampliada con una tercera operación auxiliar (`list_models`) que la GUI usa para mantener el catálogo de modelos sincronizado con el proveedor sin intervención manual; (ii) un **agente con *function calling* nativo** cuya implementación cabe en menos de 250 líneas de Python sin depender de *frameworks* de agentes externos, lo que reduce drásticamente la superficie de mantenimiento; y (iii) un **enfoque metodológico** que combina rigor de ingeniería del *software* (29148 en requisitos, ISO 31000 en riesgos, patrones GoF en diseño) con honestidad estadística en los resultados (rango observado y no número único). Las tres aportaciones son transferibles a otros TFG que se apoyen en LLMs como herramienta y, en opinión del autor, constituyen el valor principal del trabajo para la comunidad académica.
 
-## 8.2 Ampliaciones
+## 9.2 Ampliaciones
 
 Esta sección recoge seis líneas de ampliación que el propio proyecto deja abiertas: mejoras y extensiones identificadas durante el desarrollo.
 
@@ -66,11 +66,11 @@ La implementación consistiría en un módulo nuevo `normalizer/providers/zai.py
 
 ### Ampliación C. Suite de pruebas automatizadas
 
-El plan de pruebas descrito en §4.3 y §5.3 contempla los niveles unitario, integración y sistema. Su materialización es la principal ampliación en el plano de la ingeniería del *software*: introducir `pytest` como armazón, `MockProvider` como doble de prueba para los niveles aislados del LLM, *fixtures* JSON con respuestas reales del SDK capturadas para los adaptadores, y `sqlparse` para la verificación sintáctica del DDL en el nivel de aceptación. La estructura del repositorio ya contempla esta ampliación con el directorio `tests/baseline/<dataset>.yaml` para los *checklists* de los casos de aceptación cualitativa.
+El plan de pruebas descrito en §5.3 y §6.3 contempla los niveles unitario, integración y sistema. Su materialización es la principal ampliación en el plano de la ingeniería del *software*: introducir `pytest` como armazón, `MockProvider` como doble de prueba para los niveles aislados del LLM, *fixtures* JSON con respuestas reales del SDK capturadas para los adaptadores, y `sqlparse` para la verificación sintáctica del DDL en el nivel de aceptación. Esta ampliación preverá un directorio `tests/baseline/<dataset>.yaml` para los *checklists* de los casos de aceptación cualitativa.
 
 ### Ampliación D. Integración continua
 
-Como continuación natural de la Ampliación C, la activación de GitHub Actions permitiría ejecutar la suite en cada *commit* y disponer de los análisis de seguridad SCA y SAST descritos en RNF-4.3. El esfuerzo es bajo (un único fichero YAML en `.github/workflows/`) y completaría la columna "Implementado" en la tabla de cumplimiento de RNFs.
+Como continuación natural de la Ampliación C, la activación de GitHub Actions permitiría ejecutar la suite en cada *commit* y añadir análisis automáticos de seguridad —dependencias vulnerables (SCA) y errores de seguridad en el código (SAST)— sobre el repositorio público del proyecto. El esfuerzo es bajo: un único fichero YAML en `.github/workflows/`.
 
 ### Ampliación E. Portabilidad del DDL a Oracle anterior a 23ai
 

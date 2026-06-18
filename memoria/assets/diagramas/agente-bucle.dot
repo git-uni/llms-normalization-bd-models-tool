@@ -1,0 +1,28 @@
+digraph agente {
+    rankdir=LR; bgcolor="white"; pad=0.5;
+    nodesep=0.55; ranksep=1.0; fontname="Helvetica";
+    labelloc="t"; fontsize=18;
+    label="El agente de descubrimiento: un bucle conversacional sobre un historial de mensajes";
+    node [fontname="Helvetica", fontsize=11, style="filled,rounded", color="#333333"];
+    edge [fontname="Helvetica", fontsize=10, color="#555555"];
+
+    INIT [label="Mensaje inicial\nprompt de sistema del agente\n+ árbol del repositorio", shape=note, fillcolor="#fff4cc"];
+    EVID [label="Evidencia\nseleccionada", shape=folder, fillcolor="#ffe9b3"];
+    PIPE [label="Pipeline", shape=box, fillcolor="#cdddf6"];
+
+    subgraph cluster_loop {
+        label="Bucle de turnos (hasta «done»)";
+        style="filled,rounded"; fillcolor="#fdf3e7"; color="#e0b277"; fontsize=12;
+        HIST  [label="Historial de mensajes\n(memoria conversacional\nque crece turno a turno)", shape=cylinder, fillcolor="#e6dcf3"];
+        MODEL [label="Modelo de lenguaje\n(decide qué hacer)", fillcolor="#f7d7dc"];
+        TOOLS [label="Herramientas expuestas\nlist_dir · read_file · grep\nselect_evidence · done", shape=component, fillcolor="#f8e8d4"];
+
+        HIST  -> MODEL [label="lee el historial"];
+        MODEL -> TOOLS [label="invoca (tool call)"];
+        TOOLS -> HIST  [label="añade respuesta y resultado"];
+    }
+
+    INIT  -> HIST [label="inicializa"];
+    MODEL -> EVID [label="al terminar (done)"];
+    EVID  -> PIPE;
+}

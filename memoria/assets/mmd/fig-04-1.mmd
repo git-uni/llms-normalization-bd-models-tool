@@ -1,0 +1,10 @@
+flowchart LR
+    C["1 · Configuración"]
+    E["2 · Ejecución"]
+    R["3 · Resultado"]
+
+    C -->|Ejecutar| E
+    E -->|fin del pipeline| R
+    E -->|Cancelar| R
+    C -.->|Abrir resultados anteriores| R
+    R -->|Nueva ejecución| C

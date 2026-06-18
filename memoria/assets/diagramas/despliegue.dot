@@ -1,0 +1,34 @@
+digraph despliegue {
+    rankdir=LR; compound=true; bgcolor="white"; pad=0.5;
+    nodesep=0.5; ranksep=1.5; fontname="Helvetica";
+    labelloc="t"; fontsize=20;
+    label="Diagrama de despliegue";
+    node [fontname="Helvetica", fontsize=11, color="#333333"];
+    edge [fontname="Helvetica", fontsize=10, color="#444444"];
+
+    // ── Nodo: máquina del usuario ──
+    subgraph cluster_user {
+        label="«device» Máquina del usuario";
+        style="filled,rounded"; fillcolor="#eaf0fb"; color="#8fa9d6"; fontsize=13;
+
+        subgraph cluster_runtime {
+            label="«execution environment» Python 3.11+";
+            style="filled,rounded"; fillcolor="#dce8fa"; color="#9bb4dd"; fontsize=11;
+            APP [label="«artifact»\nnormalizer (CLI + GUI)",
+                 shape=box, style="filled,rounded", fillcolor="#cdddf6"];
+        }
+        ENV   [label="«artifact»\n.env (credenciales)", shape=note, style="filled", fillcolor="#fff4cc"];
+        CACHE [label=".cache/repos/", shape=cylinder, style="filled", fillcolor="#ffe9b3"];
+        OUTD  [label="out-dir/", shape=cylinder, style="filled", fillcolor="#ffe9b3"];
+    }
+
+    // ── Nodos externos ──
+    PROV [label="«node»\nProveedor de LLM\n(Google o Groq)",
+          shape=box3d, style="filled", fillcolor="#f7d7dc"];
+    GIT  [label="«node»\nRepositorio Git remoto",
+          shape=box3d, style="filled", fillcolor="#e9ecef"];
+
+    // ── Caminos de comunicación entre nodos ──
+    APP -> PROV [ltail=cluster_user, label="HTTPS"];
+    APP -> GIT  [ltail=cluster_user, label="HTTPS · git clone --depth 1"];
+}

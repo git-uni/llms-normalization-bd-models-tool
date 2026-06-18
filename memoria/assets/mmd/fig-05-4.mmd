@@ -1,0 +1,33 @@
+sequenceDiagram
+    autonumber
+    participant U as Usuario
+    participant CLI
+    participant DISC as Agente descubrimiento
+    participant PROV as LLMProvider
+    participant LLM as API de LLM
+    participant TOOLS as Tool-dispatcher
+    participant FS as Repo clonado
+    participant PIPE as Pipeline
+
+    U->>CLI: normalizer URL --provider X
+    CLI->>DISC: discover_from_url(url)
+    DISC->>FS: clone --depth 1 + build_tree_summary
+    loop hasta done o agotar presupuesto
+        DISC->>PROV: chat(messages, tools)
+        PROV->>LLM: petición HTTPS
+        LLM-->>PROV: respuesta (tool_calls)
+        PROV-->>DISC: ChatResponse
+        DISC->>TOOLS: dispatch(call, state)
+        TOOLS->>FS: list_dir | read_file | grep | select_evidence
+        FS-->>TOOLS: resultado
+        TOOLS-->>DISC: resultado como texto
+    end
+    DISC-->>CLI: directorio de evidencia
+    CLI->>PIPE: run_pipeline(evidence_dir)
+    PIPE->>PROV: generate(prompt_ANALYZE)
+    PROV-->>PIPE: 02_analysis.md
+    PIPE->>PROV: generate(prompt_DESIGN)
+    PROV-->>PIPE: 03_design.md
+    PIPE->>PROV: generate(prompt_DDL)
+    PROV-->>PIPE: 04_ddl.sql
+    PIPE-->>CLI: ruta al DDL

@@ -1,0 +1,56 @@
+// Diagrama de paquetes del paquete `normalizer`.
+// Nodos = paquetes/módulos (namespaces Python), agrupados por capa.
+// Aristas discontinuas de punta abierta = dependencias «import» (cliente -> proveedor).
+// `_log` (observabilidad) es transversal a todas las capas; se marca «transversal»
+// y sus aristas se omiten por claridad. Las dependencias externas (SDKs de LLM en
+// `providers`, git en `discovery`, toolkits gráficos en `gui`) se describen en el texto.
+// Render: dot -Tpng paquetes.dot -o paquetes.png   (y -Tsvg para paquetes.svg)
+digraph paquetes {
+    rankdir=TB; compound=true; bgcolor="white"; pad=0.4;
+    nodesep=0.7; ranksep=1.1; fontname="Helvetica";
+    splines=spline; concentrate=true;
+    labelloc="t"; fontsize=20;
+    label="Diagrama de paquetes del paquete normalizer";
+
+    node [fontname="Helvetica", fontsize=13, shape=tab, style="filled",
+          color="#333333", margin="0.22,0.12"];
+    edge [fontname="Helvetica", fontsize=10, color="#5b6b7a", style=dashed,
+          arrowhead=vee, penwidth=1.2];
+
+    subgraph cluster_pres {
+        label="Presentación"; fontsize=14; style="filled,rounded";
+        fillcolor="#eef2f7"; color="#9fb3c8"; margin=16;
+        cli [label="cli", fillcolor="#dbe7f3"];
+        gui [label="gui", fillcolor="#dbe7f3"];
+    }
+    subgraph cluster_core {
+        label="Núcleo"; fontsize=14; style="filled,rounded";
+        fillcolor="#eaf0fb"; color="#8fa9d6"; margin=16;
+        discovery [label="discovery", fillcolor="#cdddf6"];
+        pipeline  [label="pipeline", fillcolor="#cdddf6"];
+    }
+    subgraph cluster_sup {
+        label="Soporte"; fontsize=14; style="filled,rounded";
+        fillcolor="#f3eef9"; color="#b69fd0"; margin=16;
+        providers [label="providers", fillcolor="#f7d7dc"];
+        prompts   [label="prompts", fillcolor="#e6dcf3"];
+        logp      [label="_log\n«transversal»", fillcolor="#e3e8ee", color="#9aa6b2"];
+    }
+
+    // Dependencias estructurales (descendentes: presentación -> núcleo -> soporte).
+    cli -> discovery;
+    cli -> pipeline;
+    cli -> providers;
+    gui -> discovery;
+    gui -> pipeline;
+    gui -> providers;
+    discovery -> pipeline [constraint=false];   // única intra-capa (PipelineCancelled)
+    discovery -> prompts;
+    discovery -> providers;
+    pipeline -> prompts;
+    pipeline -> providers;
+
+    // Ancla invisible: fija `_log` en la banda de soporte sin dibujar arista
+    // (su dependencia transversal se explica en el texto, no se traza).
+    pipeline -> logp [style=invis];
+}

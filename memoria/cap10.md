@@ -1,14 +1,14 @@
-# Capítulo 9. Apéndices
+# Capítulo 10. Apéndices
 
-## 9.1 Plan de gestión de riesgos
+## 10.1 Plan de gestión de riesgos
 
-Este apéndice desarrolla el plan de gestión de riesgos referenciado en §2.1.4 y proporciona las hojas individuales de los doce riesgos identificados durante el proyecto, conforme a la recomendación de la plantilla del TFG.
+Este apéndice desarrolla el plan de gestión de riesgos referenciado en §3.1.4 y proporciona las hojas individuales de los doce riesgos identificados durante el proyecto, conforme a la recomendación de la plantilla del TFG.
 
-### 9.1.1 Marco de referencia
+### 10.1.1 Marco de referencia
 
 La gestión de riesgos del proyecto sigue las recomendaciones de la norma **ISO 31000:2018 — Risk management — Guidelines** y se concreta sobre la práctica habitual del PMBOK 7.ª edición. El proceso se descompone en cinco actividades secuenciales que se realimentan a lo largo del proyecto: identificación, análisis cualitativo, planificación de la respuesta, seguimiento y registro.
 
-### 9.1.2 Categorías y escalas
+### 10.1.2 Categorías y escalas
 
 Los riesgos del proyecto se clasifican en tres categorías según su origen, todas ellas específicas del dominio *LLM-as-a-service* que diferencia este trabajo de un desarrollo software clásico:
 
@@ -33,7 +33,7 @@ La **exposición** resultante (P × I, 1–25) define la urgencia de la respuest
 - Exposición entre 3 y 5: **moderado** — monitorizado con indicadores.
 - Exposición ≤ 2: **bajo** — aceptado.
 
-### 9.1.3 Plantilla de hoja de riesgo
+### 10.1.3 Plantilla de hoja de riesgo
 
 Cada riesgo identificado se documenta con los siguientes campos:
 
@@ -49,9 +49,9 @@ Cada riesgo identificado se documenta con los siguientes campos:
 | Plan de contingencia | Acciones a emprender si el riesgo se materializa pese a la mitigación. |
 | Estado final | Resultado al cierre del proyecto: materializado y mitigado, materializado y aceptado, reducido, o no materializado. |
 
-### 9.1.4 Hojas individuales de riesgo
+### 10.1.4 Hojas individuales de riesgo
 
-A continuación se incluyen las doce hojas individuales correspondientes a los riesgos identificados en §2.1.4. Cinco de ellas se anticiparon en §2.2.3 con detalle completo; aquí se consolidan todas con la plantilla aplicada de forma uniforme.
+A continuación se incluyen las doce hojas individuales correspondientes a los riesgos identificados en §3.1.4. Cinco de ellas se anticiparon en §3.2.3 con detalle completo; aquí se consolidan todas con la plantilla aplicada de forma uniforme.
 
 #### R-01. Colapso del *free tier* de Google
 
@@ -120,7 +120,7 @@ A continuación se incluyen las doce hojas individuales correspondientes a los r
 | Categoría | Calidad. |
 | Probabilidad / Impacto / Exposición | 4 / 2 / 8 (alto). |
 | Estrategia | Aceptar. |
-| Plan de mitigación | Validación cualitativa sobre los dos proveedores; documentación honesta del *trade-off* en §6.2.2 y en §8.1.3. |
+| Plan de mitigación | Validación cualitativa sobre los dos proveedores; documentación honesta del *trade-off* en §7.2.2 y en §9.1.3. |
 | Indicadores | Cobertura del UML manual significativamente distinta entre proveedores sobre el mismo *input*. |
 | Contingencia | Recomendación por defecto del proveedor con mejor cobertura (Google para *datasets* difusos). |
 | Estado final | Materializado y aceptado; documentado el *trade-off* velocidad (Groq sobre el *pipeline* texto-a-texto) ↔ calidad (Google sobre el agente en Habitica). |
@@ -180,7 +180,7 @@ A continuación se incluyen las doce hojas individuales correspondientes a los r
 | Categoría | Calidad. |
 | Probabilidad / Impacto / Exposición | 4 / 2 / 8 (alto). |
 | Estrategia | Mitigar. |
-| Plan de mitigación | Los LLMs están mayoritariamente entrenados sobre modelos relacionales y pueden aplanar denormalizaciones legítimas o forzar agrupaciones que pierdan información presente en el modelo documental original. Mitigación en el *prompt* del paso 2 (`analyze.md`) y en la regla de reconciliación de FKs de `design.md` (cap. 2 §2.1.3); trazabilidad RU-2.3 permite detección humana del aplanamiento residual. |
+| Plan de mitigación | Los LLMs están mayoritariamente entrenados sobre modelos relacionales y pueden aplanar denormalizaciones legítimas o forzar agrupaciones que pierdan información presente en el modelo documental original. Mitigación en el *prompt* del paso 2 (`analyze.md`) y en la regla de reconciliación de FKs de `design.md` (cap. 2 §3.1.3); trazabilidad RU-2.3 permite detección humana del aplanamiento residual. |
 | Indicadores | Pérdida de campos respecto al UML manual; agrupaciones forzadas; FKs que no respetan la multiplicidad observada. |
 | Contingencia | Revisión cualitativa del DDL frente al modelo documental original; ajuste de los *prompts*. |
 | Estado final | Reducido: aplanamientos detectados y corregidos vía *prompt engineering* durante P4; residuo aceptado. |
@@ -197,7 +197,7 @@ A continuación se incluyen las doce hojas individuales correspondientes a los r
 | Contingencia | Reintroducir el dataset divergente en el conjunto de iteración del *prompt*. |
 | Estado final | Reducido mediante la validación cruzada Spruce + Habitica en cada iteración del *prompt*. |
 
-## 9.2 Referencias bibliográficas
+## 10.2 Referencias bibliográficas
 
 Las referencias siguientes corresponden a las fuentes citadas a lo largo de la memoria. Se utiliza el estilo IEEE.
 
@@ -241,15 +241,15 @@ Las referencias siguientes corresponden a las fuentes citadas a lo largo de la m
 
 [20] A. Andoni *et al.*, *sqlparse — A non-validating SQL parser module for Python*, 2025. [En línea]. Disponible: <https://github.com/andialbrecht/sqlparse>.
 
-## 9.3 Contenido entregado en los anexos
+## 10.3 Contenido entregado en los anexos
 
-### 9.3.1 Descripción del contenido
+### 10.3.1 Descripción del contenido
 
 El anexo digital del Trabajo de Fin de Grado se entrega como un único fichero comprimido que contiene todos los elementos necesarios para reproducir el sistema, verificar los resultados y, en su caso, extenderlo. El contenido se ha adaptado a la naturaleza del proyecto (un paquete Python con CLI y GUI), divergiendo de la estructura por defecto recomendada por la plantilla (Java / Ant) que no aplica al *stack* utilizado.
 
 El anexo se organiza en tres grandes bloques: el **código fuente** del paquete `normalizer`, los **datos** utilizados para la validación cualitativa y los **artefactos** producidos por las ejecuciones de validación.
 
-### 9.3.2 Recomendación de la estructura de directorios
+### 10.3.2 Recomendación de la estructura de directorios
 
 La estructura propuesta para el anexo digital es la siguiente:
 
@@ -282,4 +282,4 @@ anexo/
     └── defensa.pdf                     # Diapositivas de la defensa
 ```
 
-El fichero `README.TXT` en la raíz del anexo describe el contenido, indica las dependencias mínimas y resume el procedimiento de instalación referenciando los `README.md` de cada subdirectorio. El directorio `codigo/` contiene una copia limpia del repositorio en el momento de la entrega (sin `.cache/`, sin `out-*/` superfluos, sin `.env`). El directorio `documentacion/` incluye el PDF navegable de la memoria con los marcadores activos. El directorio `explotacion/` reproduce los *datasets* utilizados y los artefactos de las ejecuciones de validación que sustentan las afirmaciones cuantitativas de §6.2.2 y §8.1.2.
+El fichero `README.TXT` en la raíz del anexo describe el contenido, indica las dependencias mínimas y resume el procedimiento de instalación referenciando los `README.md` de cada subdirectorio. El directorio `codigo/` contiene una copia limpia del repositorio en el momento de la entrega (sin `.cache/`, sin `out-*/` superfluos, sin `.env`). El directorio `documentacion/` incluye el PDF navegable de la memoria con los marcadores activos. El directorio `explotacion/` reproduce los *datasets* utilizados y los artefactos de las ejecuciones de validación que sustentan las afirmaciones cuantitativas de §7.2.2 y §9.1.2.

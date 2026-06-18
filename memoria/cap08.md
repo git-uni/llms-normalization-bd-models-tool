@@ -1,10 +1,10 @@
-# Capítulo 7. Manuales
+# Capítulo 8. Manuales
 
-Este capítulo contiene los manuales necesarios para instalar la herramienta, utilizarla desde sus dos interfaces (CLI y GUI) y extenderla con nuevos proveedores o nuevos *prompts*. Sigue la recomendación de la plantilla de diferenciar claramente el destinatario en cada caso: los manuales 7.1 y 7.4 se dirigen a un perfil técnico (instalación y extensión), mientras que 7.2 y 7.3 se dirigen a usuarios finales con conocimientos básicos de Python (CLI) o sin conocimientos técnicos (GUI).
+Este capítulo contiene los manuales necesarios para instalar la herramienta, utilizarla desde sus dos interfaces (CLI y GUI) y extenderla con nuevos proveedores o nuevos *prompts*. Sigue la recomendación de la plantilla de diferenciar claramente el destinatario en cada caso: los manuales 7.1 y 7.4 se dirigen a un perfil técnico (instalación y extensión), mientras que 7.2 y 7.3 se dirigen al usuario final, ya opere desde la CLI (con conocimientos básicos de Python y terminal) o desde la GUI (sin necesidad de la línea de comandos).
 
-## 7.1 Manual de instalación
+## 8.1 Manual de instalación
 
-### 7.1.1 Prerrequisitos
+### 8.1.1 Prerrequisitos
 
 Para instalar y ejecutar la herramienta es necesario disponer del siguiente *software* en el sistema operativo del usuario (Windows, macOS o Linux):
 
@@ -14,7 +14,7 @@ Para instalar y ejecutar la herramienta es necesario disponer del siguiente *sof
 
 Adicionalmente, el usuario debe disponer de al menos una clave de API válida para uno de los dos proveedores soportados: Google (`GOOGLE_API_KEY`) o Groq (`GROQ_API_KEY`). Ambas se pueden obtener gratuitamente en los portales de los proveedores; el sistema utiliza únicamente las cuotas del *free tier* en su configuración por defecto.
 
-### 7.1.2 Procedimiento de instalación
+### 8.1.2 Procedimiento de instalación
 
 La instalación se realiza en cuatro pasos, desde una terminal abierta en el directorio donde se desee clonar el proyecto:
 
@@ -51,7 +51,7 @@ La instalación se realiza en cuatro pasos, desde una terminal abierta en el dir
 
    El comando debe mostrar la ayuda del CLI con los cuatro argumentos opcionales (`--provider`, `--model`, `--agent-model`, `--out-dir`) y el argumento posicional `INPUT_PATH`.
 
-### 7.1.3 Diagnóstico de problemas habituales
+### 8.1.3 Diagnóstico de problemas habituales
 
 | Síntoma | Causa probable | Acción recomendada |
 |---|---|---|
@@ -61,9 +61,9 @@ La instalación se realiza en cuatro pasos, desde una terminal abierta en el dir
 | `customtkinter` no se instala (al arrancar la GUI) | Falta la dependencia opcional para la GUI. | Ejecutar `pip install -e .[gui]` (instala todo el extra de una vez). |
 | La pestaña Diagrama ER muestra "Graphviz no disponible" | El binario `dot` de Graphviz no está instalado o no está accesible en el `PATH` del proceso actual. | Instalar con `winget install Graphviz.Graphviz` (Windows), `brew install graphviz` (macOS) o `sudo apt install graphviz` (Linux) y pulsar "Reintentar" desde la propia pestaña; la aplicación detecta el binario en las rutas estándar sin necesidad de reiniciar. |
 
-## 7.2 Manual de usuario CLI
+## 8.2 Manual de usuario CLI
 
-### 7.2.1 Sintaxis básica
+### 8.2.1 Sintaxis básica
 
 La invocación general del CLI es:
 
@@ -84,7 +84,7 @@ Los valores por defecto para cada proveedor son:
 - **Google**: `gemma-4-31b-it` para el *pipeline*, `gemini-3.1-flash-lite` para el agente.
 - **Groq**: `llama-3.3-70b-versatile` para el *pipeline*, `qwen/qwen3-32b` para el agente.
 
-### 7.2.2 Tres casos de uso típicos
+### 8.2.2 Tres casos de uso típicos
 
 #### Caso A. Archivo único con *schemas* explícitos
 
@@ -134,7 +134,7 @@ out-spruce-url/
 └── 04_ddl.sql
 ```
 
-### 7.2.3 Lectura de la salida
+### 8.2.3 Lectura de la salida
 
 Durante la ejecución, la CLI emite por la salida de error estándar (`stderr`) una traza con sello de tiempo relativo al arranque:
 
@@ -156,7 +156,7 @@ Durante la ejecución, la CLI emite por la salida de error estándar (`stderr`) 
 [03:48] DDL generado en out-spruce-url/04_ddl.sql
 ```
 
-### 7.2.4 Solución de problemas frecuentes
+### 8.2.4 Solución de problemas frecuentes
 
 | Síntoma | Causa probable | Acción recomendada |
 |---|---|---|
@@ -165,9 +165,9 @@ Durante la ejecución, la CLI emite por la salida de error estándar (`stderr`) 
 | Cobertura del DDL inferior a la esperada | Varianza del agente (riesgo R-04). | Repetir la ejecución; comparar con la traza turno-a-turno; si la varianza es sistemática, probar otro modelo del agente. |
 | HTTP 413 sobre el primer mensaje al LLM | Frontera Groq × tamaño del árbol (riesgo R-02). | Usar `--provider google` para el modo URL sobre repositorios medianos+. |
 
-## 7.3 Manual de usuario GUI
+## 8.3 Manual de usuario GUI
 
-### 7.3.1 Acceso a la interfaz gráfica
+### 8.3.1 Acceso a la interfaz gráfica
 
 Tras la instalación con el extra `[gui]` (`pip install -e .[gui]`), la interfaz gráfica se lanza con:
 
@@ -177,7 +177,7 @@ python -m normalizer.gui
 
 La ventana principal de la aplicación se organiza en torno a una **secuencia de tres pantallas guiadas**: configuración, ejecución con seguimiento del progreso y resultado.
 
-### 7.3.2 Pantalla 1 — Configuración
+### 8.3.2 Pantalla 1 — Configuración
 
 La primera pantalla presenta un único formulario con tres bloques:
 
@@ -199,13 +199,13 @@ La aplicación valida inmediatamente: el archivo o directorio debe existir, y la
 **Bloque 3 — Credenciales del proveedor.** Para el proveedor seleccionado, el formulario muestra un campo de texto enmascarado (`••••`) con la clave de API correspondiente:
 
 - Si la variable de entorno asociada (`GOOGLE_API_KEY` o `GROQ_API_KEY`) ya está definida —ya sea exportada en el *shell* o cargada del fichero `.env`—, el campo aparece relleno con un marcador opaco y deshabilitado. Un botón "Cambiar" lo desbloquea por si el usuario quiere sustituir la clave.
-- Si la variable no está definida, el campo aparece vacío y editable. Cuando el usuario introduce una clave y pulsa "Ejecutar", la aplicación la inyecta en el entorno del proceso y la persiste automáticamente en el fichero `.env` del directorio de trabajo (creándolo si no existe) mediante `dotenv.set_key`. El fichero `.env` está excluido del control de versiones por `.gitignore` (véase 7.1.2).
+- Si la variable no está definida, el campo aparece vacío y editable. Cuando el usuario introduce una clave y pulsa "Ejecutar", la aplicación la inyecta en el entorno del proceso y la persiste automáticamente en el fichero `.env` del directorio de trabajo (creándolo si no existe) mediante `dotenv.set_key`. El fichero `.env` está excluido del control de versiones por `.gitignore` (véase 8.1.2).
 
 Un botón "Ejecutar" en la esquina inferior derecha pasa a la siguiente pantalla cuando todos los campos obligatorios están completos.
 
 En la cabecera de la pantalla, un enlace discreto "Abrir resultados existentes..." permite cargar un directorio `out-*/` de una corrida anterior y saltar directamente a la pantalla de resultado sin re-ejecutar el *pipeline*. Útil para revisar el diagrama ER o exportar a ZIP corridas antiguas sin volver a consumir cuota del proveedor.
 
-### 7.3.3 Pantalla 2 — Ejecución y progreso
+### 8.3.3 Pantalla 2 — Ejecución y progreso
 
 La segunda pantalla muestra el avance del proceso en tiempo real organizado en cuatro bloques verticales:
 
@@ -218,7 +218,7 @@ El botón **Cancelar** señaliza la cancelación cooperativa al núcleo y, al mi
 
 Al terminar (con éxito, cancelación o error), la pantalla transita automáticamente a la pantalla de resultado.
 
-### 7.3.4 Pantalla 3 — Resultado
+### 8.3.4 Pantalla 3 — Resultado
 
 La pantalla final muestra un banner con el estado de la ejecución (éxito, cancelación o error con la fase de origen y el mensaje) y un panel con pestañas que presentan los artefactos producidos:
 
@@ -230,22 +230,22 @@ La pantalla final muestra un banner con el estado de la ejecución (éxito, canc
 
 En la barra inferior, tres acciones cierran el ciclo: "Abrir directorio" lanza el explorador del sistema en `out-dir`, "Exportar como ZIP" comprime todos los artefactos en un único fichero seleccionado por el usuario y "Nueva ejecución" vuelve a la pantalla 1 reseteando el estado.
 
-### 7.3.5 Recomendaciones de uso para usuarios no técnicos
+### 8.3.5 Recomendaciones de uso
 
 - Comenzar con el ejemplo `data/spruce/` para familiarizarse con el flujo antes de aplicar la herramienta a un proyecto propio.
 - En el modo URL, repositorios grandes pueden tardar varios minutos: la tabla de iteraciones del agente y la traza turno-a-turno permiten seguir el avance.
 - Aunque las credenciales se pueden introducir directamente en la pantalla 1, también se pueden colocar en el fichero `.env` antes de arrancar la herramienta; la aplicación las carga al inicio en ambos casos.
-- La privacidad del contenido enviado al proveedor de LLM es responsabilidad del usuario: no utilizar la herramienta con código fuente confidencial sin autorización del titular (RNF-4.4).
+- La privacidad del contenido enviado al proveedor de LLM es responsabilidad del usuario: no utilizar la herramienta con código fuente confidencial sin autorización del titular (RNF-4.3).
 
-## 7.4 Manual técnico
+## 8.4 Manual técnico
 
 Este apartado describe los puntos de extensión más habituales para usuarios técnicos que deseen ampliar o adaptar la herramienta sin reescribir su núcleo.
 
-### 7.4.1 Añadir un nuevo proveedor de LLM
+### 8.4.1 Añadir un nuevo proveedor de LLM
 
-El procedimiento es directo gracias a la abstracción `LLMProvider` (§5.2.5, patrón *Strategy*):
+El procedimiento es directo gracias a la abstracción `LLMProvider` (§6.2.6, patrón *Strategy*):
 
-1. Crear un nuevo módulo `normalizer/providers/<nombre>.py` que defina una clase `<Nombre>Provider` implementando el protocolo `LLMProvider`: las operaciones `generate(prompt) -> str` y `chat(messages, tools) -> ChatResponse`.
+1. Crear un nuevo módulo `normalizer/providers/<nombre>.py` que defina una clase `<Nombre>Provider` implementando la interfaz `LLMProvider`: las operaciones `generate(prompt) -> str` y `chat(messages, tools) -> ChatResponse`.
 2. Implementar los adaptadores privados que traduzcan los tipos neutros (`Message`, `ToolSpec`) al formato del SDK del proveedor, y la conversión inversa de la respuesta a `ChatResponse`.
 3. Registrar el nuevo proveedor en `normalizer/providers/__init__.py`:
 
@@ -261,14 +261,14 @@ El procedimiento es directo gracias a la abstracción `LLMProvider` (§5.2.5, pa
 
 `providers/google.py` y `providers/groq.py` son ejemplos completos del procedimiento.
 
-### 7.4.2 Modificar un *prompt*
+### 8.4.2 Modificar un *prompt*
 
 Los *prompts* del sistema residen en `normalizer/prompts/`, uno por fichero (`analyze.md`, `design.md`, `ddl.md`, `discovery_system.md`). Para modificarlos:
 
 - Los *prompts* de las fases del *pipeline* (`analyze.md`, `design.md`, `ddl.md`) contienen un único *placeholder* (`{evidence}`, `{analysis}`, `{design}` respectivamente). El sistema los formatea con `str.format`, lo que implica que cualquier llave literal (`{`, `}`) que se introduzca en el cuerpo del *prompt* debe duplicarse (`{{`, `}}`).
 - El *prompt* de sistema del agente (`discovery_system.md`) **no se formatea**: contiene ejemplos en JavaScript con llaves literales (`new Schema({...})`) que romperían `str.format`.
 
-### 7.4.3 Cambiar los límites del agente
+### 8.4.3 Cambiar los límites del agente
 
 Los presupuestos del agente se controlan mediante constantes en módulos específicos:
 
@@ -278,10 +278,10 @@ Los presupuestos del agente se controlan mediante constantes en módulos especí
 
 Modificar estos valores tiene efectos directos en el consumo del *free tier* de los proveedores: por ejemplo, subir `MAX_ITERS` a 50 puede duplicar el número de peticiones al LLM por sesión, agotando antes la cuota diaria.
 
-### 7.4.4 Añadir un nuevo *dataset*
+### 8.4.4 Añadir un nuevo *dataset*
 
 Los *datasets* de control viven en `data/`. Para añadir uno nuevo:
 
 1. Crear un directorio `data/<nombre>/` con los archivos curados.
 2. Documentar el modelo de referencia esperado (por ejemplo, un diagrama UML manual o una lista de entidades) para poder comparar la cobertura cualitativa.
-3. Si se planea integrar el *dataset* en la suite de aceptación cualitativa (§5.3.3), añadir un *checklist* en `tests/baseline/<nombre>.yaml` con las entidades, claves y relaciones esperadas.
+3. Si se planea integrar el *dataset* en la suite de aceptación cualitativa (§6.3.3), añadir un *checklist* en `tests/baseline/<nombre>.yaml` con las entidades, claves y relaciones esperadas.

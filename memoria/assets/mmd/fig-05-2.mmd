@@ -1,0 +1,23 @@
+flowchart TB
+    subgraph Maquina[Máquina del usuario]
+        PY[Runtime Python 3.11+]
+        APP[normalizer]
+        ENV[.env / variables de entorno]
+        CACHE[(.cache/repos/)]
+        OUTD[(out-dir/)]
+        APP --- PY
+    end
+    subgraph Cloud[Proveedor de LLM cloud]
+        EP1[Endpoint generateContent]
+        EP2[Endpoint chat/completions]
+    end
+    subgraph Forja[Forja Git remota]
+        REPO[(repositorio público)]
+    end
+
+    APP -->|HTTPS| EP1
+    APP -->|HTTPS| EP2
+    APP -->|HTTPS git clone --depth 1| REPO
+    APP -->|lectura/escritura| CACHE
+    APP -->|lectura/escritura| OUTD
+    APP -.->|lectura| ENV

@@ -1,0 +1,34 @@
+sequenceDiagram
+    autonumber
+    actor U as Usuario
+    participant CLI as CLI / GUI
+    participant DISC as Agente descubrimiento
+    participant PROV as LLMProvider
+    participant LLM as API de LLM
+    participant FS as Repo clonado
+    participant PIPE as Pipeline
+
+    U->>CLI: URL del repositorio
+    CLI->>DISC: discover_from_url(url)
+    DISC->>FS: git clone (caché)
+    DISC->>FS: construye árbol filtrado
+
+    loop hasta done o agotar presupuesto
+        DISC->>PROV: chat(messages, tools)
+        PROV->>LLM: HTTPS
+        LLM-->>PROV: tool_calls
+        PROV-->>DISC: respuesta
+        DISC->>FS: dispatch(call): list_dir / read_file / grep / select_evidence
+        FS-->>DISC: resultado
+    end
+
+    DISC-->>CLI: evidencia (evidence/)
+    CLI->>PIPE: run_pipeline(evidence)
+
+    PIPE->>PROV: generate (análisis)
+    PROV-->>PIPE: 02_analysis.md
+    PIPE->>PROV: generate (diseño)
+    PROV-->>PIPE: 03_design.md
+    PIPE->>PROV: generate (DDL)
+    PROV-->>PIPE: 04_ddl.sql
+    PIPE-->>CLI: DDL final
