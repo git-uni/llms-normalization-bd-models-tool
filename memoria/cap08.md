@@ -1,87 +1,287 @@
-# Capítulo 8. Conclusiones y Ampliaciones
+# Capítulo 7. Manuales
 
-Este capítulo cierra la memoria con una auto-evaluación del trabajo realizado frente a los requisitos del capítulo 3 y con la enumeración de las líneas de ampliación que el propio proyecto deja abiertas. Las conclusiones se centran en lo que efectivamente se ha aportado y en las lecciones —técnicas y metodológicas— que sintetizan la experiencia del proyecto; las ampliaciones recogen mejoras y extensiones identificadas durante el desarrollo.
+Este capítulo contiene los manuales necesarios para instalar la herramienta, utilizarla desde sus dos interfaces (CLI y GUI) y extenderla con nuevos proveedores o nuevos *prompts*. Sigue la recomendación de la plantilla de diferenciar claramente el destinatario en cada caso: los manuales 7.1 y 7.4 se dirigen a un perfil técnico (instalación y extensión), mientras que 7.2 y 7.3 se dirigen a usuarios finales con conocimientos básicos de Python (CLI) o sin conocimientos técnicos (GUI).
 
-## 8.1 Conclusiones
+## 7.1 Manual de instalación
 
-### 8.1.1 Cumplimiento de los requisitos de usuario
+### 7.1.1 Prerrequisitos
 
-La tabla siguiente resume el grado de cobertura de cada uno de los ocho requisitos de usuario enunciados en el capítulo 3 frente a la evidencia observable en el sistema entregado.
+Para instalar y ejecutar la herramienta es necesario disponer del siguiente *software* en el sistema operativo del usuario (Windows, macOS o Linux):
 
-| Requisito | Cobertura | Evidencia |
+- **Python 3.11 o superior**. Se recomienda comprobar la versión con `python --version`.
+- **Git**, disponible en el `PATH` del usuario. Necesario para el modo URL: el agente clona el repositorio analizado en una caché local. Se comprueba con `git --version`.
+- **Conexión a Internet**. La herramienta envía las solicitudes a los proveedores de LLM por HTTPS y, en el modo URL, descarga el repositorio analizado por el mismo protocolo.
+
+Adicionalmente, el usuario debe disponer de al menos una clave de API válida para uno de los dos proveedores soportados: Google (`GOOGLE_API_KEY`) o Groq (`GROQ_API_KEY`). Ambas se pueden obtener gratuitamente en los portales de los proveedores; el sistema utiliza únicamente las cuotas del *free tier* en su configuración por defecto.
+
+### 7.1.2 Procedimiento de instalación
+
+La instalación se realiza en cuatro pasos, desde una terminal abierta en el directorio donde se desee clonar el proyecto:
+
+1. **Clonar el repositorio del proyecto:**
+
+   ```
+   git clone <URL-del-repositorio-del-TFG>
+   cd llms-usage-normalization-bd-models
+   ```
+
+2. **Crear un entorno virtual** (recomendado) e instalar el paquete en modo editable:
+
+   ```
+   python -m venv .venv
+   source .venv/bin/activate          # macOS / Linux
+   .venv\Scripts\activate.bat         # Windows
+   pip install -e .
+   ```
+
+3. **Crear el fichero `.env`** en la raíz del proyecto, con al menos una de las dos claves de API:
+
+   ```
+   GOOGLE_API_KEY=AIza...
+   GROQ_API_KEY=gsk_...
+   ```
+
+   El fichero `.env` no debe versionarse: la entrada `.env` está incluida en `.gitignore` desde el inicio del proyecto.
+
+4. **Verificar la instalación:**
+
+   ```
+   python -m normalizer --help
+   ```
+
+   El comando debe mostrar la ayuda del CLI con los cuatro argumentos opcionales (`--provider`, `--model`, `--agent-model`, `--out-dir`) y el argumento posicional `INPUT_PATH`.
+
+### 7.1.3 Diagnóstico de problemas habituales
+
+| Síntoma | Causa probable | Acción recomendada |
 |---|---|---|
-| RU-1.1 Carga desde archivo | Total | Ejecución end-to-end sobre `data/spruce/keys.js`; artefactos producidos. |
-| RU-1.2 Carga desde directorio | Total | Ejecución end-to-end sobre `data/spruce-difuso/`; concatenación con marcas de origen. |
-| RU-1.3 Análisis a partir de URL | Total | Ejecución sobre la URL pública de Spruce; clonado en caché, agente activo, evidencia agregada. |
-| RU-2 Análisis del modelo documental | Total | Artefacto `02_analysis.md` con entidades, atributos, relaciones y trazas de evidencia. |
-| RU-3 Generación del modelo relacional | Total | Artefactos `03_design.md` y `04_ddl.sql` en todos los casos validados. |
-| RU-4 Independencia y configuración del proveedor de LLM | Total | Dos proveedores (Google, Groq) intercambiables sin cambios fuera de `providers/`. |
-| RU-5 Uso de agentes para análisis de repositorios | Total | Agente con cinco herramientas (`list_dir`, `read_file`, `grep`, `select_evidence`, `done`) sobre tres repositorios validados. |
-| RU-6 Interfaz de uso (CLI + GUI) | Total | CLI Click y GUI CustomTkinter; misma capa de núcleo para ambas. |
-| RU-7 Inspección de los resultados intermedios | Total | Cuatro artefactos del *pipeline* + traza del agente en directorios `--out-dir` aislados. |
-| RU-8 Prototipo | Total | Validación cualitativa sobre los tres modos de entrada y desde ambas interfaces. |
+| `RuntimeError: Falta GOOGLE_API_KEY` | La variable de entorno no está cargada, el `.env` no se está leyendo o la clave no se ha pegado correctamente. | Verificar que el `.env` está en la raíz del proyecto, no contiene espacios alrededor del `=` y la clave es válida en el portal del proveedor. |
+| `git: command not found` | Git no está instalado o no está en el `PATH`. | Instalar Git desde [https://git-scm.com](https://git-scm.com) y reabrir la terminal. |
+| `pip install -e .` falla con error de versión | Versión de Python anterior a 3.11. | Instalar Python ≥ 3.11 desde [https://python.org](https://python.org). |
+| `customtkinter` no se instala (al arrancar la GUI) | Falta la dependencia opcional para la GUI. | Ejecutar `pip install -e .[gui]` (instala todo el extra de una vez). |
+| La pestaña Diagrama ER muestra "Graphviz no disponible" | El binario `dot` de Graphviz no está instalado o no está accesible en el `PATH` del proceso actual. | Instalar con `winget install Graphviz.Graphviz` (Windows), `brew install graphviz` (macOS) o `sudo apt install graphviz` (Linux) y pulsar "Reintentar" desde la propia pestaña; la aplicación detecta el binario en las rutas estándar sin necesidad de reiniciar. |
 
-La evaluación de los requisitos del sistema (RFs y RNFs del capítulo 4) sigue el mismo patrón: cada RF se traza a una decisión arquitectónica del capítulo 5 (§5.1.5) y a su materialización en un módulo del capítulo 6 (§6.1.1); cada RNF se acredita con la inspección del código y, cuando aplica, con las mediciones de §6.2.2.
+## 7.2 Manual de usuario CLI
 
-### 8.1.2 Resultados cuantitativos
+### 7.2.1 Sintaxis básica
 
-La cobertura del sistema sobre los *datasets* de referencia es la siguiente:
+La invocación general del CLI es:
 
-- **`data/spruce/`** (caso de control con *schemas* explícitos): cobertura **11/11** entidades del modelo UML manual con Google (Gemma 4 31B); cobertura **10/11** con Groq (Llama 3.3 70B). La única entidad perdida por Groq es marginal en el corpus.
-- **`data/spruce-difuso/`** (mismo modelo, sin *schemas* declarativos): cobertura **11/11** con Google; **7/11** con Groq, perdiendo las familias `keys` / `key_stats` y `analytics` / `analytics_stats`.
-- **URL pública de Spruce** (modo URL, agente activo): cobertura **11/11** del UML con un agente Gemini que selecciona los cuatro *schemas* declarativos del repositorio en cinco iteraciones.
-- **URL pública de Habitica** (modo URL, validación cualitativa adicional): 31 tablas generadas, recuperando el modelo `User` descompuesto en 13 tablas y las familias `Tasks`, `Groups`, `Challenges`, `Messages`, `Webhooks`, `Subscriptions`, `Transactions` y `Tags`. No se recuperan `Coupon`, `Blocker`, `IapPurchaseReceipt`, `NewsPost`, `EmailUnsubscription`, `PushDevice` ni `Inbox`. La cobertura es satisfactoria como caso de tamaño realista pero no completa.
+```
+python -m normalizer <entrada> [--provider NOMBRE] [--model MODELO] [--agent-model MODELO] [--out-dir DIR]
+```
 
-Sobre tres ejecuciones independientes del agente sobre Habitica con la misma configuración se observaron rangos de 5 a 22 archivos seleccionados. El sistema documenta de forma intencional este rango en lugar de un único número favorable, alineándose con la lección L7 ("honestidad estadística") del capítulo 2.
+| Argumento | Tipo | Valor por defecto | Descripción |
+|---|---|---|---|
+| `<entrada>` | ruta o URL | — (obligatorio) | Ruta a un archivo, ruta a un directorio o URL pública de un repositorio Git. |
+| `--provider` | `google` \| `groq` | `google` | Proveedor de LLM a utilizar. |
+| `--model` | texto libre | Por proveedor | Modelo concreto del *pipeline* (texto a texto). |
+| `--agent-model` | texto libre | Por proveedor | Modelo concreto del agente. Solo aplica si la entrada es una URL. |
+| `--out-dir` | ruta | `out` | Directorio de salida para los artefactos. |
 
-### 8.1.3 Reflexión sobre el techo del modelo
+Los valores por defecto para cada proveedor son:
 
-Una de las conclusiones más relevantes del trabajo, ya formulada como lección L1 del capítulo 2, es que **la capacidad del modelo elegido pone un techo a lo que el *prompt* puede lograr**. Sobre el mismo *prompt*, la jerarquía observada de modelos para el agente con *function calling* es:
+- **Google**: `gemma-4-31b-it` para el *pipeline*, `gemini-3.1-flash-lite` para el agente.
+- **Groq**: `llama-3.3-70b-versatile` para el *pipeline*, `qwen/qwen3-32b` para el agente.
 
-`Gemini 3.1 Flash Lite` > `Qwen3-32B` > `Llama 4 Scout` ≫ `Llama 3.x` / `gpt-oss`
+### 7.2.2 Tres casos de uso típicos
 
-Esta jerarquía se traduce directamente en cobertura sobre el modelo de referencia: sobre Spruce, todos los modelos hasta `Llama 4 Scout` cierran el caso; sobre Habitica, solo Gemini lo aborda con éxito. La consecuencia metodológica del trabajo es que **invertir tiempo en *prompt engineering* tiene rendimientos decrecientes una vez se exprime el modelo elegido**, y que la mejora de la cobertura a partir de cierto punto requiere subir de modelo (con el coste correspondiente, si no es gratuito) o asumir el residuo de varianza.
+#### Caso A. Archivo único con *schemas* explícitos
 
-### 8.1.4 Reflexión sobre el coste y la dependencia del *free tier*
+Adecuado cuando el usuario dispone de un único fichero con los *schemas* declarativos del modelo documental (por ejemplo, un *bundle* exportado).
 
-La adopción inicial de un único proveedor (Google) resultó frágil tras el recorte de cuotas de diciembre de 2025. La incorporación del segundo proveedor (Groq) fue posterior y se motivó como mitigación del riesgo R-01. Esta experiencia confirma que, en proyectos académicos o de investigación que se apoyan en proveedores externos, **la abstracción multi-proveedor es una decisión arquitectónica con valor de gestión de riesgo**, no solo de elegancia técnica.
+```
+python -m normalizer data/spruce/keys.js --out-dir out-keys/
+```
 
-### 8.1.5 Reflexión final
+Tras la ejecución, el directorio `out-keys/` contiene:
 
-Más allá del cumplimiento de los requisitos, el trabajo ha aportado tres elementos que el autor considera contribuciones genuinas para futuros proyectos similares: (i) una abstracción **`LLMProvider`** cuyas dos operaciones del núcleo (`generate` y `chat`) han probado ser suficientes para dos SDKs con paradigmas distintos (Google con `Content/Part`, Groq con formato OpenAI), ampliada con una tercera operación auxiliar (`list_models`) que la GUI usa para mantener el catálogo de modelos sincronizado con el proveedor sin intervención manual; (ii) un **agente con *function calling* nativo** cuya implementación cabe en menos de 250 líneas de Python sin depender de *frameworks* de agentes externos, lo que reduce drásticamente la superficie de mantenimiento; y (iii) un **enfoque metodológico** que combina rigor de ingeniería del *software* (29148 en requisitos, ISO 31000 en riesgos, patrones GoF en diseño) con honestidad estadística en los resultados (rango observado y no número único). Las tres aportaciones son transferibles a otros TFG que se apoyen en LLMs como herramienta y, en opinión del autor, constituyen el valor principal del trabajo para la comunidad académica.
+```
+out-keys/
+├── 01_input.txt           # entrada agregada
+├── 02_analysis.md         # análisis del modelo documental
+├── 03_design.md           # diseño relacional
+└── 04_ddl.sql             # DDL Oracle generado
+```
 
-## 8.2 Ampliaciones
+#### Caso B. Directorio con evidencia heterogénea
 
-Esta sección recoge seis líneas de ampliación que el propio proyecto deja abiertas: mejoras y extensiones identificadas durante el desarrollo.
+Adecuado cuando el usuario ha curado manualmente un conjunto de archivos del proyecto que considera suficientes para reconstruir el modelo documental.
 
-### Ampliación A. Selección independiente de proveedores para *pipeline* y agente
+```
+python -m normalizer data/spruce-difuso/ --provider google --out-dir out-difuso/
+```
 
-En la versión actual, el *flag* `--provider` es único y obliga a usar el mismo proveedor para el *pipeline* y para el agente. Añadir un segundo *flag* `--agent-provider` independiente permitiría combinaciones útiles como "agente Google + *pipeline* Groq", que durante el desarrollo se ha probado de facto como respuesta a episodios transitorios de 5xx en Gemma. El cambio es localizado: se concentra en `cli.py` (un *option* adicional) y no requiere modificaciones en el resto del sistema, dado que `build_provider` ya admite invocaciones independientes para los dos roles.
+#### Caso C. URL de un repositorio público
 
-### Ampliación B. Tercer proveedor: Z.ai
+Adecuado cuando el usuario solo dispone de la URL del repositorio y delega en el agente la selección de los archivos relevantes.
 
-Z.ai constituye el candidato más prometedor para un tercer proveedor de LLM. Los modelos `GLM-4.5-Flash` y `GLM-4.7-Flash` están disponibles en *free tier* sin tarjeta de crédito, con 128 K de contexto (suficiente para absorber el árbol BFS de 2 000 entradas de Habitica sin chocar contra el TPM), soporte oficial de *function calling* y una API OpenAI-compatible que facilita la implementación. El único cuello observado del *free tier* —una sola petición concurrente— se cumple de manera trivial con el diseño actual, dado que el bucle del agente es secuencial.
+```
+python -m normalizer https://github.com/dan-divy/spruce --out-dir out-spruce-url/
+```
 
-La implementación consistiría en un módulo nuevo `normalizer/providers/zai.py` aproximadamente equivalente a `groq.py` con `base_url` y modelos por defecto distintos, y el registro en `_REGISTRY`, `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS`. La validación seguiría el mismo patrón que para Groq: Spruce-URL primero (caso pequeño) y luego Habitica para comparar con la ejecución Google de referencia.
+Adicionalmente al *pipeline*, esta invocación genera el directorio `00_discovery/`:
 
-### Ampliación C. Suite de pruebas automatizadas
+```
+out-spruce-url/
+├── 00_discovery/
+│   ├── tree.txt           # árbol del repo entregado al agente
+│   ├── discovery.md       # traza de las iteraciones del agente
+│   └── evidence/          # archivos seleccionados por el agente
+├── 01_input.txt
+├── 02_analysis.md
+├── 03_design.md
+└── 04_ddl.sql
+```
 
-El plan de pruebas descrito en §4.3 y §5.3 contempla los niveles unitario, integración y sistema. Su materialización es la principal ampliación en el plano de la ingeniería del *software*: introducir `pytest` como armazón, `MockProvider` como doble de prueba para los niveles aislados del LLM, *fixtures* JSON con respuestas reales del SDK capturadas para los adaptadores, y `sqlparse` para la verificación sintáctica del DDL en el nivel de aceptación. La estructura del repositorio ya contempla esta ampliación con el directorio `tests/baseline/<dataset>.yaml` para los *checklists* de los casos de aceptación cualitativa.
+### 7.2.3 Lectura de la salida
 
-### Ampliación D. Integración continua
+Durante la ejecución, la CLI emite por la salida de error estándar (`stderr`) una traza con sello de tiempo relativo al arranque:
 
-Como continuación natural de la Ampliación C, la activación de GitHub Actions permitiría ejecutar la suite en cada *commit* y disponer de los análisis de seguridad SCA y SAST descritos en RNF-4.3. El esfuerzo es bajo (un único fichero YAML en `.github/workflows/`) y completaría la columna "Implementado" en la tabla de cumplimiento de RNFs.
+```
+[00:00] Provider: google | pipeline=gemma-4-31b-it | agent=gemini-3.1-flash-lite | out=out-spruce-url/
+[00:00] Descubriendo evidencia desde https://github.com/dan-divy/spruce ...
+[00:01] Agente arrancado (max_iters=30, max_files=30, árbol=187 entradas)
+[00:14] [iter 01] -> grep('Schema|model'), list_dir(utils/models)
+[00:28] [iter 02] -> read_file(utils/models/user.js), read_file(utils/models/room.js)
+...
+[02:34] Agente done — 4 archivos seleccionados en 5 iter.
+[02:34] Evidencia en out-spruce-url/00_discovery/evidence (traza en out-spruce-url/00_discovery/discovery.md)
+[02:35] Pipeline: ANÁLISIS ...
+[03:01] Pipeline: ANÁLISIS ok (26s)
+[03:01] Pipeline: DISEÑO ...
+[03:27] Pipeline: DISEÑO ok (26s)
+[03:27] Pipeline: DDL ...
+[03:48] Pipeline: DDL ok (21s)
+[03:48] DDL generado en out-spruce-url/04_ddl.sql
+```
 
-### Ampliación E. Portabilidad del DDL a Oracle anterior a 23ai
+### 7.2.4 Solución de problemas frecuentes
 
-El DDL generado utiliza el tipo `BOOLEAN`, soportado de forma nativa por Oracle 23ai pero ausente de las versiones anteriores. Un mapeo posterior trivial —`BOOLEAN` → `NUMBER(1) CHECK (X IN (0,1))` o `CHAR(1) CHECK (X IN ('Y','N'))`— ampliaría la portabilidad del DDL al universo Oracle <23, mayoritario en los entornos *legacy* objetivo. La ampliación puede materializarse como una opción adicional del *pipeline* (`--oracle-version 12c|19c|23ai`) o como un *postprocesador* externo aplicable al artefacto `04_ddl.sql`.
+| Síntoma | Causa probable | Acción recomendada |
+|---|---|---|
+| Ejecuciones con cuota agotada (HTTP 429) | Excede el *free tier* del proveedor. | El sistema reintenta automáticamente respetando el `retry-after`. Si persiste, esperar a la recarga de cuota o cambiar de proveedor (`--provider groq` / `--provider google`). |
+| El agente devuelve "presupuesto agotado" | Repositorio demasiado grande o *prompt* mal sintonizado. | Inspeccionar `00_discovery/discovery.md` y `00_discovery/tree.txt`. Considerar invocar con un valor mayor de `max_iters` (requiere modificación del código). |
+| Cobertura del DDL inferior a la esperada | Varianza del agente (riesgo R-04). | Repetir la ejecución; comparar con la traza turno-a-turno; si la varianza es sistemática, probar otro modelo del agente. |
+| HTTP 413 sobre el primer mensaje al LLM | Frontera Groq × tamaño del árbol (riesgo R-02). | Usar `--provider google` para el modo URL sobre repositorios medianos+. |
 
-### Ampliación F. Reducción de la varianza del agente
+## 7.3 Manual de usuario GUI
 
-La varianza observada del agente (5–22 archivos sobre Habitica) tiene tres palancas de reducción:
+### 7.3.1 Acceso a la interfaz gráfica
 
-- **Herramienta `select_evidence_batch(items=[…])`**, que materialice el *batching* en una sola invocación y elimine la ambigüedad del *batching* implícito por consecutividad. El cambio se localiza en `discovery/tools.py`.
-- **Agrupación de `select_evidence` consecutivos en `dispatch()`**, sin cambiar la interfaz expuesta al LLM. Solución alternativa más conservadora.
-- **Nudges dinámicos**: tras cada `read_file`, devolver al agente la lista de archivos del mismo directorio que aún no ha leído. Esto ataca de forma directa el patrón "principal vs secundario". El cambio se concentra en `discovery/tools.py:_do_read_file` y en una pequeña ampliación de `DiscoveryState` para llevar la lista de archivos vistos.
+Tras la instalación con el extra `[gui]` (`pip install -e .[gui]`), la interfaz gráfica se lanza con:
 
-Ninguna de las tres elimina la varianza por completo —es propiedad latente del modelo—, pero las tres reducen su techo de forma medible.
+```
+python -m normalizer.gui
+```
+
+La ventana principal de la aplicación se organiza en torno a una **secuencia de tres pantallas guiadas**: configuración, ejecución con seguimiento del progreso y resultado.
+
+### 7.3.2 Pantalla 1 — Configuración
+
+La primera pantalla presenta un único formulario con tres bloques:
+
+**Bloque 1 — Entrada.** Un selector segmentado escoge el modo (`Archivo`, `Directorio`, `URL`). Bajo el selector, un campo y un botón "Examinar..." adaptan su comportamiento al modo:
+
+- **Archivo**: el botón abre un selector de archivos del sistema operativo.
+- **Directorio**: el botón abre un selector de carpetas del sistema operativo.
+- **URL**: el botón se deshabilita y el campo acepta la URL pública del repositorio (`https://…`, `http://…` o `git@…`).
+
+La aplicación valida inmediatamente: el archivo o directorio debe existir, y la URL debe tener uno de los prefijos aceptados. Mientras la validación no pase, el botón "Ejecutar" permanece deshabilitado y un texto explicativo indica el motivo.
+
+**Bloque 2 — LLM y directorio de salida.** Tres controles desplegables más un selector de directorio:
+
+- **Proveedor**: combo con los valores `google` y `groq`. Al cambiar la selección, la aplicación consulta el catálogo de modelos del proveedor (`LLMProvider.list_models()`, que internamente llama a `client.models.list()` del SDK correspondiente) y popula dinámicamente los dos combos siguientes. El modelo por defecto del proveedor queda pre-seleccionado. Si la API key no está configurada o el proveedor responde con error, los combos caen al modelo por defecto y un texto auxiliar gris invita al usuario a introducir la clave para ver el catálogo completo.
+- **Modelo del *pipeline***: combo editable. Acepta cualquier identificador de modelo válido para el proveedor seleccionado.
+- **Modelo del agente**: combo editable. Filtra el catálogo a los modelos con soporte verificado de *function-calling* (una *whitelist* corta dentro del *provider*, porque ningún SDK expone este metadato hoy). Solo se habilita si la entrada es una URL.
+- **Directorio de salida**: por defecto, `out-gui-YYYYMMDD-HHMMSS/` en el directorio de trabajo; se puede cambiar con el botón "Examinar...".
+
+**Bloque 3 — Credenciales del proveedor.** Para el proveedor seleccionado, el formulario muestra un campo de texto enmascarado (`••••`) con la clave de API correspondiente:
+
+- Si la variable de entorno asociada (`GOOGLE_API_KEY` o `GROQ_API_KEY`) ya está definida —ya sea exportada en el *shell* o cargada del fichero `.env`—, el campo aparece relleno con un marcador opaco y deshabilitado. Un botón "Cambiar" lo desbloquea por si el usuario quiere sustituir la clave.
+- Si la variable no está definida, el campo aparece vacío y editable. Cuando el usuario introduce una clave y pulsa "Ejecutar", la aplicación la inyecta en el entorno del proceso y la persiste automáticamente en el fichero `.env` del directorio de trabajo (creándolo si no existe) mediante `dotenv.set_key`. El fichero `.env` está excluido del control de versiones por `.gitignore` (véase 7.1.2).
+
+Un botón "Ejecutar" en la esquina inferior derecha pasa a la siguiente pantalla cuando todos los campos obligatorios están completos.
+
+En la cabecera de la pantalla, un enlace discreto "Abrir resultados existentes..." permite cargar un directorio `out-*/` de una corrida anterior y saltar directamente a la pantalla de resultado sin re-ejecutar el *pipeline*. Útil para revisar el diagrama ER o exportar a ZIP corridas antiguas sin volver a consumir cuota del proveedor.
+
+### 7.3.3 Pantalla 2 — Ejecución y progreso
+
+La segunda pantalla muestra el avance del proceso en tiempo real organizado en cuatro bloques verticales:
+
+- **Cabecera**: título de la pantalla, botón Cancelar a la derecha y una línea de metadatos con el proveedor, modelos seleccionados y directorio de salida, más un reloj que tickea cada segundo (*wall clock*) desde el inicio de la corrida (gracias a `_log.reset_clock()`, que se invoca al lanzar el hilo trabajador para que la primera marca sea `[00:00]`).
+- **Progreso del pipeline** (bloque protagonista): una fila por fase con icono de estado, nombre y texto a la derecha (`pendiente` / `en curso · 0:42` / `completada · 2:14` / `error · 0:05` / `cancelando · 0:18`). La fase activa tiene fondo destacado y su contador de segundos se refresca en vivo. Un pie de bloque resume el avance global: `Fase 2 de 4 · 2:56 transcurridos`. En modo URL las fases son Descubrimiento, Análisis, Diseño y DDL; en modo archivo o directorio, las tres últimas.
+- **Tabla de iteraciones del agente** (solo en modo URL): tabla viva con dos columnas (`Iter`, `Tool calls`) que se actualiza conforme el agente completa cada iteración del bucle.
+- **Panel de *log***: caja compacta de altura fija con las líneas `[mm:ss] …` emitidas por el núcleo, con auto-*scroll* al final. Permite seguir el detalle bajo demanda sin que el log se coma la pantalla.
+
+El botón **Cancelar** señaliza la cancelación cooperativa al núcleo y, al mismo tiempo, transita inmediatamente a la pantalla de resultado sin esperar a que termine la llamada al LLM en curso (que los SDKs síncronos no permiten abortar mid-HTTP). El hilo trabajador queda *abandonado* — sigue vivo en *background* hasta que la llamada termine, pero el `GuiController` descarta sus eventos restantes y no contamina la siguiente corrida (el hilo es `daemon` y muere solo). El núcleo, mientras tanto, aborta entre fases, entre iteraciones del agente y también entre llamadas a *tools* dentro de un mismo turno, escribe la traza de descubrimiento con la evidencia parcial y los artefactos ya escritos a disco se preservan (RF-7.3). En la pantalla de resultado, un banner en *tertiary-container* indica al usuario que la corrida fue cancelada y advierte de que la última operación puede seguir terminando en *background*.
+
+Al terminar (con éxito, cancelación o error), la pantalla transita automáticamente a la pantalla de resultado.
+
+### 7.3.4 Pantalla 3 — Resultado
+
+La pantalla final muestra un banner con el estado de la ejecución (éxito, cancelación o error con la fase de origen y el mensaje) y un panel con pestañas que presentan los artefactos producidos:
+
+- **Diagrama ER** (pestaña por defecto): diagrama entidad-relación auto-generado a partir del DDL final. El parser interno extrae las tablas (con sus columnas y claves primarias marcadas) y las claves foráneas, construye un grafo Graphviz y lo renderiza como PNG. El *layout* se selecciona automáticamente según la topología (jerárquico para grafos modestos; *force-directed* cuando hay un nodo concentrador). El visor permite *zoom* con los controles `−`, `+`, `100 %`, "Ajustar a ventana" o `Ctrl + rueda`, *scroll* horizontal y vertical, y un botón "Abrir en visor externo" que delega el PNG al visor del sistema operativo. Si el binario Graphviz no está disponible en el sistema, la pestaña muestra instrucciones de instalación específicas para cada sistema operativo y un botón "Reintentar" que vuelve a probar tras instalarlo, sin necesidad de cerrar la aplicación; el resto de pestañas funciona con normalidad.
+- **Diseño** (`03_design.md`): Markdown renderizado con encabezados, listas, tablas (embebidas como *widgets* reales con *scroll* horizontal independiente cuando exceden el ancho del visor) y resaltado en línea (bold, código, énfasis).
+- **DDL** (`04_ddl.sql`): texto con resaltado de sintaxis SQL (palabras clave, literales, comentarios, operadores) gracias a `pygments`.
+- **Análisis** (`02_analysis.md`): Markdown renderizado.
+- **Descubrimiento** (`00_discovery/discovery.md`, solo en modo URL): Markdown renderizado.
+
+En la barra inferior, tres acciones cierran el ciclo: "Abrir directorio" lanza el explorador del sistema en `out-dir`, "Exportar como ZIP" comprime todos los artefactos en un único fichero seleccionado por el usuario y "Nueva ejecución" vuelve a la pantalla 1 reseteando el estado.
+
+### 7.3.5 Recomendaciones de uso para usuarios no técnicos
+
+- Comenzar con el ejemplo `data/spruce/` para familiarizarse con el flujo antes de aplicar la herramienta a un proyecto propio.
+- En el modo URL, repositorios grandes pueden tardar varios minutos: la tabla de iteraciones del agente y la traza turno-a-turno permiten seguir el avance.
+- Aunque las credenciales se pueden introducir directamente en la pantalla 1, también se pueden colocar en el fichero `.env` antes de arrancar la herramienta; la aplicación las carga al inicio en ambos casos.
+- La privacidad del contenido enviado al proveedor de LLM es responsabilidad del usuario: no utilizar la herramienta con código fuente confidencial sin autorización del titular (RNF-4.4).
+
+## 7.4 Manual técnico
+
+Este apartado describe los puntos de extensión más habituales para usuarios técnicos que deseen ampliar o adaptar la herramienta sin reescribir su núcleo.
+
+### 7.4.1 Añadir un nuevo proveedor de LLM
+
+El procedimiento es directo gracias a la abstracción `LLMProvider` (§5.2.5, patrón *Strategy*):
+
+1. Crear un nuevo módulo `normalizer/providers/<nombre>.py` que defina una clase `<Nombre>Provider` implementando el protocolo `LLMProvider`: las operaciones `generate(prompt) -> str` y `chat(messages, tools) -> ChatResponse`.
+2. Implementar los adaptadores privados que traduzcan los tipos neutros (`Message`, `ToolSpec`) al formato del SDK del proveedor, y la conversión inversa de la respuesta a `ChatResponse`.
+3. Registrar el nuevo proveedor en `normalizer/providers/__init__.py`:
+
+   ```python
+   from normalizer.providers.<nombre> import <Nombre>Provider
+
+   _REGISTRY["<nombre>"] = <Nombre>Provider
+   DEFAULT_MODELS["<nombre>"] = "<modelo-por-defecto-pipeline>"
+   DEFAULT_AGENT_MODELS["<nombre>"] = "<modelo-por-defecto-agente>"
+   ```
+
+4. Recordar definir la variable de entorno de la API key correspondiente y documentarla en el `.env.example`.
+
+`providers/google.py` y `providers/groq.py` son ejemplos completos del procedimiento.
+
+### 7.4.2 Modificar un *prompt*
+
+Los *prompts* del sistema residen en `normalizer/prompts/`, uno por fichero (`analyze.md`, `design.md`, `ddl.md`, `discovery_system.md`). Para modificarlos:
+
+- Los *prompts* de las fases del *pipeline* (`analyze.md`, `design.md`, `ddl.md`) contienen un único *placeholder* (`{evidence}`, `{analysis}`, `{design}` respectivamente). El sistema los formatea con `str.format`, lo que implica que cualquier llave literal (`{`, `}`) que se introduzca en el cuerpo del *prompt* debe duplicarse (`{{`, `}}`).
+- El *prompt* de sistema del agente (`discovery_system.md`) **no se formatea**: contiene ejemplos en JavaScript con llaves literales (`new Schema({...})`) que romperían `str.format`.
+
+### 7.4.3 Cambiar los límites del agente
+
+Los presupuestos del agente se controlan mediante constantes en módulos específicos:
+
+- `normalizer/discovery/agent.py`: `MAX_ITERS = 30` (iteraciones máximas por sesión), `MAX_FILES = 30` (archivos seleccionables máximos). También configurables al invocar `discover_from_url` con los *keyword* `max_iters` y `max_files`.
+- `normalizer/discovery/tools.py`: `READ_FILE_CAP = 50_000` *bytes* (tamaño máximo de un archivo leído por `read_file`), `GREP_MAX_HITS = 50` (número máximo de coincidencias devueltas por `grep`).
+- `normalizer/discovery/filesystem.py`: `MAX_FILE_BYTES` (tamaño máximo de un archivo aceptado en el árbol), `max_entries` por defecto en `build_tree_summary` (`2000`).
+
+Modificar estos valores tiene efectos directos en el consumo del *free tier* de los proveedores: por ejemplo, subir `MAX_ITERS` a 50 puede duplicar el número de peticiones al LLM por sesión, agotando antes la cuota diaria.
+
+### 7.4.4 Añadir un nuevo *dataset*
+
+Los *datasets* de control viven en `data/`. Para añadir uno nuevo:
+
+1. Crear un directorio `data/<nombre>/` con los archivos curados.
+2. Documentar el modelo de referencia esperado (por ejemplo, un diagrama UML manual o una lista de entidades) para poder comparar la cobertura cualitativa.
+3. Si se planea integrar el *dataset* en la suite de aceptación cualitativa (§5.3.3), añadir un *checklist* en `tests/baseline/<nombre>.yaml` con las entidades, claves y relaciones esperadas.

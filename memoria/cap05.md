@@ -1,290 +1,702 @@
-# Capítulo 5. Diseño
+# Capítulo 4. Requisitos del Sistema
 
-Este capítulo describe el diseño del sistema a partir de los requisitos enunciados en el capítulo 4. Se organiza en tres apartados: la **arquitectura general** (5.1) describe los componentes lógicos del sistema y su despliegue; el **diseño de detalle** (5.2) explica la estructura interna del código, el flujo de ejecución y los patrones de diseño empleados; y el **diseño de pruebas** (5.3) define qué se prueba en cada subsistema, sobre la base del plan de pruebas presentado en §4.3.
+Este capítulo proporciona una representación técnica del producto requerido que indica lo que el sistema debe realizar para cumplir los requisitos de usuario del capítulo 3. Su contenido se alinea con el resultado del proceso de *Requirements Analysis Process* descrito en ISO/IEC/IEEE 15288 [3] y se especifica de acuerdo con la norma ISO/IEC/IEEE 29148:2018 [1], aplicando la **ficha esencial completa** a cada requisito atómico, con los atributos exigidos por 29148 §5.2.4 ("Characteristics of individual requirements") y §5.2.5 ("Characteristics of a set of requirements"): identificador único, descripción no ambigua y verificable, fuente trazable al RU del que deriva, prioridad y necesidad declaradas, mecanismo de verificación y dependencias con otros requisitos.
 
-## 5.1 Diseño de la arquitectura
+## 4.1 Requisitos funcionales
 
-### 5.1.1 Visión general
+### 4.1.1 Funciones del sistema
 
-El sistema es una **aplicación de escritorio mono-proceso** que orquesta llamadas a APIs externas de modelos de lenguaje y produce, como salida, un conjunto de artefactos persistentes en el sistema de archivos local. No expone ningún servicio remoto: cada invocación es autocontenida y se ejecuta sobre la máquina del usuario.
+Los requisitos funcionales se han agrupado en siete áreas: gestión de la entrada, *pipeline* de transformación, agente de descubrimiento, herramientas operativas del agente, gestión del proveedor de LLM, interfaces de usuario y gestión de errores y diagnóstico. Cada RF de primer nivel se descompone en sub-requisitos atómicos que detallan la capacidad correspondiente, especificados con la ficha completa.
 
-El núcleo de la herramienta es un **pipeline lineal de cuatro fases** —lectura, análisis del modelo documental, diseño relacional y generación de DDL— que transforma una colección heterogénea de evidencias documentales en un esquema relacional normalizado expresado en SQL compatible con Oracle. Cada fase recibe el artefacto producido por la anterior, persiste su propia salida en disco y se invoca con un *prompt* externalizado en un fichero independiente.
+#### RF-1. Gestión de la entrada (traza: RU-1)
 
-El sistema soporta **tres modos de entrada** —fichero único, directorio curado y URL de repositorio público— que convergen en el mismo *pipeline*. Cuando la entrada es una URL, el sistema delega la selección de las evidencias en un **agente de descubrimiento** que clona el repositorio, lo explora mediante un conjunto acotado de herramientas (*function calling*) y entrega al *pipeline* el subconjunto de archivos relevante.
+El sistema debe aceptar tres modos de entrada y unificarlos internamente en una representación común antes de invocar al LLM.
 
-La interacción con cualquier proveedor de LLM se realiza a través de una **abstracción común** que aísla al *pipeline* y al agente del SDK concreto del proveedor. Esto permite alternar proveedores (Google, Groq y, por extensión, cualquier otro) sin modificar el resto del sistema, y elegir en cada ejecución qué modelo concreto utiliza cada uno de los dos subsistemas que invocan al LLM: el *pipeline*, que requiere únicamente generación de texto, y el agente, que requiere además capacidad de *function calling*.
+##### RF-1.1 Lectura de archivo único
 
-El sistema ofrece **dos interfaces equivalentes**: una interfaz de línea de comandos para usuarios técnicos y para la integración en *pipelines* automatizados, y una interfaz gráfica para usuarios no técnicos. La GUI es estrictamente una capa de presentación: invoca los mismos puntos de entrada del núcleo que el CLI sin duplicar lógica, lo que materializa el requisito de paridad funcional RF-6.3.
+El sistema debe aceptar como entrada la ruta a un único archivo de texto y leer su contenido íntegro como evidencia del modelo documental, anteponiendo a su contenido una marca que identifique su ruta original.
 
-El estilo arquitectónico combina **pipes-and-filters** para la cadena de transformación (cada fase es un filtro con entrada y salida bien definidas) con un **agente** independiente para la tarea de exploración de repositorios, que no admite una formulación lineal.
-
-### 5.1.2 Diagrama de bloques general
-
-![Figura 5.1. Diagrama de bloques general del sistema](assets/png/fig-05-1.png)
-
-**Interfaces.** El sistema ofrece dos puntos de entrada equivalentes: una **interfaz de línea de comandos** orientada a usuarios técnicos y a la integración en *pipelines* automatizados, y una **interfaz gráfica** orientada al usuario no técnico, que permite seleccionar la fuente, configurar el proveedor, seguir el avance de la ejecución, inspeccionar los artefactos intermedios y exportar el resultado final. La equivalencia funcional entre CLI y GUI es un requisito explícito (RF-6.3): toda capacidad expuesta por la GUI puede ejecutarse también desde la CLI, porque la GUI invoca los mismos puntos de entrada del núcleo.
-
-**Núcleo.** El **pipeline** concentra la lógica de transformación principal. El **agente de descubrimiento** se activa exclusivamente en el modo URL: clona el repositorio en una caché local, recibe del sistema un árbol filtrado del repositorio y, mediante un bucle de *function calling*, decide qué archivos contienen evidencia útil del modelo documental.
-
-**Soporte.** La **abstracción `LLMProvider`** uniformiza el acceso al LLM mediante tres operaciones: una para generación de texto (utilizada por el *pipeline*), una para diálogo con herramientas (utilizada por el agente) y una auxiliar para listar el catálogo de modelos disponibles del proveedor (utilizada por la GUI para poblar dinámicamente los selectores de modelo sin necesidad de cerrar el catálogo en código). El **tool-dispatcher** materializa, del lado Python, las decisiones que el LLM expresa como invocaciones de herramientas; encapsula las herramientas de exploración del repositorio. El **subsistema de prompts** mantiene los *prompts* de cada fase como ficheros Markdown editables sin necesidad de modificar el código. La **persistencia** se materializa en un directorio de salida específico por ejecución, donde se almacenan todos los artefactos intermedios y finales. La **observabilidad** consiste en un registro estructurado por la salida de error estándar que marca el inicio y el fin de cada fase con un sello de tiempo relativo al arranque del proceso, complementado con un mecanismo de *callbacks* que la GUI consume sin parsear *stderr*.
-
-**Sistemas externos.** El sistema interactúa con dos categorías de servicios externos: las **APIs de proveedores de LLM**, accedidas por HTTPS, y los **repositorios Git públicos**, accedidos mediante un cliente Git local con clonado superficial (`--depth 1`) para minimizar el tráfico.
-
-### 5.1.3 Diagrama de despliegue
-
-![Figura 5.2. Diagrama de despliegue](assets/png/fig-05-2.png)
-
-Todo el cómputo del sistema se concentra en la **máquina del usuario**, sobre la que se instala el paquete `normalizer` y un *runtime* de **Python 3.11 o superior**. El estado persistente se reparte en dos directorios bien acotados: una **caché de repositorios clonados** (`.cache/repos/`), que evita reclonar repositorios entre ejecuciones consecutivas, y un **directorio de salida** (`out-dir/`) específico para cada ejecución, donde se materializan los artefactos del *pipeline* y, en su caso, la traza del agente de descubrimiento. Las credenciales de los proveedores de LLM se inyectan a través de **variables de entorno**, opcionalmente cargadas desde un fichero `.env` que no debe versionarse en el repositorio del proyecto.
-
-Las dependencias externas del sistema son dos: el **proveedor de LLM** —que expone los dos endpoints utilizados, uno por cada operación de la abstracción `LLMProvider`— y la **forja Git remota** que aloja el repositorio del usuario. Ambas se acceden por HTTPS; el sistema no realiza modificaciones sobre ninguna de las dos.
-
-### 5.1.4 Decisiones arquitectónicas
-
-La arquitectura presentada se sustenta en un conjunto de decisiones cuya justificación se enuncia a continuación, cada una acompañada de su traza al requisito correspondiente.
-
-- **Aplicación mono-proceso y local.** El sistema se concibe como una herramienta de apoyo individual, no como un servicio multiusuario. Esta decisión reduce drásticamente la complejidad arquitectónica (no hay autenticación, control de sesiones ni concurrencia) y permite que la totalidad de los datos del usuario permanezca en su máquina. *Traza: RU-6, RU-7, RNF-3.*
-
-- **Estilo *pipes-and-filters* en el *pipeline* con artefactos persistentes por fase.** Cada una de las cuatro fases es un filtro con una entrada y una salida bien definidas, y persiste su salida como un fichero independiente en el directorio de salida. Esto facilita la inspección por parte del usuario, el diagnóstico de fallos a nivel de fase y la reanudación parcial de una ejecución interrumpida. *Traza: RU-2, RU-3, RU-7, RF-2.*
-
-- **Agente con *function calling* nativo del SDK.** Las decisiones del LLM sobre qué herramienta invocar se canalizan a través del mecanismo estructurado de *function calling* que ofrece cada SDK, en lugar de un esquema de respuesta JSON parseado a mano. Este enfoque es más robusto frente a desviaciones de formato del modelo y aprovecha el entrenamiento específico que los proveedores realizan sobre este canal. *Traza: RF-3, RF-4.4.*
-
-- **Abstracción de proveedor mediante un *Protocol* en lugar de una jerarquía de herencia.** La interfaz `LLMProvider` se declara como un protocolo estructural, no como una clase base abstracta. Esto permite añadir nuevos proveedores sin acoplarlos a una jerarquía existente y mantiene el *pipeline* y el agente totalmente desacoplados del SDK concreto. *Traza: RU-4, RF-5.1, RF-5.2.*
-
-- **Dos modelos distintos por proveedor: uno para el *pipeline* y otro para el agente.** El *pipeline* necesita únicamente capacidad de generación de texto; el agente, además, *function calling*. La selección de modelos por defecto distingue ambos casos, lo que permite combinar un modelo barato y rápido para el *pipeline* con uno más capaz para el agente. *Traza: RF-5.*
-
-- **Prompts externalizados como ficheros Markdown.** Los *prompts* de cada fase del *pipeline* y el *prompt* de sistema del agente residen en `normalizer/prompts/*.md` y se cargan en tiempo de importación. Esto desacopla la iteración sobre los *prompts* —que es frecuente durante el desarrollo— de los cambios en el código Python. *Traza: RF-2.7.*
-
-- **Confinamiento del agente al directorio temporal del repositorio clonado.** Las herramientas de acceso al sistema de archivos disponibles para el agente rechazan cualquier ruta que escape del directorio donde se ha clonado el repositorio analizado o del directorio de salida de la ejecución. Esto evita que el agente, ya sea por un error del modelo o por una invocación intencionada, acceda a información ajena a la tarea. *Traza: RF-4.2, RNF-4.2.*
-
-- **Credenciales de los proveedores fuera del código.** Las claves de API no aparecen en el código fuente ni en el repositorio versionado; se inyectan a través de variables de entorno cargadas opcionalmente desde un fichero `.env` local. *Traza: RU-4.3, RNF-4.1.*
-
-- **Aislamiento de ejecuciones por directorio de salida.** Cada invocación recibe (o adopta por defecto) un directorio de salida distinto. El sistema nunca asume que un directorio se reutiliza entre ejecuciones, lo que evita interferencias entre experimentos paralelos. *Traza: RU-7.2, RF-2.6.*
-
-### 5.1.5 Trazabilidad arquitectura ↔ requisitos
-
-La tabla siguiente resume cómo cada componente o decisión arquitectónica responde a los requisitos enunciados en los capítulos 3 y 4.
-
-| Componente o decisión | Requisitos asociados |
+| Atributo | Valor |
 |---|---|
-| Interfaces CLI y GUI | RU-6, RF-6 |
-| *Pipeline* lineal con artefactos persistentes | RU-2, RU-3, RU-7, RF-2 |
-| Agente de descubrimiento | RU-1.3, RU-5, RF-3 |
-| Herramientas confinadas del agente | RF-4, RNF-4.2 |
-| Abstracción `LLMProvider` | RU-4, RF-5 |
-| Subsistema de *prompts* externalizado | RF-2.7 |
-| Configuración de credenciales | RU-4.3, RNF-4.1 |
-| Aislamiento por directorio de salida | RU-7.2, RF-2.6 |
-| Reintentos sobre errores transitorios del proveedor | RNF-2.2 |
-| Validación de la entrada y filtrado de archivos no textuales | RF-1.4, RF-1.5, RNF-1.2 |
+| Fuente | RU-1.1. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Ejecución de `python -m normalizer data/spruce/keys.js`; el artefacto `01_input.txt` reproduce el contenido del archivo con la marca de origen. |
+| Dependencias | RF-2.1. |
 
----
+##### RF-1.2 Lectura de directorio curado
 
-## 5.2 Diseño de detalle
+El sistema debe aceptar como entrada la ruta a un directorio, leer todos los archivos de texto contenidos en su primer nivel (no recursivo) y concatenarlos en un único documento de evidencia, anteponiendo a cada archivo una marca que identifique su ruta original.
 
-### 5.2.1 Estructura del código
-
-El código del sistema se organiza en un único paquete Python, `normalizer`, dividido en módulos cuya responsabilidad se enumera en la tabla siguiente.
-
-| Módulo o subpaquete | Responsabilidad |
+| Atributo | Valor |
 |---|---|
-| `normalizer.cli` | Punto de entrada del programa por línea de comandos: parseo de argumentos, validación de la entrada, detección del modo (archivo, directorio o URL), instanciación del proveedor e invocación del agente de descubrimiento o del *pipeline* según el modo. |
-| `normalizer.gui` | Punto de entrada gráfico: presentación de las tres pantallas guiadas (configuración, ejecución con progreso, resultado con diagrama ER). Invoca los mismos puntos de entrada del núcleo (`run_pipeline`, `discover_from_url`) que el CLI, sin re-implementar lógica. |
-| `normalizer.pipeline` | Implementación de las cuatro fases del *pipeline*. Carga los *prompts*, invoca al proveedor de LLM para análisis, diseño y generación de DDL, y persiste cada artefacto en el directorio de salida. |
-| `normalizer.prompts` | Almacén de los *prompts* del sistema en formato Markdown (un fichero por *prompt*) y rutinas de carga. |
-| `normalizer.discovery` | Agente de descubrimiento sobre repositorios remotos: bucle de `chat`, gestión del estado (`DiscoveryState`), definición y despacho de las herramientas (`ALL_TOOLS`, `dispatch`), clonado del repositorio y construcción del árbol filtrado. |
-| `normalizer.providers` | Abstracción del proveedor de LLM (`LLMProvider`) e implementaciones concretas (`GoogleProvider`, `GroqProvider`), junto con las estructuras de datos neutras (`Message`, `ToolSpec`, `ToolCall`, `ChatResponse`) y la *factory* de instanciación dinámica (`build_provider`). |
-| `normalizer._log` | Utilidad de registro estructurado: emite eventos por la salida de error estándar con un sello de tiempo relativo al arranque del proceso (`[mm:ss]`). Expone además un registro de *callbacks* (`register_callback`, `unregister_callback`) que la GUI consume para reinyectar cada línea como evento de su cola, y `reset_clock` para reiniciar el sello al inicio de cada corrida de la GUI sin afectar a la CLI. |
+| Fuente | RU-1.2. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Ejecución de `python -m normalizer data/spruce-difuso/`; el artefacto `01_input.txt` contiene los ocho archivos concatenados con sus marcas de origen. |
+| Dependencias | RF-1.4, RF-1.5, RF-2.1. |
 
-Esta organización refleja directamente los grandes bloques de la arquitectura: `cli` y `gui` ejercen de capa de presentación, `pipeline` y `discovery` constituyen el núcleo, y `providers`, `prompts` y `_log` son los servicios de soporte transversales.
+##### RF-1.3 Lectura desde repositorio remoto
 
-### 5.2.2 Modelo de objetos del subsistema de proveedor
+El sistema debe aceptar como entrada la URL de un repositorio Git público, clonarlo en un directorio de caché local y delegar en el subsistema de agentes (RF-3) la selección de los archivos relevantes.
 
-La interacción del *pipeline* y del agente con el LLM se canaliza a través de un conjunto reducido de tipos neutros definidos en `providers/base.py`. La figura 5.3 muestra su relación.
-
-![Figura 5.3. Diagrama de clases del subsistema de proveedor](assets/png/fig-05-3.png)
-
-`LLMProvider` es un **protocolo** que expone tres operaciones: `generate(prompt)`, utilizada por el *pipeline* para tareas de texto a texto; `chat(messages, tools)`, utilizada por el agente para mantener un diálogo con *function calling*; y `list_models(for_agent)`, utilizada únicamente por la GUI para poblar dinámicamente los combos de selección de modelo con el catálogo actual del proveedor. Cualquier implementación concreta cumple este protocolo sin necesidad de heredar explícitamente de una clase base.
-
-`Message`, `ToolSpec`, `ToolCall` y `ChatResponse` son estructuras de datos neutras, **comunes a todos los proveedores**, que conforman el lenguaje con el que el resto del sistema describe la interacción con el LLM. Su diseño se inspira en el formato de *function calling* establecido de facto por OpenAI —en particular, el emparejamiento de invocaciones y respuestas mediante un identificador único—, y se enriquece con el campo `tool_name` para acomodar a proveedores como Google Gemini, que realizan el emparejamiento por nombre en lugar de por identificador. Cada implementación concreta de `LLMProvider` traduce internamente entre estas estructuras y el formato propio de su SDK.
-
-### 5.2.3 Flujo de ejecución según el modo de entrada
-
-El sistema admite tres modos de entrada que comparten el *pipeline* central pero difieren en la fase previa.
-
-**Modo fichero único.** El sistema lee el contenido completo del fichero indicado por el usuario y lo deposita íntegramente como artefacto de la fase de lectura, anteponiéndole una marca con su ruta de origen. El *pipeline* arranca a continuación sobre ese artefacto.
-
-**Modo directorio curado.** El sistema enumera los ficheros del primer nivel del directorio, descarta los binarios y los que superen un umbral de tamaño configurable, y concatena los restantes anteponiendo a cada uno una marca con su ruta original. El resultado es funcionalmente equivalente al del modo anterior.
-
-**Modo URL de repositorio.** El sistema clona el repositorio público indicado en la caché local y delega en el agente de descubrimiento la selección de los archivos relevantes. El agente devuelve un directorio con los ficheros seleccionados, y el *pipeline* arranca sobre ese directorio como si se hubiera proporcionado en el modo curado.
-
-La figura 5.4 representa el flujo completo en el modo URL, que es el más rico.
-
-![Figura 5.4. Diagrama de secuencia de una ejecución desde URL](assets/png/fig-05-4.png)
-
-### 5.2.4 El bucle del agente
-
-El agente de descubrimiento se estructura en torno a un **bucle de turnos** que opera sobre un historial de mensajes en crecimiento. En cada turno, el agente envía al proveedor el historial completo junto con la lista de herramientas disponibles; la respuesta del modelo se incorpora al historial; si la respuesta contiene invocaciones a herramientas, el sistema las despacha y reinyecta los resultados como mensajes de rol `tool`; el bucle continúa hasta que el modelo invoca una herramienta especial (`done`) o se agota un presupuesto duro de iteraciones.
-
-El bucle separa explícitamente **dos representaciones del estado** del agente. Por un lado, el historial de mensajes (`messages`) constituye la *memoria conversacional* que el modelo necesita para mantener la coherencia entre turnos: el modelo debe ver sus propias decisiones para no contradecirse, y debe ver los resultados de las herramientas para razonar sobre ellos. Por otro lado, un objeto `DiscoveryState` materializa, del lado Python, la *memoria estructurada* del agente: el conjunto de archivos seleccionados con sus justificaciones, el resumen final, las trazas turno a turno y los indicadores de terminación. El modelo no manipula directamente este objeto; lo hace de forma indirecta a través de las herramientas que el dispatcher proporciona.
-
-El bucle contempla **tres salidas**: la salida normal, en la que el modelo invoca la herramienta `done`; una salida anómala por respuesta sin invocaciones, que se anota como advertencia en la traza; y una salida anómala por agotamiento del presupuesto, que también se anota. La existencia de un presupuesto duro (`max_iters`) no es opcional: es la garantía de que un fallo del modelo —por ejemplo, un bucle estéril de exploración— no se traduce en un consumo indefinido de cuota.
-
-Las llamadas al proveedor están envueltas por una **rutina de reintentos con espera exponencial**. La política varía según el proveedor: `GoogleProvider` reintenta sobre los códigos `{429, 500, 502, 503, 504}` —dado que la familia Gemma devuelve códigos 5xx transitorios con cierta frecuencia—, respetando el `retryDelay` indicado por el SDK; `GroqProvider` reintenta únicamente sobre `RateLimitError` (HTTP 429), respetando la cabecera `retry-after` cuando está presente. Esta política está alineada con el requisito no funcional de robustez frente a fallos del proveedor (RNF-2.2) y evita que una indisponibilidad momentánea de la infraestructura externa aborte una ejecución completa.
-
-### 5.2.5 Patrones de diseño
-
-El diseño se apoya en cinco patrones clásicos —uno arquitectónico y cuatro de diseño de objeto— cuya aplicación se documenta a continuación con el detalle solicitado por la plantilla del TFG: nombre del patrón, cada instanciación dentro del sistema y la relación entre los roles del patrón y la clase asociada a cada uno.
-
-#### Pipes and Filters
-
-Estructura la transformación principal del sistema —de la evidencia documental agregada al DDL final— como una cadena lineal de fases independientes, cada una con una entrada y una salida bien definidas. Cada filtro lee su entrada de un artefacto persistente y escribe su salida en otro, lo que permite tanto la inspección por parte del usuario de los resultados intermedios como la reanudación de una ejecución interrumpida desde la última fase válida.
-
-- **Instanciación única — *Pipeline* de cuatro fases.**
-  - *Filter* (filtro): cada una de las cuatro fases implementadas en `normalizer.pipeline`. Por orden: la fase de lectura (que produce el artefacto `01_input.txt`), la fase de análisis del modelo documental (que produce `02_analysis.md`), la fase de diseño relacional (que produce `03_design.md`) y la fase de generación de DDL Oracle (que produce `04_ddl.sql`).
-  - *Pipe* (tubería): los ficheros del directorio de salida, que constituyen el canal a través del cual fluyen los artefactos entre filtros. La decisión deliberada de utilizar un canal **persistente** —y no un *buffer* en memoria— es la que materializa los requisitos de inspeccionabilidad de los resultados intermedios (RU-7, RF-2.5) y de reanudación parcial tras fallo (RF-7.3).
-  - *Data Source*: el subsistema de lectura de la entrada (en `normalizer.cli` o `normalizer.gui`), que materializa el primer artefacto a partir del fichero, del directorio curado o del directorio de evidencia producido por el agente de descubrimiento, según el modo de uso.
-  - *Data Sink*: el artefacto `04_ddl.sql`, consumido por la interfaz de usuario para su presentación.
-
-Cada filtro es independiente de los demás y solo conoce el formato del artefacto de entrada y del de salida. Esta independencia, característica del patrón, permite sustituir el *prompt* de una fase sin alterar las restantes y verificar el comportamiento de cada filtro en aislamiento mediante un doble de prueba del proveedor de LLM.
-
-#### Strategy
-
-Aísla la dependencia del proveedor de LLM concreto detrás de una interfaz uniforme, de modo que el resto del sistema no conoce nunca el SDK utilizado.
-
-- **Instanciación 1 — *Pipeline*.** El *pipeline* consume la operación `generate` del proveedor sin saber a cuál se está dirigiendo.
-  - *Strategy*: `LLMProvider` (protocolo definido en `providers/base.py`).
-  - *ConcreteStrategy*: `GoogleProvider`, `GroqProvider` y cualquier otra implementación futura.
-  - *Context*: la función `run_pipeline(input_path, provider, out_dir)` en `normalizer/pipeline.py`, que ejecuta las tres llamadas `generate` correspondientes a las fases de análisis, diseño y DDL.
-- **Instanciación 2 — Agente.** El agente consume la operación `chat` del proveedor con el mismo grado de desacoplamiento.
-  - *Strategy*: `LLMProvider` (la misma interfaz, ahora a través de `chat`).
-  - *ConcreteStrategy*: las mismas que en la instanciación 1.
-  - *Context*: la función `discover_from_url(url, agent_provider, out_dir)` en `normalizer/discovery/agent.py`.
-
-#### Factory Method con Registry
-
-Resuelve la instanciación de un proveedor de LLM a partir de su nombre simbólico (proporcionado por el usuario en la línea de comandos o en la GUI), seleccionando la clase apropiada y el modelo por defecto correspondiente al rol —*pipeline* o agente— en el que se va a utilizar.
-
-- **Instanciación única — Resolución de proveedor.**
-  - *Creator* (factory): la función `build_provider(name, model, for_agent)` en `providers/__init__.py`.
-  - *Registry*: el diccionario `_REGISTRY: dict[str, type[LLMProvider]]`, que mapea el nombre simbólico de cada proveedor a su clase.
-  - *Tablas auxiliares*: `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS`, que aportan el modelo por defecto cuando el usuario no lo especifica explícitamente.
-  - *Product*: una instancia de la subclase de `LLMProvider` correspondiente, ya configurada con el modelo elegido.
-
-Esta combinación permite **añadir un proveedor nuevo** sin modificar el código del *pipeline*, del agente o de la CLI: basta con declarar una nueva clase que cumpla el protocolo `LLMProvider`, registrarla en `_REGISTRY` y aportar los modelos por defecto. El requisito RF-5.2 (registro extensible de proveedores) se cumple exactamente sobre esta combinación de *Factory* y *Registry*.
-
-#### Adapter
-
-Salva la diferencia entre las estructuras de datos neutras del sistema —`Message`, `ToolSpec`, `ToolCall`, `ChatResponse`— y los tipos propios del SDK de cada proveedor. La capa neutra es invariante; los adaptadores son privados a cada implementación concreta.
-
-- **Instanciación 1 — Google.**
-  - *Target* (formato neutro): las estructuras de `providers/base.py`.
-  - *Adaptee* (SDK): los tipos del SDK `google-genai` (`Content`, `Part`, `FunctionCall`, `FunctionDeclaration`).
-  - *Adapter*: los métodos privados `_to_gemini_tools` y `_to_gemini_contents` de `GoogleProvider`, junto con la lógica de conversión inversa integrada directamente en `GoogleProvider.chat()`, que produce un `ChatResponse` a partir de la respuesta del SDK.
-- **Instanciación 2 — Groq.**
-  - *Target* (formato neutro): las mismas estructuras.
-  - *Adaptee* (SDK): los tipos del SDK `groq`, que sigue el formato OpenAI (mensajes con campo `tool_calls`, identificadores únicos por invocación y argumentos como cadena JSON).
-  - *Adapter*: los métodos privados `_to_groq_messages` y `_to_groq_tools` de `GroqProvider`, junto con la lógica de conversión inversa integrada directamente en `GroqProvider.chat()`.
-
-La existencia simultánea de los campos `tool_call_id` y `tool_name` en `Message` es una concesión deliberada al hecho de que Google empareja invocaciones y resultados por nombre de función, mientras que el resto de proveedores lo hacen por identificador. Cada adaptador rellena el campo que necesita su SDK y deja el otro vacío.
-
-#### Command
-
-Materializa cada decisión del agente —expresada como una invocación de herramienta— como un objeto que el dispatcher recibe, identifica y ejecuta de forma uniforme.
-
-- **Instanciación única — Tool-dispatcher.**
-  - *Command*: la estructura `ToolCall`, que encapsula el nombre de la herramienta y sus argumentos ya deserializados.
-  - *ConcreteCommand*: los manejadores `_do_list_dir`, `_do_read_file`, `_do_grep` y `_do_select` en el agente de descubrimiento; el caso `done` se resuelve directamente dentro de `dispatch`, marcando la finalización en `DiscoveryState`.
-  - *Invoker*: la función `dispatch(call, state, max_files)`, que enruta cada invocación al manejador correspondiente según `call.name`.
-  - *Receiver*: el objeto de estado `DiscoveryState` y el sistema de archivos confinado al directorio del repositorio clonado y al de salida.
-
-El patrón permite que las herramientas se añadan o se modifiquen sin que el bucle del agente necesite cambiar: el agente desconoce qué hace cada manejador y solo gestiona la circulación de invocaciones y resultados.
-
-### 5.2.6 Modelo de datos del dominio
-
-El modelo conceptual sobre el que el sistema razona no es el de las estructuras internas del código, sino el del **modelo entidad-relación** que la herramienta produce: entidades con sus atributos y tipos, claves primarias y claves foráneas, y relaciones entre entidades clasificadas según su cardinalidad y según se hubieran expresado en el modelo documental como referencias por identificador, documentos embebidos o arrays anidados. Este metamodelo conceptual es el lenguaje común entre el análisis del modelo documental (artefacto `02_analysis`), el diseño relacional (artefacto `03_design`) y la generación de DDL (artefacto `04_ddl`). El sistema no representa este metamodelo como estructuras Python persistentes —el LLM lo manipula directamente en formato Markdown / SQL—, lo que mantiene el código del *pipeline* deliberadamente delgado: la única responsabilidad del *pipeline* es orquestar las invocaciones y persistir los artefactos.
-
-### 5.2.7 Arquitectura de la interfaz gráfica
-
-La interfaz gráfica se construye sobre **CustomTkinter**, un *toolkit* derivado de Tkinter que añade *widgets* con aspecto moderno y consistente entre plataformas (véase 3.3.1 para la justificación de la elección). La arquitectura interna sigue una estricta separación en tres capas:
-
-- **Capa de presentación.** Las ventanas, paneles y *widgets* que el usuario ve. Implementada en `normalizer/gui/`, esta capa solo conoce los puntos de entrada públicos del núcleo y los tipos de datos elementales (cadenas, rutas, enumeraciones). No importa ninguna clase del subsistema de proveedor ni del agente.
-- **Capa de aplicación.** Un coordinador (`GuiController`) que recibe los eventos de la presentación, valida los argumentos, decide el modo de ejecución (fichero / directorio / URL) e invoca los puntos de entrada del núcleo en un hilo trabajador independiente del hilo de la interfaz.
-- **Capa de núcleo.** Es la misma que utiliza la CLI: `run_pipeline(input_path, provider, out_dir, cancel_event)` y `discover_from_url(url, agent_provider, out_dir, cancel_event)`. La GUI **no implementa ninguna lógica de transformación**; se limita a orquestar la invocación, propagar el evento de cancelación al núcleo y observar el progreso a través del subsistema de *log*.
-
-El **progreso en tiempo real** se materializa mediante un sistema de *callbacks* en `normalizer/_log.py`: la GUI registra una función con `register_callback()` antes de lanzar el hilo trabajador, y cada línea `[mm:ss] …` emitida por el núcleo se reinyecta como evento en la cola del `GuiController`. El hilo de la interfaz consume la cola con `app.after(...)` (patrón estándar de Tkinter, que no es *thread-safe*) y actualiza la barra de progreso por fases, la tabla de iteraciones del agente y el panel de *log*. Esta solución mantiene la lógica de observabilidad centralizada en un único lugar (`_log.py`) sin necesidad de parsear `sys.stderr` desde la GUI ni de duplicar canales de comunicación entre las capas.
-
-La **cancelación cooperativa** (RF-7.3) se implementa con un `threading.Event` que el `GuiController` señaliza al pulsar el botón de cancelar. El núcleo lo comprueba entre fases del *pipeline*, al inicio de cada iteración del bucle del agente y también **entre las llamadas a *tools* dentro de un mismo turno** (el agente típicamente batchea varios `read_file`/`select_evidence` en una respuesta; sin ese chequeo interno, la cancelación esperaría a despachar todo el lote). Al activarse, el núcleo levanta la excepción `PipelineCancelled` y deja en disco los artefactos producidos hasta ese momento. Para que la UI no se vea bloqueada esperando a que termine la llamada HTTP al LLM en curso (que los SDKs síncronos no permiten abortar), el `GuiController` ofrece `cancel_and_abandon()`: señaliza la cancelación, desregistra el *callback* del log y marca el controlador como abandonado para que los eventos restantes del hilo trabajador se descarten. La pantalla de ejecución transita inmediatamente a la pantalla de resultado, donde un banner en *tertiary-container* indica que la corrida fue cancelada y que los artefactos parciales están disponibles. El hilo trabajador huérfano —al ser `daemon`— termina la llamada en *background* y muere solo sin contaminar la siguiente corrida.
-
-El **catálogo de modelos disponibles por proveedor es dinámico**: el protocolo `LLMProvider` expone `list_models(for_agent: bool) -> list[str]` que la pantalla de configuración consulta al cambiar de proveedor (`client.models.list()` en los SDKs de Google y Groq, gratuito y rápido). Los catálogos `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS` se mantienen únicamente como modelos por defecto pre-seleccionados, no como listas cerradas. La distinción entre modelos válidos para el pipeline (texto-a-texto) y para el agente (con *function-calling*) se materializa mediante una *whitelist* corta de capacidades conocidas dentro de cada *provider*, porque ningún SDK expone hoy ese metadato.
-
-La GUI hereda automáticamente toda la funcionalidad del núcleo: cualquier ampliación del *pipeline* o del agente queda accesible sin tocar la capa de presentación, lo que materializa la decisión arquitectónica de **paridad funcional CLI / GUI** (RF-6.3).
-
----
-
-## 5.3 Diseño de pruebas
-
-### 5.3.1 Encuadre
-
-La estrategia general de pruebas se define en el plan presentado en §4.3. Esta sección detalla, para cada subsistema identificado en la arquitectura, **qué se prueba** y en qué nivel se prueba, sin descender al detalle de los casos de prueba concretos, que pertenecen al capítulo de implementación.
-
-El diseño contempla los dos ejes anunciados en el plan: la **verificación funcional** mediante una pirámide clásica de pruebas automatizables y la **validación cualitativa** del resultado mediante comparación con un modelo de referencia humano. El primer eje se aplica a la parte determinista del sistema; el segundo, a la parte probabilística introducida por las decisiones del LLM.
-
-### 5.3.2 Objetos de la prueba
-
-La tabla siguiente recoge, para cada subsistema, las propiedades cuya verificación se considera obligatoria.
-
-| Subsistema | Propiedades verificadas |
+| Atributo | Valor |
 |---|---|
-| Lectura de la entrada | Lectura correcta del fichero único; concatenación correcta del directorio con marcas de origen; descarte silencioso de binarios y de ficheros que excedan el umbral configurado; manejo de entrada inexistente o inaccesible con mensaje claro. |
-| *Pipeline* | Generación de los cuatro artefactos esperados en el directorio de salida; carga correcta de los *prompts* desde el subsistema correspondiente; propagación ordenada de errores producidos en cada fase con identificación de la fase fallida. |
-| Agente de descubrimiento | Cumplimiento del presupuesto de iteraciones; clonado y reutilización correctos de la caché de repositorios; construcción del árbol filtrado con BFS y *cap* de entradas; despacho correcto de cada herramienta; producción de la traza (`discovery.md`) con la lista de archivos seleccionados y sus justificaciones; salida limpia tanto en el caso normal como en los dos casos anómalos. |
-| Herramientas confinadas | Rechazo de rutas que escapen del directorio del repositorio clonado o del directorio de salida; validación de los argumentos recibidos del LLM con mensajes de error estructurados; comportamiento determinista en lecturas, listados y búsquedas. |
-| Abstracción del proveedor | Traducción correcta entre el formato neutro y el formato del SDK en ambos sentidos; reintentos con espera exponencial sobre los códigos transitorios definidos; selección correcta de la clase y del modelo por la *factory* en función de los parámetros. |
-| Interfaces (CLI y GUI) | Paridad funcional entre ambas; emisión de mensajes de progreso por cada fase; presentación al usuario de los errores del proveedor con indicación de la fase de origen. |
+| Fuente | RU-1.3. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Ejecución sobre la URL pública del repositorio Spruce; el directorio `.cache/repos/<hash>/` contiene el repositorio clonado y `00_discovery/evidence/` la selección del agente. |
+| Dependencias | RF-3, RF-4.1. |
 
-### 5.3.3 Diseño por niveles
+##### RF-1.4 Validación de la entrada
 
-#### Pruebas unitarias
+El sistema debe verificar que la entrada existe y es accesible antes de invocar al *pipeline*, y debe informar al usuario con un mensaje claro en caso contrario, sin lanzar excepciones no controladas.
 
-Se aplican sobre las piezas deterministas del sistema, en aislamiento. El conjunto incluye, entre otras: la lectura y normalización de la entrada, la construcción del árbol filtrado del repositorio con sus reglas de exclusión, el despacho individual de cada herramienta del agente, el confinamiento del acceso al sistema de archivos (`resolve_within`), la rutina de reintentos sobre códigos sintéticos cubriendo tanto los casos exitosos como los de agotamiento, y los adaptadores de cada proveedor sobre *fixtures* JSON capturadas de respuestas reales del SDK.
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-1, RNF-3.2 (usabilidad de mensajes de error). |
+| Prioridad | Media. |
+| Necesidad | Must. |
+| Verificación | Invocación de la CLI con una ruta inexistente; comprobación de un código de salida distinto de cero y un mensaje legible por la salida de error estándar. |
+| Dependencias | — |
 
-#### Pruebas de integración
+##### RF-1.5 Filtrado de archivos no textuales
 
-Comprueban la cooperación de varios subsistemas sustituyendo el LLM por un doble de prueba (`MockProvider`) que cumple la interfaz `LLMProvider` y devuelve respuestas grabadas previamente. Se identifican dos conjuntos relevantes:
+El sistema debe descartar los archivos no textuales contenidos en el directorio de entrada (imágenes, binarios compilados, etc.) y los archivos cuyo tamaño supere un umbral configurable, para evitar saturar el contexto del LLM. El descarte se registra en la salida de error estándar como entrada de *log* informativa, con el nombre del archivo descartado y el motivo.
 
-- ***Pipeline* end-to-end con doble del LLM*: ejecuta las cuatro fases sobre una entrada conocida y verifica la existencia, el formato y el contenido estructural de cada artefacto.
-- *Agente de descubrimiento sobre un repositorio sintético*: el repositorio incluye un *schema* explícito, un *schema* implícito en código de aplicación y un fichero de ruido; la prueba verifica que el agente selecciona los dos primeros y descarta el tercero.
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-1.2, RNF-1.2 (consumo del contexto del LLM). |
+| Prioridad | Media. |
+| Necesidad | Must. |
+| Verificación | Inclusión en el directorio de prueba de un fichero binario y un fichero de gran tamaño; comprobación de que ambos se omiten del artefacto `01_input.txt` y de que aparece la traza correspondiente. |
+| Dependencias | RNF-1.2. |
 
-#### Pruebas de sistema
+#### RF-2. *Pipeline* de transformación (traza: RU-2, RU-3, RU-7, RU-8)
 
-Invocan la CLI sobre los *datasets* de prueba y verifican la estructura externa de los artefactos producidos (existencia, no vacuidad, validez sintáctica del DDL con `sqlparse`) y los códigos de retorno. La GUI se ejercita en este nivel mediante una versión sin interfaz visual de su capa de aplicación (`GuiController`), que invoca exactamente el mismo flujo que la presentación. La evaluación semántica del modelo relacional generado pertenece al nivel siguiente.
+El sistema debe estructurar la transformación en una secuencia de fases independientes, cada una con una entrada y una salida bien definidas, y persistir las salidas intermedias en disco.
 
-#### Pruebas de aceptación cualitativa
+##### RF-2.1 Fase de lectura
 
-Se ejecutan sobre los *datasets* de referencia, cada uno con un modelo de referencia elaborado manualmente por un experto (un diagrama UML del autor del repositorio o del autor del TFG). Para cada *dataset* y modelo de LLM, la prueba calcula y registra:
+El sistema debe producir un artefacto de entrada agregada (`01_input.txt`) que contenga todos los fragmentos de evidencia que se pasarán al LLM, normalizados y marcados por su origen.
 
-- **Cobertura de entidades**: cociente entre el número de entidades del modelo de referencia recuperadas en el DDL generado y el número total de entidades del modelo de referencia.
-- **Entidades extra**: clasificadas en *legítimas* (sobre-normalización razonable, como la separación en tablas independientes de arrays embebidos) y *ruido* (entidades sin justificación en la entrada).
-- **Invariantes estructurales**: toda tabla declara una clave primaria; toda clave foránea referencia una tabla y columna existentes; los atributos reconciliados por la regla de reconciliación de atributos redundantes no producen duplicidades.
-- **Reproducibilidad inter-runs**: estabilidad de la cobertura a lo largo de varias ejecuciones con la misma entrada, el mismo proveedor y el mismo modelo, como concreción de RNF-2.1.
-- **Cobertura cruzada modelo × dataset**: una tabla que cruza los modelos de LLM disponibles con los *datasets* de referencia y registra la cobertura observada. Esta tabla constituye la evidencia empírica del comportamiento del sistema bajo distintos modelos y permite documentar, sin ocultarlo, que la capacidad del modelo elegido es un factor determinante en la calidad del resultado.
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-7.1. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Ejecución end-to-end; presencia del artefacto `01_input.txt` en el directorio de salida. |
+| Dependencias | RF-1. |
 
-### 5.3.4 Datasets de prueba
+##### RF-2.2 Fase de análisis del modelo documental
 
-El banco de pruebas se compone de los siguientes *datasets*, agrupados según su grado de formalización.
+El sistema debe invocar al LLM con la entrada agregada y un *prompt* de análisis, y producir un artefacto en formato Markdown (`02_analysis.md`) que describa las entidades, atributos y relaciones detectadas, así como una traza de las evidencias en que se apoya cada decisión.
 
-**Datasets de cobertura con *checklist* de referencia:**
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-2. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Ejecución end-to-end sobre `data/spruce/`; el artefacto `02_analysis.md` recoge las cuatro entidades de referencia con citas explícitas de evidencia. |
+| Dependencias | RF-2.1, RF-2.7. |
 
-- **`data/spruce/`**: caso de control con cuatro *schemas* Mongoose explícitos. El modelo documental está declarado de forma íntegra y la prueba ejercita el *pipeline* aislado del agente de descubrimiento.
-- **`data/spruce-difuso/`**: el mismo modelo documental que el anterior pero distribuido implícitamente en código de aplicación (rutas Express, manejadores de socket) sin *schemas* declarados. Ejercita la capacidad del *prompt* de análisis para inferir el modelo a partir de evidencia heterogénea.
-- **URL pública del repositorio de Spruce**: el repositorio completo, suministrado únicamente como URL, ejercita el agente de descubrimiento sobre un proyecto pequeño con *schemas* explícitos.
+##### RF-2.3 Fase de diseño relacional
 
-**Datasets de validación cualitativa adicional:**
+El sistema debe invocar al LLM con el análisis previo y un *prompt* de diseño que solicite la propuesta de un modelo relacional normalizado. El *prompt* debe incluir la regla de reconciliación de atributos redundantes para evitar duplicidades de claves foráneas en el resultado.
 
-- **URL pública del repositorio de Habitica**: una aplicación real de tamaño realista, con muchos directorios irrelevantes para el modelo documental. Se utiliza para observar la varianza del agente frente a repositorios grandes y para detectar las fronteras de cuota de los proveedores en condiciones reales. No dispone de un *checklist* formal: la comparación es cualitativa contra una lista no exhaustiva de entidades esperadas elaborada por inspección del código fuente del repositorio.
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-3.1, RU-3.2. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Ejecución sobre `data/spruce-difuso/`; el artefacto `03_design.md` no contiene dos columnas en la misma tabla que referencien al mismo registro de otra tabla. |
+| Dependencias | RF-2.2. |
 
-### 5.3.5 Grado de automatización y herramientas
+##### RF-2.4 Fase de generación de DDL Oracle
 
-Las pruebas unitarias y de integración se ejecutan en cada *commit* en GitHub Actions con `pytest`, *fixtures* versionadas en el repositorio y el doble de prueba del LLM. Las pruebas de sistema se ejecutan automáticamente con el doble de prueba para garantizar el flujo de integración continua, y se replican fuera de CI con proveedores reales cuando la cuota lo permite. Las pruebas de aceptación cualitativa se ejecutan de forma manual asistida: un *script* auxiliar lanza la herramienta sobre cada *dataset* con cada modelo de LLM disponible, recoge los artefactos producidos, los compara contra la *checklist* del *dataset* y produce el informe cruzado modelo × *dataset*.
+El sistema debe invocar al LLM con el diseño relacional previo y un *prompt* de generación que produzca sentencias DDL compatibles con Oracle (`CREATE TABLE`, restricciones de clave primaria y foránea, tipos de datos Oracle).
 
-Las herramientas utilizadas son las descritas en el plan de pruebas (§4.3): `pytest` y *fixtures* JSON para los niveles automatizados; `sqlparse` para la verificación sintáctica del DDL; opcionalmente, un contenedor con Oracle Database Express Edition para una verificación adicional por intento de ejecución del DDL en una instancia real; GitHub Actions como infraestructura de integración continua; y *checklists* en YAML versionadas en `tests/baseline/<dataset>.yaml` que constituyen la especificación operativa del modelo de referencia para cada *dataset*.
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-3.3. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inspección del artefacto `04_ddl.sql`: parseo correcto con un analizador SQL; presencia de `CREATE TABLE`, `PRIMARY KEY` y `FOREIGN KEY` en las cantidades esperadas. |
+| Dependencias | RF-2.3. |
+
+##### RF-2.5 Persistencia de artefactos intermedios
+
+El sistema debe escribir cada uno de los cuatro artefactos (`01_input`, `02_analysis`, `03_design`, `04_ddl`) en un directorio de salida configurable, de modo que el usuario pueda inspeccionarlos y compararlos posteriormente.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-7.1. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Ejecución end-to-end; los cuatro artefactos están presentes en el directorio `--out-dir`. |
+| Dependencias | — |
+
+##### RF-2.6 Aislamiento entre ejecuciones
+
+El sistema debe permitir especificar un directorio de salida distinto en cada invocación, y por defecto no debe asumir que un mismo directorio se reutiliza entre ejecuciones distintas.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-7.2. |
+| Prioridad | Media. |
+| Necesidad | Must. |
+| Verificación | Dos ejecuciones consecutivas sobre datasets distintos con `--out-dir` distintos no comparten ni colisionan artefactos. |
+| Dependencias | — |
+
+##### RF-2.7 Externalización de *prompts*
+
+Los *prompts* utilizados en cada fase del *pipeline* deben residir en archivos independientes (formato Markdown), no en cadenas literales dentro del código fuente, para facilitar su edición, versionado y reutilización entre proveedores.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | Decisión arquitectónica del capítulo 5 (§5.1.4). |
+| Prioridad | Media. |
+| Necesidad | Must. |
+| Verificación | Inspección de `normalizer/prompts/`: existencia de los archivos `analyze.md`, `design.md`, `ddl.md` y `discovery_system.md`, cargados por el código sin contenido *prompt* embebido. |
+| Dependencias | — |
+
+#### RF-3. Agente de descubrimiento sobre repositorio (traza: RU-1.3, RU-5)
+
+Cuando la entrada sea la URL de un repositorio, el sistema debe utilizar un agente para reconstruir el conjunto de archivos relevantes antes de invocar el *pipeline*.
+
+##### RF-3.1 Exploración de la estructura del repositorio
+
+El agente debe ser capaz de listar archivos y directorios del repositorio clonado, así como de abrir y leer aquellos que considere candidatos a contener evidencia del modelo documental.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-5.1. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inspección de la traza `00_discovery/discovery.md`: presencia de invocaciones a las herramientas `list_dir` y `read_file`. |
+| Dependencias | RF-4. |
+
+##### RF-3.2 Selección de archivos relevantes
+
+El agente debe seleccionar el subconjunto de archivos cuya evidencia sea suficiente para reconstruir el modelo documental, priorizando *schemas* explícitos cuando existan y, en su defecto, archivos donde se realicen operaciones de lectura / escritura contra la base de datos.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-5.1. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Ejecución sobre la URL pública de Spruce; el agente selecciona los cuatro *schemas* declarativos. |
+| Dependencias | RF-4. |
+
+##### RF-3.3 Generación de evidencia agregada
+
+El agente debe entregar al *pipeline* (RF-2) una entrada agregada equivalente a la que produciría la lectura de un directorio curado por un humano (RF-1.2).
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-1.3, RU-5.1. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Tras el agente, el directorio `00_discovery/evidence/` contiene los archivos seleccionados con sus rutas aplanadas; el *pipeline* arranca sobre ese directorio. |
+| Dependencias | RF-1.2. |
+
+##### RF-3.4 Traza de las decisiones del agente
+
+El agente debe registrar, en un artefacto adicional dentro del directorio de salida (`00_discovery/discovery.md`), qué archivos ha examinado, cuáles ha seleccionado y por qué.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-5.2. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inspección del artefacto: tabla `Iter | Tool calls` con las invocaciones y lista de archivos seleccionados con sus justificaciones. |
+| Dependencias | — |
+
+##### RF-3.5 Límites operativos del agente
+
+La ejecución del agente debe estar acotada por límites configurables de número de pasos (`max_iters`) y número de archivos seleccionados (`max_files`), abortando la operación con un mensaje claro si se exceden y registrando la causa en la traza.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RNF-1.3 (coste). |
+| Prioridad | Media. |
+| Necesidad | Must. |
+| Verificación | Configuración artificial de `max_iters=2` sobre un repositorio mediano; comprobación de que la ejecución termina con la marca de "presupuesto agotado" en la traza. |
+| Dependencias | RNF-1.3. |
+
+#### RF-4. Herramientas operativas del agente (traza: RU-5)
+
+El agente definido en RF-3 debe disponer de un conjunto acotado de herramientas para interactuar con el repositorio clonado y el directorio de salida. Estas herramientas se exponen al LLM mediante el mecanismo nativo de *function calling* del proveedor.
+
+##### RF-4.1 Herramientas de exploración del repositorio
+
+El sistema debe poner a disposición del agente herramientas para: listar el contenido de un directorio del repositorio clonado; leer el contenido de un archivo concreto; realizar búsquedas textuales por patrón sobre el conjunto de archivos; marcar un archivo como evidencia relevante; y declarar el cierre de la sesión de descubrimiento.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-5.1, RU-5.2. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inspección de la traza `00_discovery/discovery.md`: aparición de las cinco herramientas (`list_dir`, `read_file`, `grep`, `select_evidence`, `done`) al menos en uno de los datasets de validación. |
+| Dependencias | RF-4.2, RF-4.3, RF-4.4. |
+
+##### RF-4.2 Confinamiento de las herramientas
+
+Las herramientas de acceso al sistema de archivos deben operar exclusivamente dentro del directorio temporal donde se ha clonado el repositorio analizado y dentro del directorio de salida de la ejecución, rechazando cualquier ruta que escape de estos ámbitos.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RNF-4.2 (control de efectos de los agentes). |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inyección de una invocación sintética con una ruta tipo `../../etc/passwd`; comprobación de que la herramienta devuelve un error estructurado y no accede al archivo. |
+| Dependencias | RNF-4.2. |
+
+##### RF-4.3 Validación de los argumentos
+
+Cada herramienta debe validar los argumentos recibidos del LLM antes de ejecutarse, devolviendo al agente un mensaje de error estructurado en caso de argumentos inválidos en lugar de elevar excepciones.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RNF-2.2 (fiabilidad). |
+| Prioridad | Media. |
+| Necesidad | Must. |
+| Verificación | Inyección de una invocación con argumentos del tipo incorrecto; la herramienta devuelve `ERROR: …` y la ejecución continúa. |
+| Dependencias | — |
+
+##### RF-4.4 Definición independiente del proveedor
+
+La descripción de cada herramienta (nombre, parámetros, tipos, descripción para el LLM) debe definirse una sola vez en un formato común (estructura `ToolSpec`), y la abstracción de proveedor (RF-5) debe encargarse de traducirla al formato concreto que cada proveedor de LLM espera para *function calling*.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | Decisión arquitectónica (§5.1.4). |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inspección del código: ausencia de definiciones de herramientas en `providers/`; presencia de `ALL_TOOLS` en `discovery/tools.py` reutilizable por cualquier proveedor. |
+| Dependencias | RF-5.1. |
+
+#### RF-5. Gestión del proveedor de LLM (traza: RU-4)
+
+El sistema debe permitir elegir el proveedor y el modelo de LLM en cada ejecución, sin acoplar el resto del *pipeline* a un proveedor concreto.
+
+##### RF-5.1 Abstracción de proveedor
+
+El sistema debe definir una interfaz uniforme de proveedor de LLM con dos operaciones obligatorias del núcleo: una para generación de texto a partir de un *prompt* (`generate`) y otra para diálogo con herramientas (`chat`). El *pipeline* y el agente deben usar exclusivamente esta interfaz, sin importar SDKs específicos de proveedor. La interfaz expone adicionalmente una operación auxiliar (`list_models`) que la GUI consume para mantener el selector de modelos sincronizado con el catálogo actual del proveedor sin requerir intervención en el código.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-4.1, RU-4.2. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inspección de `normalizer/pipeline.py` y `normalizer/discovery/agent.py`: ausencia de *imports* de los SDKs `google.genai` o `groq`; uso únicamente del *Protocol* `LLMProvider`. |
+| Dependencias | — |
+
+##### RF-5.2 Registro extensible de proveedores
+
+El sistema debe disponer de un registro de proveedores soportados, ampliable mediante el alta de una nueva clase de proveedor sin necesidad de modificar el código del *pipeline*, del agente o de la CLI.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-4.1. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inspección de `normalizer/providers/__init__.py`: presencia de un diccionario `_REGISTRY` y de una función `build_provider`; comprobación de que añadir un proveedor nuevo requiere solo modificar `providers/`. |
+| Dependencias | RF-5.1. |
+
+##### RF-5.3 Selección de proveedor y modelo
+
+El usuario debe poder indicar, en el momento de la invocación, qué proveedor y qué modelo concreto se utilizarán para cada uno de los dos roles (*pipeline* y agente). En ausencia de elección, el sistema debe usar valores por defecto definidos para cada proveedor.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-4.1, RU-4.2. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Invocación con `--provider`, `--model` y `--agent-model` arbitrarios; comprobación de que la traza refleja los valores empleados. |
+| Dependencias | RF-5.1, RF-5.2. |
+
+##### RF-5.4 Soporte mínimo multiproveedor
+
+El sistema debe incluir, en su versión final, al menos dos implementaciones reales de proveedores (en este trabajo, Google y Groq) para validar la independencia del proveedor.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-4.1. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inspección de `normalizer/providers/`: presencia de `google.py` y `groq.py`, ambos registrados en `_REGISTRY` y ambos validados sobre al menos un dataset. |
+| Dependencias | RF-5.1, RF-5.2. |
+
+##### RF-5.5 Configuración de credenciales
+
+Las credenciales (API keys) de cada proveedor deben leerse de variables de entorno o de un archivo de configuración local no versionado, nunca quedar embebidas (*hardcoded*) en el código fuente.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-4.3, RNF-4.1. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Auditoría del repositorio: `grep -r "AIza\|gsk_" .` no devuelve resultados; `.env.example` documenta los nombres de variable; `.env` está en `.gitignore`. |
+| Dependencias | RNF-4.1. |
+
+#### RF-6. Interfaces de usuario (traza: RU-6)
+
+El sistema debe ofrecer dos modos de uso adaptados a perfiles distintos.
+
+##### RF-6.1 Interfaz de línea de comandos (CLI)
+
+El sistema debe ofrecer un punto de entrada CLI que acepte, como mínimo, los siguientes parámetros: ruta o URL de entrada, directorio de salida, proveedor de LLM, modelo del *pipeline*, modelo del agente. La CLI debe mostrar al usuario el avance del *pipeline* (qué fase está ejecutándose y cuándo termina cada una) mediante eventos por la salida de error estándar con sello de tiempo relativo.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-6.1. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Invocación `python -m normalizer --help` muestra las opciones; ejecución de extremo a extremo emite mensajes `[mm:ss]` por cada fase. |
+| Dependencias | — |
+
+##### RF-6.2 Interfaz gráfica de usuario (GUI)
+
+El sistema debe ofrecer una GUI que permita, sin uso de la línea de comandos: seleccionar la fuente de entrada (archivo, directorio o URL); configurar el proveedor, el modelo del *pipeline* y el modelo del agente; lanzar la ejecución y seguir su progreso en tiempo real; visualizar los artefactos intermedios; exportar los artefactos como un único fichero `.zip` o abrir el directorio de salida en el explorador del sistema; y recuperar corridas anteriores sin re-ejecutar el *pipeline* abriendo un directorio `out-*/` previo.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-6.2. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Reproducción manual desde la GUI de un caso completo (`data/spruce/`) por un usuario sin conocimiento previo del CLI; comprobación de la presencia de los cuatro artefactos. |
+| Dependencias | RF-6.3, RF-6.1. |
+
+##### RF-6.3 Paridad funcional CLI / GUI
+
+Toda funcionalidad expuesta por la GUI debe poder ejecutarse también desde la CLI, para no quedar atada al modo gráfico de uso. En la práctica, la GUI invoca el mismo punto de entrada del núcleo (`run_pipeline` y `discover_from_url`) que utiliza el CLI, sin duplicar lógica.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-6 (interfaz adecuada al perfil). |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inspección del código: la GUI no implementa lógica de pipeline ni de agente. Comparación de los DDL resultantes para un mismo dataset desde CLI y GUI. |
+| Dependencias | RF-6.1, RF-6.2. |
+
+#### RF-7. Gestión de errores y diagnóstico
+
+El sistema debe informar de forma comprensible de cualquier condición de error y permitir el diagnóstico de fallos en el *pipeline*.
+
+##### RF-7.1 Errores del proveedor
+
+Los errores devueltos por el proveedor de LLM (autenticación, cuota agotada, modelo no disponible, salida malformada) deben capturarse y presentarse al usuario con un mensaje que indique la fase del *pipeline* en que se produjeron.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RNF-3.2 (usabilidad de mensajes de error). |
+| Prioridad | Media. |
+| Necesidad | Must. |
+| Verificación | Invocación con una API key inválida; el mensaje de error identifica la fase ("análisis", "diseño", "DDL", "agente") y la causa. |
+| Dependencias | RF-5.5. |
+
+##### RF-7.2 Observabilidad por fases
+
+El sistema debe emitir, por la salida de error estándar, eventos breves con sello de tiempo relativo al arranque del proceso (`[mm:ss]`) en los puntos clave de la ejecución: inicio del CLI, inicio y fin de cada fase del *pipeline*, clonado del repositorio, cada iteración del agente con un resumen compacto de las invocaciones, y los reintentos del proveedor. En la GUI, el reloj relativo se reinicia al inicio de cada corrida (las corridas suceden en el mismo proceso pero el usuario espera ver `[00:00]` en la primera línea de cada una), mientras que en la CLI coincide con el arranque del proceso.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | Necesidad práctica observada durante el desarrollo (depuración de bucles del agente). |
+| Prioridad | Media. |
+| Necesidad | Must. |
+| Verificación | Ejecución sobre un dataset; aparición de los eventos `[mm:ss]` esperados en `2> log.txt`. |
+| Dependencias | — |
+
+##### RF-7.3 Reanudación parcial
+
+Cuando la ejecución falle en una fase distinta de la primera, el sistema debe conservar los artefactos intermedios producidos hasta ese punto, de modo que un usuario avanzado pueda retomar la ejecución desde el último artefacto válido.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RNF-2.2 (fiabilidad). |
+| Prioridad | Baja. |
+| Necesidad | Should. |
+| Verificación | Inducción artificial de un fallo en la fase de DDL (clave inválida); comprobación de que `02_analysis.md` y `03_design.md` siguen presentes en el directorio de salida. |
+| Dependencias | RF-2.5. |
+
+### 4.1.2 Modelo de datos del dominio
+
+El sistema razona simultáneamente sobre dos modelos de datos distintos: por una parte, el **modelo conceptual del dominio** —entidades, atributos, claves y relaciones del modelo entidad-relación que la herramienta produce—; por otra, las **estructuras internas neutras** que materializan la interacción con cualquier proveedor de LLM (`Message`, `ToolSpec`, `ToolCall`, `ChatResponse`) y el estado del agente (`DiscoveryState`). El primero es el objeto de salida de la herramienta y se describe en detalle en §5.2.6; el segundo es el lenguaje común con el que el resto del sistema describe la interacción con el LLM y se describe en detalle en §5.2.2 mediante un diagrama de clases. Esta separación es deliberada: el dominio del problema (modelado relacional) es independiente de cómo se realiza la interacción con el LLM.
+
+### 4.1.3 Interfaz de usuario
+
+#### Interfaz de línea de comandos
+
+La CLI sigue las convenciones POSIX: un argumento posicional para la entrada, opciones con doble guion para la configuración y mensaje de ayuda accesible con `--help`. La invocación típica tiene la forma:
+
+```
+python -m normalizer <entrada> [--provider NOMBRE] [--model MODELO] [--agent-model MODELO] [--out-dir DIR]
+```
+
+El argumento `<entrada>` puede ser una ruta (archivo o directorio) o una URL de repositorio; el sistema lo detecta automáticamente mediante el prefijo (`http://`, `https://`, `git@`). La CLI emite, durante la ejecución, mensajes breves con sello de tiempo relativo al arranque (`[mm:ss]`) indicando el inicio y fin de cada fase del *pipeline* y de cada iteración del agente, así como la ruta del directorio de salida resultante.
+
+#### Interfaz gráfica de usuario
+
+La GUI se articula en torno a una secuencia de tres pantallas guiadas, no a una lista de ventanas inconexas, lo que reduce la carga cognitiva para usuarios no técnicos:
+
+1. **Configuración.** Un único formulario que reúne todos los parámetros de la ejecución: selector de entrada (archivo, directorio o URL) con validación inmediata; combo de proveedor y combos de modelos del *pipeline* y del agente poblados dinámicamente desde el catálogo del proveedor seleccionado (vía `LLMProvider.list_models()`), con el modelo por defecto pre-seleccionado y *fallback* a ese valor si no hay clave configurada; directorio de salida; y un campo enmascarado para la *API key* del proveedor seleccionado que solo se muestra si la variable de entorno correspondiente no está ya definida. Las claves introducidas en la GUI se persisten automáticamente en `.env` (excluido del repositorio por `.gitignore`). Un enlace adicional permite, alternativamente, abrir un directorio de resultados de una corrida anterior y saltar directamente a la pantalla de resultado sin re-ejecutar el *pipeline*.
+2. **Ejecución y progreso.** Barra de progreso por fase del *pipeline* (Análisis, Diseño, DDL, más Descubrimiento en el modo URL); en el modo URL, tabla viva con las iteraciones del agente y las herramientas invocadas en cada una; panel de *log* con sello `[mm:ss]`; y un botón Cancelar que, además de propagar la cancelación cooperativa al núcleo (RF-7.3), transita inmediatamente a la pantalla de resultado para que el usuario no perciba el bloqueo de la llamada HTTP en curso (el núcleo termina su última operación en *background*).
+3. **Resultado.** Pestañas independientes con los artefactos producidos: un diagrama ER auto-generado a partir del DDL final (parser por *regex* + Graphviz) como pestaña por defecto, seguido del diseño relacional (`03_design.md`) en Markdown renderizado, el DDL (`04_ddl.sql`) con resaltado de sintaxis SQL, el análisis (`02_analysis.md`) en Markdown y, en el modo URL, la traza de descubrimiento (`00_discovery/discovery.md`). Una barra de acciones inferior permite abrir el directorio de salida en el explorador del sistema, exportar todos los artefactos en un único fichero `.zip` o lanzar una nueva ejecución sin cerrar la aplicación.
+
+La paridad funcional con la CLI se garantiza porque la GUI invoca directamente los mismos puntos de entrada del núcleo (`run_pipeline`, `discover_from_url`) que utiliza el módulo de línea de comandos.
+
+## 4.2 Requisitos no funcionales
+
+Los requisitos no funcionales se organizan en cinco categorías: rendimiento, fiabilidad, usabilidad, seguridad y restricciones de implementación. La categoría de seguridad se inspira en el Nivel 1 de OWASP ASVS y en las buenas prácticas recogidas en la plantilla del TFG.
+
+### 4.2.1 RNF-1. Rendimiento
+
+#### RNF-1.1 Tiempo de respuesta del *pipeline*
+
+Para una entrada de hasta 20 KB de texto y los modelos de tamaño medio considerados por defecto, el *pipeline* completo debe terminar en menos de 5 minutos en condiciones normales de red. El sistema no se considera un sistema de tiempo real: este límite es orientativo y depende de la latencia del proveedor.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | Expectativa de uso interactivo en GUI; experiencia del autor con tiempos aceptables en entornos de defensa. |
+| Prioridad | Media. |
+| Necesidad | Should. |
+| Verificación | Mediciones puntuales sobre los datasets `data/spruce/` y `data/spruce-difuso/` con cada uno de los dos proveedores soportados; registro en el capítulo 6. |
+| Dependencias | — |
+
+#### RNF-1.2 Consumo del contexto del LLM
+
+El sistema debe controlar el tamaño del contexto enviado al LLM en cada fase. Si la entrada agregada o el árbol del repositorio supera un umbral configurable (por defecto, el 80 % del límite de contexto del modelo seleccionado), el sistema debe avisar al usuario antes de invocar al LLM, en lugar de fallar silenciosamente. Para el agente, el árbol filtrado del repositorio se acota explícitamente a 2 000 entradas (~30 K *tokens*) mediante recorrido por anchura (BFS).
+
+| Atributo | Valor |
+|---|---|
+| Fuente | Frontera observada con Groq sobre repositorios medianos durante la validación experimental (§7). |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inspección de `build_tree_summary` en `discovery/filesystem.py`: implementación BFS con corte a 2 000 entradas; ejecución sobre Habitica con Groq, comprobación de que el aviso se emite antes de la invocación. |
+| Dependencias | RF-1.5. |
+
+#### RNF-1.3 Coste de las ejecuciones con agentes
+
+La ejecución del agente (RF-3) debe estar acotada por un número máximo de iteraciones (`max_iters`) y de archivos seleccionables (`max_files`), configurables por el usuario, para evitar consumos imprevistos de cuota.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-4 (independencia de proveedor implica no depender de cuotas abundantes). |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inspección de `discovery/agent.py`: presencia de las constantes `MAX_ITERS=30` y `MAX_FILES=30`, ambas configurables por el llamador. |
+| Dependencias | RF-3.5. |
+
+### 4.2.2 RNF-2. Fiabilidad
+
+#### RNF-2.1 Reproducibilidad estructural de las ejecuciones
+
+Dadas la misma entrada, el mismo proveedor, el mismo modelo y los mismos *prompts*, el sistema debe producir resultados estructuralmente equivalentes entre ejecuciones. Las pequeñas variaciones inherentes a la naturaleza estocástica de los LLMs son aceptables; las diferencias sustanciales en el modelo relacional resultante deben analizarse como un fallo del *prompt* o del modelo, no como ruido normal.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | Casuística observada durante el desarrollo: rango de cobertura inter-*runs* documentado en la traza experimental del proyecto. |
+| Prioridad | Media. |
+| Necesidad | Should. |
+| Verificación | Tres ejecuciones del mismo caso con el mismo modelo; cobertura del DDL frente al diagrama de referencia dentro de una banda de ±10 %. |
+| Dependencias | — |
+
+#### RNF-2.2 Robustez ante fallos transitorios del proveedor
+
+Los fallos transitorios del proveedor (*timeouts*, *rate limits*, errores 5xx) deben gestionarse mediante reintentos con espera exponencial respetando, cuando lo proporcione el proveedor, el tiempo de espera sugerido en la cabecera de la respuesta. Tras agotar los reintentos, el sistema debe terminar con un código de error claro y conservar los artefactos intermedios producidos hasta ese punto.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | Casuística observada con Gemma (códigos 500 / 503 frecuentes) y con Groq (cuota agotada). |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inspección de `_call_with_retry` en `providers/google.py` (códigos `{429, 500, 502, 503, 504}`) y en `providers/groq.py` (`RateLimitError`). Inyección de un fallo sintético en una fase intermedia; comprobación de la conservación de los artefactos anteriores. |
+| Dependencias | RF-7.3. |
+
+#### RNF-2.3 Validez sintáctica del DDL
+
+El DDL generado en la fase final debe ser sintácticamente válido para Oracle. Si la primera respuesta del LLM no cumple esta condición, el sistema debe reintentar la fase con un *prompt* de corrección antes de devolver el resultado al usuario.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-3.3. |
+| Prioridad | Media. |
+| Necesidad | Should. |
+| Verificación | Parseo del artefacto `04_ddl.sql` con `sqlparse` para los datasets de referencia. |
+| Dependencias | RF-2.4. |
+
+### 4.2.3 RNF-3. Usabilidad
+
+#### RNF-3.1 Documentación de uso
+
+Tanto la CLI como la GUI deben venir acompañadas de documentación que permita a un usuario con conocimientos básicos de Python (CLI) o sin conocimientos técnicos (GUI) ejecutar una transformación de extremo a extremo siguiendo un manual de inicio rápido.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-6 (interfaz adecuada al perfil). |
+| Prioridad | Media. |
+| Necesidad | Must. |
+| Verificación | Inspección del capítulo 7 ("Manuales") de esta memoria. |
+| Dependencias | — |
+
+#### RNF-3.2 Mensajes de error orientados al usuario
+
+Los mensajes de error mostrados al usuario deben describir la causa probable y la acción recomendada, no limitarse a volcar la traza de excepciones.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | Buenas prácticas de UX. |
+| Prioridad | Media. |
+| Necesidad | Should. |
+| Verificación | Inducción artificial de cuatro fallos representativos (entrada inexistente, API key inválida, cuota agotada, modelo no disponible) y verificación de que el mensaje resultante incluye causa + acción. |
+| Dependencias | RF-7.1. |
+
+#### RNF-3.3 Comprensibilidad de los artefactos intermedios
+
+Los artefactos producidos por el *pipeline* deben ser legibles directamente por un humano (Markdown para análisis y diseño, SQL plano para el DDL), sin requerir herramientas adicionales para inspeccionarlos.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-7.1. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inspección de los artefactos producidos sobre `data/spruce/`: `02_analysis.md` y `03_design.md` se renderizan correctamente; `04_ddl.sql` se abre como texto plano. |
+| Dependencias | RF-2.5. |
+
+### 4.2.4 RNF-4. Seguridad
+
+#### RNF-4.1 No *hardcoding* de credenciales
+
+Ninguna API key, *token* o secreto debe aparecer en el código fuente ni en archivos versionados del repositorio. Las credenciales deben proporcionarse mediante variables de entorno o archivos `.env` locales no versionados.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | OWASP ASVS Nivel 1 §V2.10. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Auditoría con `git log -p | grep -i "api[_-]key"`; ausencia de coincidencias. Presencia de `.env` en `.gitignore`. |
+| Dependencias | — |
+
+#### RNF-4.2 Control de efectos del agente
+
+El agente no debe poder ejecutar operaciones con efectos persistentes fuera del directorio de salida y del directorio temporal de clonado del repositorio sin autorización explícita del usuario. En particular, no debe poder modificar el repositorio analizado ni acceder a archivos fuera del ámbito declarado.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | Buenas prácticas de aislamiento de agentes LLM. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inspección de `resolve_within` en `discovery/filesystem.py`: rechazo activo de rutas que escapen del repositorio o del directorio de salida. |
+| Dependencias | RF-4.2. |
+
+#### RNF-4.3 Higiene del código
+
+El código del repositorio debe poder pasar análisis automáticos de dependencias vulnerables (SCA) y de errores de seguridad (SAST), sin alertas críticas pendientes en el momento de la entrega.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | OWASP ASVS Nivel 1; recomendación de la plantilla. |
+| Prioridad | Media. |
+| Necesidad | Should. |
+| Verificación | Activación del análisis automático de seguridad de GitHub sobre el repositorio público del proyecto. |
+| Dependencias | — |
+
+#### RNF-4.4 Privacidad de la entrada del usuario
+
+El sistema debe informar al usuario de que el contenido de la entrada (archivos, fragmentos del repositorio) se envía a un proveedor de LLM externo, y por tanto no debe utilizarse con código fuente o esquemas confidenciales que el usuario no esté autorizado a compartir con dicho proveedor.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RNF-4.1 (privacidad como complemento a no *hardcoding*). |
+| Prioridad | Media. |
+| Necesidad | Must. |
+| Verificación | Inclusión de la advertencia correspondiente en el manual de usuario (capítulo 7). |
+| Dependencias | — |
+
+### 4.2.5 RNF-5. Restricciones de implementación
+
+#### RNF-5.1 Lenguaje de implementación
+
+La herramienta se implementa en Python 3.11 o superior, por razones de ecosistema (disponibilidad de los SDKs oficiales de los proveedores de LLM y de las librerías de soporte: `google-genai`, `groq`, `click`, `python-dotenv`, `customtkinter`).
+
+| Atributo | Valor |
+|---|---|
+| Fuente | Disponibilidad de SDKs y experiencia del autor. |
+| Prioridad | Alta. |
+| Necesidad | Must. |
+| Verificación | Inspección del `pyproject.toml`: `requires-python = ">=3.11"`. |
+| Dependencias | — |
+
+#### RNF-5.2 Compatibilidad de salida
+
+El DDL generado debe ser compatible con Oracle Database. La versión mínima objetivo del DDL es Oracle 23ai, ya que el sistema emite columnas de tipo `BOOLEAN` de forma nativa. Para entornos Oracle <23 sería necesario un mapeo posterior a `NUMBER(1)` o `CHAR(1)`, que se documenta como ampliación en el capítulo 8.
+
+| Atributo | Valor |
+|---|---|
+| Fuente | RU-3.3, y casuística del entorno *legacy* del autor. |
+| Prioridad | Media. |
+| Necesidad | Must. |
+| Verificación | Parseo del DDL generado contra el dialecto Oracle 23ai con `sqlparse` o equivalente. |
+| Dependencias | — |
+
+## 4.3 Plan de pruebas
+
+Este apartado describe la **estrategia general** de pruebas del sistema: tipos, niveles, objetos, grado de automatización y herramientas. El detalle de qué se prueba en cada caso se especifica en el capítulo 5, apartado 5.3 ("Diseño de pruebas").
+
+### 4.3.1 Estrategia
+
+El sistema combina dos clases de componentes con propiedades muy distintas de cara a las pruebas. Por un lado, una **parte determinista** —lectura de la entrada, persistencia de artefactos, despacho de herramientas del agente, traducción entre el formato neutro y los SDK de cada proveedor, control de presupuestos y reintentos— cuyo comportamiento puede verificarse de forma mecánica. Por otro, una **parte probabilística** —las decisiones del LLM en cada fase del *pipeline* y en cada turno del agente— cuyo resultado correcto no es objetivamente definible y, por tanto, se valida cualitativamente por comparación con un modelo de referencia elaborado por un experto humano.
+
+La estrategia de pruebas aborda ambas clases en paralelo, **sin reducir una a la otra**:
+
+- La parte determinista se verifica mediante una pirámide clásica de pruebas (unitarias, integración, sistema) con un alto grado de automatización.
+- La parte probabilística se valida mediante un conjunto de **pruebas de aceptación cualitativas** sobre un banco de *datasets* de referencia, midiendo la cobertura del modelo relacional generado frente al modelo objetivo y observando la varianza entre ejecuciones y entre modelos.
+
+Esta separación es deliberada: la calidad del software (lo determinista) se mide con métricas binarias (pasa / falla), mientras que la calidad del resultado (lo probabilístico) se mide con métricas continuas de cobertura y de coherencia estructural.
+
+### 4.3.2 Tipos y niveles de prueba
+
+| Nivel | Tipo | Caja | Objetivo |
+|---|---|---|---|
+| Unitario | Funcional | Blanca | Verificar cada función o clase aislada de la parte determinista. |
+| Integración | Funcional | Negra (con dobles de prueba para el LLM) | Comprobar la cooperación entre subsistemas sin depender de la API real del proveedor. |
+| Sistema | Funcional | Negra | Ejecutar la herramienta de extremo a extremo y comprobar la estructura de los artefactos producidos. |
+| Aceptación | Cualitativa | Negra | Comparar el modelo relacional generado con el modelo de referencia para cada *dataset*. |
+
+Quedan **fuera del alcance** las pruebas de carga y de rendimiento sostenido: el sistema no se concibe como un servicio de producción multiusuario, por lo que sus requisitos de rendimiento (RNF-1) se cubren con mediciones puntuales durante la validación de sistema.
+
+### 4.3.3 Objetos de la prueba
+
+La estrategia se aplica a los siguientes subsistemas, identificables a partir de la arquitectura descrita en el capítulo 5:
+
+- **Lectura y normalización de la entrada** (modos archivo, directorio y URL).
+- ***Pipeline* lineal** de cuatro fases (lectura, análisis, diseño relacional, generación de DDL).
+- **Agente de descubrimiento** sobre repositorios remotos.
+- **Herramientas operativas** invocables por el agente (`list_dir`, `read_file`, `grep`, `select_evidence`, `done`).
+- **Abstracción de proveedor LLM** y sus implementaciones concretas (Google, Groq).
+- **Interfaces de usuario** (CLI y GUI), incluyendo paridad funcional entre ambas.
+
+Para cada uno de estos subsistemas, el apartado 5.3 detalla las invariantes y los criterios de aceptación que las pruebas deben verificar.
+
+### 4.3.4 Grado de automatización
+
+| Categoría | Grado | Justificación |
+|---|---|---|
+| Unitarias e integración | Plenamente automatizadas | Ejecución desacoplada del LLM mediante dobles de prueba; coste por ejecución despreciable. |
+| Sistema | Semiautomatizadas | Lanzamiento automatizado con un proveedor simulado para el flujo de integración continua; ejecuciones con proveedor real fuera de CI por motivos de cuota. |
+| Aceptación cualitativa | Manuales asistidas | La comparación con el modelo de referencia requiere juicio humano; se apoya en *checklists* versionadas que reducen la subjetividad y permiten reproducir la evaluación. |
+
+La automatización persigue dos objetivos: garantizar la regresión de la parte determinista en cada cambio del código y aislar la evaluación del modelo del proveedor de LLM concreto, de modo que el *pipeline* de integración continua no se vea afectado por cuotas, latencias ni costes externos.
+
+### 4.3.5 Herramientas
+
+- **`pytest`** como armazón de pruebas unitarias, de integración y de sistema.
+- **Dobles de prueba (`MockProvider`)** que implementan la interfaz `LLMProvider` y devuelven respuestas grabadas previamente, lo que permite ejercitar el *pipeline* y el agente de forma determinista.
+- **Ficheros de respuesta del SDK** versionados como *fixtures* JSON, capturados a partir de invocaciones reales y reutilizados en las pruebas de los adaptadores.
+- **`sqlparse`** para verificar la validez sintáctica del DDL Oracle generado (RNF-2.3).
+- **Contenedor de Oracle Database (Express Edition)** opcional para una validación de ejecución del DDL más exhaustiva en un *pipeline* extendido.
+- **GitHub Actions** como infraestructura de integración continua, encargada de ejecutar los niveles automatizados en cada *commit* y los niveles semiautomatizados de forma programada.
+- ***Checklists* en YAML** versionadas en `tests/baseline/<dataset>.yaml` que enumeran las entidades, claves y relaciones esperadas para cada *dataset* de referencia, y un *script* auxiliar que produce el informe de cobertura por modelo y *dataset* utilizado en la sección 5.3.
+
+Esta combinación de herramientas se traduce en un flujo de pruebas ejecutable, repetible y suficientemente independiente del proveedor de LLM utilizado en la ejecución real.

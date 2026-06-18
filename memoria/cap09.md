@@ -1,285 +1,87 @@
-# Capítulo 9. Apéndices
+# Capítulo 8. Conclusiones y Ampliaciones
 
-## 9.1 Plan de gestión de riesgos
+Este capítulo cierra la memoria con una auto-evaluación del trabajo realizado frente a los requisitos del capítulo 3 y con la enumeración de las líneas de ampliación que el propio proyecto deja abiertas. Las conclusiones se centran en lo que efectivamente se ha aportado y en las lecciones —técnicas y metodológicas— que sintetizan la experiencia del proyecto; las ampliaciones recogen mejoras y extensiones identificadas durante el desarrollo.
 
-Este apéndice desarrolla el plan de gestión de riesgos referenciado en §2.1.4 y proporciona las hojas individuales de los doce riesgos identificados durante el proyecto, conforme a la recomendación de la plantilla del TFG.
+## 8.1 Conclusiones
 
-### 9.1.1 Marco de referencia
+### 8.1.1 Cumplimiento de los requisitos de usuario
 
-La gestión de riesgos del proyecto sigue las recomendaciones de la norma **ISO 31000:2018 — Risk management — Guidelines** y se concreta sobre la práctica habitual del PMBOK 7.ª edición. El proceso se descompone en cinco actividades secuenciales que se realimentan a lo largo del proyecto: identificación, análisis cualitativo, planificación de la respuesta, seguimiento y registro.
+La tabla siguiente resume el grado de cobertura de cada uno de los ocho requisitos de usuario enunciados en el capítulo 3 frente a la evidencia observable en el sistema entregado.
 
-### 9.1.2 Categorías y escalas
-
-Los riesgos del proyecto se clasifican en tres categorías según su origen, todas ellas específicas del dominio *LLM-as-a-service* que diferencia este trabajo de un desarrollo software clásico:
-
-- **Dependencia externa**: riesgos cuya materialización depende de un actor o sistema externo al control del autor (proveedores de LLM, retiradas de modelos, cambios de política, suspensión de cuentas).
-- **Técnico**: riesgos relacionados con la viabilidad técnica de las decisiones adoptadas (compatibilidad de SDKs, fronteras de cuota, soporte irregular de *function calling*, *aliasing* silencioso de modelos).
-- **Calidad**: riesgos que afectan a la calidad del resultado producido por el sistema (varianza del agente, cobertura inter-proveedor, sesgo del LLM, *drift* del *prompt*).
-
-La probabilidad y el impacto se evalúan en una escala 1–5 cualitativa-cuantitativa:
-
-| Valor | Probabilidad | Impacto |
+| Requisito | Cobertura | Evidencia |
 |---|---|---|
-| 1 | Muy baja (≤ 10 %) | Despreciable: no afecta al alcance ni al plazo. |
-| 2 | Baja (10–30 %) | Menor: corregible con horas adicionales. |
-| 3 | Media (30–60 %) | Moderado: requiere replanificación parcial. |
-| 4 | Alta (60–80 %) | Mayor: pone en riesgo un paquete WBS completo. |
-| 5 | Muy alta (≥ 80 %) | Crítico: pone en riesgo la entrega del proyecto. |
+| RU-1.1 Carga desde archivo | Total | Ejecución end-to-end sobre `data/spruce/keys.js`; artefactos producidos. |
+| RU-1.2 Carga desde directorio | Total | Ejecución end-to-end sobre `data/spruce-difuso/`; concatenación con marcas de origen. |
+| RU-1.3 Análisis a partir de URL | Total | Ejecución sobre la URL pública de Spruce; clonado en caché, agente activo, evidencia agregada. |
+| RU-2 Análisis del modelo documental | Total | Artefacto `02_analysis.md` con entidades, atributos, relaciones y trazas de evidencia. |
+| RU-3 Generación del modelo relacional | Total | Artefactos `03_design.md` y `04_ddl.sql` en todos los casos validados. |
+| RU-4 Independencia y configuración del proveedor de LLM | Total | Dos proveedores (Google, Groq) intercambiables sin cambios fuera de `providers/`. |
+| RU-5 Uso de agentes para análisis de repositorios | Total | Agente con cinco herramientas (`list_dir`, `read_file`, `grep`, `select_evidence`, `done`) sobre tres repositorios validados. |
+| RU-6 Interfaz de uso (CLI + GUI) | Total | CLI Click y GUI CustomTkinter; misma capa de núcleo para ambas. |
+| RU-7 Inspección de los resultados intermedios | Total | Cuatro artefactos del *pipeline* + traza del agente en directorios `--out-dir` aislados. |
+| RU-8 Prototipo | Total | Validación cualitativa sobre los tres modos de entrada y desde ambas interfaces. |
 
-La **exposición** resultante (P × I, 1–25) define la urgencia de la respuesta:
+La evaluación de los requisitos del sistema (RFs y RNFs del capítulo 4) sigue el mismo patrón: cada RF se traza a una decisión arquitectónica del capítulo 5 (§5.1.5) y a su materialización en un módulo del capítulo 6 (§6.1.1); cada RNF se acredita con la inspección del código y, cuando aplica, con las mediciones de §6.2.2.
 
-- Exposición ≥ 12: **crítico** — plan de mitigación obligatorio antes de cualquier nueva tarea.
-- Exposición entre 6 y 11: **alto** — plan de mitigación recomendado, contingencia preparada.
-- Exposición entre 3 y 5: **moderado** — monitorizado con indicadores.
-- Exposición ≤ 2: **bajo** — aceptado.
+### 8.1.2 Resultados cuantitativos
 
-### 9.1.3 Plantilla de hoja de riesgo
+La cobertura del sistema sobre los *datasets* de referencia es la siguiente:
 
-Cada riesgo identificado se documenta con los siguientes campos:
+- **`data/spruce/`** (caso de control con *schemas* explícitos): cobertura **11/11** entidades del modelo UML manual con Google (Gemma 4 31B); cobertura **10/11** con Groq (Llama 3.3 70B). La única entidad perdida por Groq es marginal en el corpus.
+- **`data/spruce-difuso/`** (mismo modelo, sin *schemas* declarativos): cobertura **11/11** con Google; **7/11** con Groq, perdiendo las familias `keys` / `key_stats` y `analytics` / `analytics_stats`.
+- **URL pública de Spruce** (modo URL, agente activo): cobertura **11/11** del UML con un agente Gemini que selecciona los cuatro *schemas* declarativos del repositorio en cinco iteraciones.
+- **URL pública de Habitica** (modo URL, validación cualitativa adicional): 31 tablas generadas, recuperando el modelo `User` descompuesto en 13 tablas y las familias `Tasks`, `Groups`, `Challenges`, `Messages`, `Webhooks`, `Subscriptions`, `Transactions` y `Tags`. No se recuperan `Coupon`, `Blocker`, `IapPurchaseReceipt`, `NewsPost`, `EmailUnsubscription`, `PushDevice` ni `Inbox`. La cobertura es satisfactoria como caso de tamaño realista pero no completa.
 
-| Campo | Descripción |
-|---|---|
-| Identificador | Código único R-NN del registro de riesgos. |
-| Descripción | Enunciado claro del riesgo, evitando confundir causa con consecuencia. |
-| Categoría | Una de las tres categorías (dependencia externa, técnico, calidad). |
-| Probabilidad / Impacto / Exposición | Valoración inicial 1–5 × 1–5 y producto resultante. |
-| Estrategia | Una de las cuatro estrategias canónicas: **evitar**, **mitigar**, **transferir**, **aceptar**. |
-| Plan de mitigación | Acciones concretas a emprender para reducir la probabilidad o el impacto. |
-| Indicadores de materialización | Eventos observables que avisarían de la cercanía del riesgo. |
-| Plan de contingencia | Acciones a emprender si el riesgo se materializa pese a la mitigación. |
-| Estado final | Resultado al cierre del proyecto: materializado y mitigado, materializado y aceptado, reducido, o no materializado. |
+Sobre tres ejecuciones independientes del agente sobre Habitica con la misma configuración se observaron rangos de 5 a 22 archivos seleccionados. El sistema documenta de forma intencional este rango en lugar de un único número favorable, alineándose con la lección L7 ("honestidad estadística") del capítulo 2.
 
-### 9.1.4 Hojas individuales de riesgo
+### 8.1.3 Reflexión sobre el techo del modelo
 
-A continuación se incluyen las doce hojas individuales correspondientes a los riesgos identificados en §2.1.4. Cinco de ellas se anticiparon en §2.2.3 con detalle completo; aquí se consolidan todas con la plantilla aplicada de forma uniforme.
+Una de las conclusiones más relevantes del trabajo, ya formulada como lección L1 del capítulo 2, es que **la capacidad del modelo elegido pone un techo a lo que el *prompt* puede lograr**. Sobre el mismo *prompt*, la jerarquía observada de modelos para el agente con *function calling* es:
 
-#### R-01. Colapso del *free tier* de Google
+`Gemini 3.1 Flash Lite` > `Qwen3-32B` > `Llama 4 Scout` ≫ `Llama 3.x` / `gpt-oss`
 
-| Campo | Valor |
-|---|---|
-| Categoría | Dependencia externa. |
-| Probabilidad / Impacto / Exposición | 4 / 5 / 20 (crítico). |
-| Estrategia | Mitigar. |
-| Plan de mitigación | Implementar `GroqProvider` como proveedor alternativo desde el inicio del paquete P3 ("Abstracción de proveedor"); migrar al sucesor de `gemini-2.5-flash-lite` (`gemini-3.1-flash-lite`) cuando se libere. |
-| Indicadores | Errores HTTP 429 persistentes; comunicaciones públicas del proveedor; mediciones empíricas registradas en `notes/2026-05-25-free-tier-google-y-alternativas.md`. |
-| Contingencia | Migración temporal del agente a Groq (con la advertencia de R-02 para repositorios medianos+). |
-| Estado final | Materializado en diciembre de 2025; mitigado mediante adopción de `gemini-3.1-flash-lite` y de `GroqProvider`. |
+Esta jerarquía se traduce directamente en cobertura sobre el modelo de referencia: sobre Spruce, todos los modelos hasta `Llama 4 Scout` cierran el caso; sobre Habitica, solo Gemini lo aborda con éxito. La consecuencia metodológica del trabajo es que **invertir tiempo en *prompt engineering* tiene rendimientos decrecientes una vez se exprime el modelo elegido**, y que la mejora de la cobertura a partir de cierto punto requiere subir de modelo (con el coste correspondiente, si no es gratuito) o asumir el residuo de varianza.
 
-#### R-02. Frontera Groq × tamaño del árbol del repositorio
+### 8.1.4 Reflexión sobre el coste y la dependencia del *free tier*
 
-| Campo | Valor |
-|---|---|
-| Categoría | Técnico. |
-| Probabilidad / Impacto / Exposición | 3 / 4 / 12 (crítico). |
-| Estrategia | Mitigar. |
-| Plan de mitigación | Documentar la frontera de TPM × tamaño del árbol; reservar Groq para el *pipeline* texto-a-texto y usar Google para el agente sobre repositorios medianos+. |
-| Indicadores | HTTP 413 sobre la primera petición al LLM; medición del tamaño del árbol antes de invocar. |
-| Contingencia | Uso forzado de Google para el agente; investigación del *dev tier* de Cerebras como ampliación. |
-| Estado final | Materializado y aceptado como límite del *free tier* de Groq. |
+La adopción inicial de un único proveedor (Google) resultó frágil tras el recorte de cuotas de diciembre de 2025. La incorporación del segundo proveedor (Groq) fue posterior y se motivó como mitigación del riesgo R-01. Esta experiencia confirma que, en proyectos académicos o de investigación que se apoyan en proveedores externos, **la abstracción multi-proveedor es una decisión arquitectónica con valor de gestión de riesgo**, no solo de elegancia técnica.
 
-#### R-03. Soporte irregular de *function calling* en modelos *open-weight*
+### 8.1.5 Reflexión final
 
-| Campo | Valor |
-|---|---|
-| Categoría | Técnico. |
-| Probabilidad / Impacto / Exposición | 4 / 3 / 12 (crítico). |
-| Estrategia | Mitigar. |
-| Plan de mitigación | Caracterización empírica del catálogo Groq: solo `qwen/qwen3-32b` y `meta-llama/llama-4-scout-17b-16e-instruct` validados como agentes; el resto descartados (Llama 3.x emite *markup* `<function=…>`, `gpt-oss-20b` produce JSON malformado, `gpt-oss-120b` emite *chain-of-thought* no parseable). |
-| Indicadores | Errores `tool_use_failed` del SDK; salidas con *markup* no estructurado. |
-| Contingencia | Forzar el modelo del agente a `qwen/qwen3-32b` (que es el valor por defecto en `DEFAULT_AGENT_MODELS`). |
-| Estado final | Materializado y mitigado. La frontera está documentada en la traza experimental del proyecto como referencia futura. |
+Más allá del cumplimiento de los requisitos, el trabajo ha aportado tres elementos que el autor considera contribuciones genuinas para futuros proyectos similares: (i) una abstracción **`LLMProvider`** cuyas dos operaciones del núcleo (`generate` y `chat`) han probado ser suficientes para dos SDKs con paradigmas distintos (Google con `Content/Part`, Groq con formato OpenAI), ampliada con una tercera operación auxiliar (`list_models`) que la GUI usa para mantener el catálogo de modelos sincronizado con el proveedor sin intervención manual; (ii) un **agente con *function calling* nativo** cuya implementación cabe en menos de 250 líneas de Python sin depender de *frameworks* de agentes externos, lo que reduce drásticamente la superficie de mantenimiento; y (iii) un **enfoque metodológico** que combina rigor de ingeniería del *software* (29148 en requisitos, ISO 31000 en riesgos, patrones GoF en diseño) con honestidad estadística en los resultados (rango observado y no número único). Las tres aportaciones son transferibles a otros TFG que se apoyen en LLMs como herramienta y, en opinión del autor, constituyen el valor principal del trabajo para la comunidad académica.
 
-#### R-04. Alta varianza del agente sobre el mismo *input*
+## 8.2 Ampliaciones
 
-| Campo | Valor |
-|---|---|
-| Categoría | Calidad. |
-| Probabilidad / Impacto / Exposición | 5 / 3 / 15 (crítico). |
-| Estrategia | Mitigar parcialmente y aceptar el residuo. |
-| Plan de mitigación | Tres palancas de *prompt engineering*: (i) Principio del hermano (filtro principal/secundario en el *pipeline*, no en el agente); (ii) dos pasadas obligatorias (declarativa + implícita); (iii) *batching* como regla dura. Árbol BFS con corte a 2 000 entradas. Documentación honesta del rango. |
-| Indicadores | Variaciones >50 % en el número de archivos seleccionados sobre el mismo *input*. |
-| Contingencia | Ejecución múltiple del agente y selección del mejor *run*; documentación del rango observado. |
-| Estado final | Reducido (del rango 1–22 al rango 5–22 con prompt v5) y aceptado. |
+Esta sección recoge seis líneas de ampliación que el propio proyecto deja abiertas: mejoras y extensiones identificadas durante el desarrollo.
 
-#### R-05. Retirada o sustitución de modelos durante el desarrollo
+### Ampliación A. Selección independiente de proveedores para *pipeline* y agente
 
-| Campo | Valor |
-|---|---|
-| Categoría | Dependencia externa. |
-| Probabilidad / Impacto / Exposición | 3 / 3 / 9 (alto). |
-| Estrategia | Mitigar. |
-| Plan de mitigación | Externalización de los nombres de modelos en `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS`; documentación comentada de las migraciones. |
-| Indicadores | Errores 404 / "model not found"; anuncios del proveedor. |
-| Contingencia | Sustitución del modelo en `DEFAULT_MODELS` y re-validación con `data/spruce/`. |
-| Estado final | Materializado en mayo de 2026 (retirada de Gemma 3 27B); mitigado mediante migración a `gemma-4-31b-it`. |
+En la versión actual, el *flag* `--provider` es único y obliga a usar el mismo proveedor para el *pipeline* y para el agente. Añadir un segundo *flag* `--agent-provider` independiente permitiría combinaciones útiles como "agente Google + *pipeline* Groq", que durante el desarrollo se ha probado de facto como respuesta a episodios transitorios de 5xx en Gemma. El cambio es localizado: se concentra en `cli.py` (un *option* adicional) y no requiere modificaciones en el resto del sistema, dado que `build_provider` ya admite invocaciones independientes para los dos roles.
 
-#### R-06. Diferencia de cobertura inter-proveedor
+### Ampliación B. Tercer proveedor: Z.ai
 
-| Campo | Valor |
-|---|---|
-| Categoría | Calidad. |
-| Probabilidad / Impacto / Exposición | 4 / 2 / 8 (alto). |
-| Estrategia | Aceptar. |
-| Plan de mitigación | Validación cualitativa sobre los dos proveedores; documentación honesta del *trade-off* en §6.2.2 y en §8.1.3. |
-| Indicadores | Cobertura del UML manual significativamente distinta entre proveedores sobre el mismo *input*. |
-| Contingencia | Recomendación por defecto del proveedor con mejor cobertura (Google para *datasets* difusos). |
-| Estado final | Materializado y aceptado; documentado el *trade-off* velocidad (Groq sobre el *pipeline* texto-a-texto) ↔ calidad (Google sobre el agente en Habitica). |
+Z.ai constituye el candidato más prometedor para un tercer proveedor de LLM. Los modelos `GLM-4.5-Flash` y `GLM-4.7-Flash` están disponibles en *free tier* sin tarjeta de crédito, con 128 K de contexto (suficiente para absorber el árbol BFS de 2 000 entradas de Habitica sin chocar contra el TPM), soporte oficial de *function calling* y una API OpenAI-compatible que facilita la implementación. El único cuello observado del *free tier* —una sola petición concurrente— se cumple de manera trivial con el diseño actual, dado que el bucle del agente es secuencial.
 
-#### R-07. Suspensión o limitación de cuentas de proveedor por uso intensivo
+La implementación consistiría en un módulo nuevo `normalizer/providers/zai.py` aproximadamente equivalente a `groq.py` con `base_url` y modelos por defecto distintos, y el registro en `_REGISTRY`, `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS`. La validación seguiría el mismo patrón que para Groq: Spruce-URL primero (caso pequeño) y luego Habitica para comparar con la ejecución Google de referencia.
 
-| Campo | Valor |
-|---|---|
-| Categoría | Dependencia externa. |
-| Probabilidad / Impacto / Exposición | 2 / 3 / 6 (alto). |
-| Estrategia | Aceptar. |
-| Plan de mitigación | Cumplimiento de los términos de uso de los proveedores; uso responsable de los *free tiers*; vigilancia razonable durante las campañas de validación. |
-| Indicadores | Notificaciones del proveedor; rechazos de autenticación persistentes. |
-| Contingencia | Migración al otro proveedor disponible. |
-| Estado final | No materializado. |
+### Ampliación C. Suite de pruebas automatizadas
 
-#### R-08. Cambios estructurales en políticas de uso del proveedor
+El plan de pruebas descrito en §4.3 y §5.3 contempla los niveles unitario, integración y sistema. Su materialización es la principal ampliación en el plano de la ingeniería del *software*: introducir `pytest` como armazón, `MockProvider` como doble de prueba para los niveles aislados del LLM, *fixtures* JSON con respuestas reales del SDK capturadas para los adaptadores, y `sqlparse` para la verificación sintáctica del DDL en el nivel de aceptación. La estructura del repositorio ya contempla esta ampliación con el directorio `tests/baseline/<dataset>.yaml` para los *checklists* de los casos de aceptación cualitativa.
 
-| Campo | Valor |
-|---|---|
-| Categoría | Dependencia externa. |
-| Probabilidad / Impacto / Exposición | 3 / 4 / 12 (crítico). |
-| Estrategia | Mitigar. |
-| Plan de mitigación | Diferente de R-01 (cuota numérica) y R-07 (cuenta individual): aquí se atacan los cambios estructurales que afectan a todos los usuarios del *free tier* (retirada completa, exigencia de verificación de pago, restricciones de uso académico, retirada simultánea de modelos demo-críticos). Mitigación: *snapshot* offline del *run* canónico sobre Spruce y Habitica (DDL, trazas del agente, *prompts* y *outputs* en disco) grabado con antelación a la defensa, utilizable como demo de respaldo sin invocar al proveedor; *fallback* claramente comunicable al tribunal si el sistema en vivo no responde; multi-proveedor reduce la exposición frente a un único cambio. |
-| Indicadores | Anuncios oficiales del proveedor; cambios en los términos de servicio; foros y *subreddits* del SDK; cambios bruscos en las respuestas de la API en los días previos a la defensa. |
-| Contingencia | Reproducción de la demo desde el *snapshot* offline; comunicación abierta del incidente al tribunal. |
-| Estado final | No materializado a fecha de cierre del prototipo. *Snapshot* offline preparado como contingencia para la defensa. |
+### Ampliación D. Integración continua
 
-#### R-09. Breaking changes en los SDKs cliente
+Como continuación natural de la Ampliación C, la activación de GitHub Actions permitiría ejecutar la suite en cada *commit* y disponer de los análisis de seguridad SCA y SAST descritos en RNF-4.3. El esfuerzo es bajo (un único fichero YAML en `.github/workflows/`) y completaría la columna "Implementado" en la tabla de cumplimiento de RNFs.
 
-| Campo | Valor |
-|---|---|
-| Categoría | Técnico. |
-| Probabilidad / Impacto / Exposición | 3 / 3 / 9 (alto). |
-| Estrategia | Mitigar. |
-| Plan de mitigación | Los SDKs `google-genai` y `groq` son jóvenes y siguen una cadencia de evolución rápida con riesgo de cambios incompatibles entre versiones. Mitigación mediante *pinning* de versiones en `requirements.txt`, *smoke test* tras cada actualización y aislamiento del SDK detrás de la abstracción `LLMProvider` para localizar el impacto en `providers/*.py`. |
-| Indicadores | Errores `ImportError` / `AttributeError` al actualizar; avisos de *deprecation* en `stderr`; notas de versión del SDK. |
-| Contingencia | Bloqueo de la versión funcional anterior; *rollback* del `requirements.txt`. |
-| Estado final | No materializado: un único *bump* de versión durante el proyecto, compatible. |
+### Ampliación E. Portabilidad del DDL a Oracle anterior a 23ai
 
-#### R-10. Reenrutamiento silencioso del alias del modelo
+El DDL generado utiliza el tipo `BOOLEAN`, soportado de forma nativa por Oracle 23ai pero ausente de las versiones anteriores. Un mapeo posterior trivial —`BOOLEAN` → `NUMBER(1) CHECK (X IN (0,1))` o `CHAR(1) CHECK (X IN ('Y','N'))`— ampliaría la portabilidad del DDL al universo Oracle <23, mayoritario en los entornos *legacy* objetivo. La ampliación puede materializarse como una opción adicional del *pipeline* (`--oracle-version 12c|19c|23ai`) o como un *postprocesador* externo aplicable al artefacto `04_ddl.sql`.
 
-| Campo | Valor |
-|---|---|
-| Categoría | Técnico. |
-| Probabilidad / Impacto / Exposición | 2 / 2 / 4 (moderado). |
-| Estrategia | Mitigar. |
-| Plan de mitigación | A diferencia de R-05 (retirada formal), aquí el identificador del modelo se mantiene mientras el modelo subyacente cambia silenciosamente (*model aliasing*), alterando *outputs* entre *runs* aparentemente idénticos. Mitigación preventiva fijando IDs de modelo explícitamente versionados cuando el proveedor los ofrece, en lugar de alias genéricos. |
-| Indicadores | Discrepancias en *outputs* entre *runs* con la misma configuración; cambios en los metadatos de la respuesta de la API. |
-| Contingencia | Fijar la versión exacta del modelo en `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS`; re-validación contra la *baseline* de Spruce. |
-| Estado final | No materializado: sin discrepancias observadas en *runs* idénticos durante el proyecto. |
+### Ampliación F. Reducción de la varianza del agente
 
-#### R-11. Sesgo del LLM hacia modelos relacionales convencionales
+La varianza observada del agente (5–22 archivos sobre Habitica) tiene tres palancas de reducción:
 
-| Campo | Valor |
-|---|---|
-| Categoría | Calidad. |
-| Probabilidad / Impacto / Exposición | 4 / 2 / 8 (alto). |
-| Estrategia | Mitigar. |
-| Plan de mitigación | Los LLMs están mayoritariamente entrenados sobre modelos relacionales y pueden aplanar denormalizaciones legítimas o forzar agrupaciones que pierdan información presente en el modelo documental original. Mitigación en el *prompt* del paso 2 (`analyze.md`) y en la regla de reconciliación de FKs de `design.md` (cap. 2 §2.1.3); trazabilidad RU-2.3 permite detección humana del aplanamiento residual. |
-| Indicadores | Pérdida de campos respecto al UML manual; agrupaciones forzadas; FKs que no respetan la multiplicidad observada. |
-| Contingencia | Revisión cualitativa del DDL frente al modelo documental original; ajuste de los *prompts*. |
-| Estado final | Reducido: aplanamientos detectados y corregidos vía *prompt engineering* durante P4; residuo aceptado. |
+- **Herramienta `select_evidence_batch(items=[…])`**, que materialice el *batching* en una sola invocación y elimine la ambigüedad del *batching* implícito por consecutividad. El cambio se localiza en `discovery/tools.py`.
+- **Agrupación de `select_evidence` consecutivos en `dispatch()`**, sin cambiar la interfaz expuesta al LLM. Solución alternativa más conservadora.
+- **Nudges dinámicos**: tras cada `read_file`, devolver al agente la lista de archivos del mismo directorio que aún no ha leído. Esto ataca de forma directa el patrón "principal vs secundario". El cambio se concentra en `discovery/tools.py:_do_read_file` y en una pequeña ampliación de `DiscoveryState` para llevar la lista de archivos vistos.
 
-#### R-12. *Drift* del *prompt* del agente hacia un dataset concreto
-
-| Campo | Valor |
-|---|---|
-| Categoría | Calidad. |
-| Probabilidad / Impacto / Exposición | 3 / 3 / 9 (alto). |
-| Estrategia | Mitigar. |
-| Plan de mitigación | La iteración del *prompt* del agente sobre un único dataset (Spruce) podría optimizar el *prompt* para ese caso particular y degradar la generalización a otros repositorios. Mitigación mediante validación cruzada en cada iteración significativa: `data/spruce/` (caso de control) y URL pública de Habitica (caso de tamaño realista). El *drift* hacia Mongoose se ataca explícitamente en la pasada declarativa multi-*stack* del *prompt* v5.2. |
-| Indicadores | Caída de cobertura en repositorios fuera del conjunto de iteración. |
-| Contingencia | Reintroducir el dataset divergente en el conjunto de iteración del *prompt*. |
-| Estado final | Reducido mediante la validación cruzada Spruce + Habitica en cada iteración del *prompt*. |
-
-## 9.2 Referencias bibliográficas
-
-Las referencias siguientes corresponden a las fuentes citadas a lo largo de la memoria. Se utiliza el estilo IEEE.
-
-[1] ISO/IEC/IEEE 29148:2018, *Systems and software engineering — Life cycle processes — Requirements engineering*, International Organization for Standardization, Ginebra, 2018.
-
-[2] IEEE 830-1998, *Recommended Practice for Software Requirements Specifications*, Institute of Electrical and Electronics Engineers, Nueva York, 1998. (Retirada en 2011, reemplazada por [1].)
-
-[3] ISO/IEC/IEEE 15288:2015, *Systems and software engineering — System life cycle processes*, International Organization for Standardization, Ginebra, 2015.
-
-[4] ISO 31000:2018, *Risk management — Guidelines*, International Organization for Standardization, Ginebra, 2018.
-
-[5] Project Management Institute, *A Guide to the Project Management Body of Knowledge (PMBOK Guide)*, 7.ª ed. Newtown Square, PA: PMI, 2021.
-
-[6] E. Gamma, R. Helm, R. Johnson y J. Vlissides, *Design Patterns: Elements of Reusable Object-Oriented Software*. Reading, MA: Addison-Wesley, 1994.
-
-[7] J. M. Redondo y P. J. Tuya González, *Plantilla TFG — Escuela Politécnica de Ingeniería de Gijón*, versión 2.1, Universidad de Oviedo, 2025. Proyecto de innovación docente PINN-19-A-029.
-
-[8] Ministerio de Administraciones Públicas, *Metodología Métrica versión 3*, Madrid, 2001.
-
-[9] OWASP Foundation, *OWASP Application Security Verification Standard (ASVS) — Nivel 1*, versión 4.0, 2019.
-
-[10] Google LLC, *google-genai Python SDK Documentation*, 2025. [En línea]. Disponible: <https://github.com/googleapis/python-genai>.
-
-[11] Google LLC, *Gemini API — Function Calling*, 2025. [En línea]. Disponible: <https://ai.google.dev/gemini-api/docs/function-calling>.
-
-[12] Groq Inc., *Groq Python SDK Documentation*, 2025. [En línea]. Disponible: <https://github.com/groq/groq-python>.
-
-[13] OpenAI, *Function Calling Guide*, 2025. [En línea]. Disponible: <https://platform.openai.com/docs/guides/function-calling>.
-
-[14] Pallets Projects, *Click Documentation*, 2025. [En línea]. Disponible: <https://click.palletsprojects.com>.
-
-[15] T. Schimansky, *CustomTkinter*, 2025. [En línea]. Disponible: <https://github.com/TomSchimansky/CustomTkinter>.
-
-[16] *Spruce — Live Chat Web Application*, 2018. [En línea]. Disponible: <https://github.com/dan-divy/spruce>.
-
-[17] HabitRPG / Habitica Authors, *Habitica — Open-Source Habit Building Web Application*, 2013–2026. [En línea]. Disponible: <https://github.com/HabitRPG/habitica>.
-
-[18] Automattic Inc., *Mongoose — Elegant MongoDB Object Modeling for Node.js*, 2025. [En línea]. Disponible: <https://mongoosejs.com>.
-
-[19] Oracle Corporation, *Oracle Database 23ai — Release Notes*, 2024. [En línea]. Disponible: <https://docs.oracle.com/en/database/oracle/oracle-database/23/>.
-
-[20] A. Andoni *et al.*, *sqlparse — A non-validating SQL parser module for Python*, 2025. [En línea]. Disponible: <https://github.com/andialbrecht/sqlparse>.
-
-## 9.3 Contenido entregado en los anexos
-
-### 9.3.1 Descripción del contenido
-
-El anexo digital del Trabajo de Fin de Grado se entrega como un único fichero comprimido que contiene todos los elementos necesarios para reproducir el sistema, verificar los resultados y, en su caso, extenderlo. El contenido se ha adaptado a la naturaleza del proyecto (un paquete Python con CLI y GUI), divergiendo de la estructura por defecto recomendada por la plantilla (Java / Ant) que no aplica al *stack* utilizado.
-
-El anexo se organiza en tres grandes bloques: el **código fuente** del paquete `normalizer`, los **datos** utilizados para la validación cualitativa y los **artefactos** producidos por las ejecuciones de validación.
-
-### 9.3.2 Recomendación de la estructura de directorios
-
-La estructura propuesta para el anexo digital es la siguiente:
-
-```
-anexo/
-├── README.TXT                          # Punto de entrada del anexo
-├── codigo/
-│   ├── pyproject.toml
-│   ├── normalizer/                     # Paquete Python completo
-│   ├── memoria/                        # Borradores Markdown de los capítulos
-│   ├── notes/                          # Documentos vivos y registros de sesión
-│   └── .env.example                    # Plantilla de credenciales
-├── instalacion/
-│   ├── README.md                       # Procedimiento detallado de instalación
-│   └── checklist.md                    # Comprobaciones post-instalación
-├── documentacion/
-│   ├── MemoriaTFG.pdf                  # Memoria en PDF navegable
-│   └── diagramas/                      # Diagramas individuales en PNG
-├── explotacion/
-│   ├── data/
-│   │   ├── spruce/                     # Dataset de control
-│   │   └── spruce-difuso/              # Dataset realista
-│   ├── runs/
-│   │   ├── out-spruce/                 # Artefactos de validación
-│   │   ├── out-difuso-google/          # Artefactos de validación
-│   │   ├── out-spruce-url/             # Artefactos del modo URL
-│   │   └── out-habitica-2026-06-01/    # Artefactos del caso realista
-│   └── README.md                       # Guía de reproducción de las ejecuciones
-└── presentacion/
-    └── defensa.pdf                     # Diapositivas de la defensa
-```
-
-El fichero `README.TXT` en la raíz del anexo describe el contenido, indica las dependencias mínimas y resume el procedimiento de instalación referenciando los `README.md` de cada subdirectorio. El directorio `codigo/` contiene una copia limpia del repositorio en el momento de la entrega (sin `.cache/`, sin `out-*/` superfluos, sin `.env`). El directorio `documentacion/` incluye el PDF navegable de la memoria con los marcadores activos. El directorio `explotacion/` reproduce los *datasets* utilizados y los artefactos de las ejecuciones de validación que sustentan las afirmaciones cuantitativas de §6.2.2 y §8.1.2.
+Ninguna de las tres elimina la varianza por completo —es propiedad latente del modelo—, pero las tres reducen su techo de forma medible.
