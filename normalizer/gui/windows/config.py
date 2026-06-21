@@ -22,6 +22,7 @@ _INPUT_FG = ("#e7eef8", "#181c20")
 _INPUT_BORDER = ("#a8bcd9", "#3a4456")
 _INPUT_BUTTON = ("#1f6aa5", "#3a8fd6")  # primary para botones de combo
 
+from normalizer.gui.components.tooltip import attach_tooltip
 from normalizer.gui.controller import (
     ENV_KEY_BY_PROVIDER,
     persist_api_key,
@@ -80,6 +81,29 @@ class ConfigScreen(ctk.CTkFrame):
             width=220,
             height=26,
         ).pack(side="left", padx=8, pady=(0, 12))
+
+        # --- Barra inferior fija: el botón "Ejecutar" siempre visible -----
+        # Se crea y empaqueta ANTES del área scrollable para que ésta (con
+        # expand=True) ocupe solo el espacio central y el botón quede siempre
+        # accesible aunque el formulario no quepa entero.
+        bottom = ctk.CTkFrame(self, fg_color="transparent")
+        bottom.pack(side="bottom", fill="x", pady=(12, 0))
+        self.error_label = ctk.CTkLabel(
+            bottom, text="",
+            text_color=("#ba1a1a", "#ffb4ab"),  # error M3
+            anchor="w",
+        )
+        self.error_label.pack(side="left", fill="x", expand=True)
+        self.run_btn = ctk.CTkButton(
+            bottom, text="Ejecutar →", command=self._on_run, width=140
+        )
+        self.run_btn.pack(side="right")
+
+        # --- Contenido scrollable: los bloques del formulario -------------
+        # Scrollable para que el formulario completo (cuatro bloques en modo
+        # URL) quede accesible aunque la ventana esté a su tamaño mínimo.
+        self._scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        self._scroll.pack(side="top", fill="both", expand=True)
 
         # Bloque entrada -------------------------------------------------
         block_in = self._make_block("1. Entrada")
@@ -190,25 +214,40 @@ class ConfigScreen(ctk.CTkFrame):
         ctk.CTkLabel(
             block_keys,
             text=(
-                "Si introduces una clave nueva, se guardará en .env "
-                "(excluido del repositorio por .gitignore)."
+                "Si introduces una clave nueva, se guardará en .env"
+                
             ),
             text_color="gray",
             anchor="w",
             wraplength=900,
         ).pack(fill="x", pady=(6, 0))
 
-        # Bloque agente (solo modo URL) ---------------------------------
-        block_agent = self._make_block("4. Agente de descubrimiento (modo URL)")
+        # Bloque agente (solo modo URL): se crea aquí pero se muestra u oculta
+        # por completo según el modo de entrada (ver
+        # _refresh_agent_block_visibility), porque solo es relevante en URL.
+        self._block_agent = ctk.CTkFrame(
+            self._scroll, corner_radius=12, fg_color=("#dfe7f2", "#1c2024"),
+        )
+        block_agent = ctk.CTkFrame(self._block_agent, fg_color="transparent")
+        block_agent.pack(fill="x", padx=18, pady=16)
+        ctk.CTkLabel(
+            block_agent,
+            text="4. Agente de descubrimiento (modo URL)",
+            font=ctk.CTkFont(size=15, weight="bold"), anchor="w",
+        ).pack(fill="x", pady=(0, 12))
+        # wraplength fijo y conservador: cabe a tamaño mínimo de ventana dentro
+        # del frame scrollable, y justify a la izquierda evita el centrado raro
+        # de las líneas envueltas. (Un wrap dinámico vía <Configure> recursaba:
+        # cambiar wraplength altera la altura -> nuevo <Configure> -> bucle.)
         ctk.CTkLabel(
             block_agent,
             text=(
-                "Presupuesto del agente que explora el repositorio. Solo aplica "
-                "cuando la entrada es una URL; se ignora en archivo/directorio. "
-                "Bajar las entradas del árbol ayuda con los límites de cuota "
-                "(TPM) sobre repositorios grandes."
+                "Presupuesto del agente que explora el repositorio.\n"
+                "Limita cuánto explora (iteraciones y archivos seleccionados) y "
+                "cuánto contexto recibe de partida (tamaño del árbol del "
+                "repositorio), para ajustar el consumo de cuota del proveedor. "
             ),
-            text_color="gray", anchor="w", wraplength=900,
+            text_color="gray", anchor="w", justify="left", wraplength=760,
         ).pack(fill="x", pady=(0, 8))
 
         self._max_iters_var = ctk.StringVar()
@@ -218,16 +257,48 @@ class ConfigScreen(ctk.CTkFrame):
             _var.trace_add("write", lambda *_: self._refresh_run_button())
 
         self._agent_budget_entries: list[ctk.CTkEntry] = []
-        for label_text, var in (
-            ("Máx. iteraciones", self._max_iters_var),
-            ("Máx. archivos", self._max_files_var),
-            ("Máx. entradas del árbol", self._max_tree_var),
+        for label_text, var, tip in (
+            (
+                "Máx. iteraciones",
+                self._max_iters_var,
+                "Número máximo de turnos (una petición al LLM por turno) que el "
+                "agente puede dar explorando el repositorio antes de abortar. "
+                "Más iteraciones permiten una exploración más exhaustiva, pero "
+                "consumen más cuota. Por defecto: 30.",
+            ),
+            (
+                "Máx. archivos",
+                self._max_files_var,
+                "Número máximo de archivos que el agente puede marcar como "
+                "evidencia relevante. Acota el tamaño de la entrada que luego "
+                "recibe el pipeline. Por defecto: 30.",
+            ),
+            (
+                "Máx. entradas del árbol",
+                self._max_tree_var,
+                "Número máximo de archivos y carpetas que se listan en el árbol "
+                "del repositorio que el agente recibe en su primer mensaje. "
+                "Bajarlo reduce el tamaño de ese mensaje (útil cuando el "
+                "proveedor tiene un límite de tokens estrecho, p. ej. Groq); "
+                "subirlo da más contexto inicial. Por defecto: 2000.",
+            ),
         ):
             row = ctk.CTkFrame(block_agent, fg_color="transparent")
             row.pack(fill="x", pady=(0, 8))
-            ctk.CTkLabel(row, text=label_text, width=200, anchor="w").pack(
-                side="left"
+            # Icono "ⓘ" delante del texto del parámetro: pista visible de que
+            # hay ayuda. El tooltip se asocia solo al icono (no al campo ni a la
+            # etiqueta) para que aparezca de forma intencional al posar el
+            # cursor sobre él.
+            info = ctk.CTkLabel(
+                row, text="ⓘ", width=18,
+                text_color=("#1f6aa5", "#5aa0e0"),  # primary
+                font=ctk.CTkFont(size=15),
+                cursor="hand2",
             )
+            info.pack(side="left", padx=(0, 6))
+            attach_tooltip(info, tip)
+            label = ctk.CTkLabel(row, text=label_text, width=182, anchor="w")
+            label.pack(side="left")
             entry = ctk.CTkEntry(
                 row, textvariable=var, width=120,
                 fg_color=_INPUT_FG, border_color=_INPUT_BORDER,
@@ -235,23 +306,9 @@ class ConfigScreen(ctk.CTkFrame):
             entry.pack(side="left")
             self._agent_budget_entries.append(entry)
 
-        # Botón ejecutar -------------------------------------------------
-        bottom = ctk.CTkFrame(self, fg_color="transparent")
-        bottom.pack(fill="x", pady=(20, 0))
-        self.error_label = ctk.CTkLabel(
-            bottom, text="",
-            text_color=("#ba1a1a", "#ffb4ab"),  # error M3
-            anchor="w",
-        )
-        self.error_label.pack(side="left", fill="x", expand=True)
-        self.run_btn = ctk.CTkButton(
-            bottom, text="Ejecutar →", command=self._on_run, width=140
-        )
-        self.run_btn.pack(side="right")
-
     def _make_block(self, title: str) -> ctk.CTkFrame:
         block = ctk.CTkFrame(
-            self, corner_radius=12,
+            self._scroll, corner_radius=12,
             fg_color=("#dfe7f2", "#1c2024"),  # surface-container
         )
         block.pack(fill="x", pady=(0, 12))
@@ -292,6 +349,7 @@ class ConfigScreen(ctk.CTkFrame):
         self._max_files_var.set(str(s.max_files))
         self._max_tree_var.set(str(s.max_tree_entries))
         self._refresh_agent_model_enabled()
+        self._refresh_agent_block_visibility()
 
     def _on_provider_change(self, value: str, refresh: bool = True) -> None:
         # Prerrellena los combos: si la API key del proveedor está
@@ -379,14 +437,23 @@ class ConfigScreen(ctk.CTkFrame):
             self.input_entry.configure(placeholder_text="Selecciona un directorio...")
             self.browse_btn.configure(state="normal")
         self._refresh_agent_model_enabled()
+        self._refresh_agent_block_visibility()
         self._refresh_run_button()
 
     def _refresh_agent_model_enabled(self) -> None:
-        # El modelo del agente y su presupuesto solo aplican en modo URL.
+        # El modelo del agente solo aplica en modo URL.
         new_state = "normal" if self.gui_state.input_mode == "url" else "disabled"
         self.agent_model_cb.configure(state=new_state)
-        for entry in getattr(self, "_agent_budget_entries", []):
-            entry.configure(state=new_state)
+
+    def _refresh_agent_block_visibility(self) -> None:
+        # El bloque del presupuesto del agente solo es relevante en modo URL:
+        # se muestra u oculta por completo (no solo deshabilitado) según el modo.
+        if getattr(self, "_block_agent", None) is None:
+            return
+        if self.gui_state.input_mode == "url":
+            self._block_agent.pack(fill="x", pady=(0, 12))
+        else:
+            self._block_agent.pack_forget()
 
     def _sync_key_field(self) -> None:
         provider = self.provider_sel.get()
