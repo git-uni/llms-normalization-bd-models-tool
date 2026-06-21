@@ -18,7 +18,7 @@ import threading
 from pathlib import Path
 
 from normalizer._log import log
-from normalizer.discovery.filesystem import build_tree_summary
+from normalizer.discovery.filesystem import MAX_TREE_ENTRIES, build_tree_summary
 from normalizer.discovery.repo import clone_repo
 from normalizer.discovery.tools import (
     ALL_TOOLS,
@@ -41,6 +41,7 @@ def discover_from_url(
     *,
     max_iters: int = MAX_ITERS,
     max_files: int = MAX_FILES,
+    max_tree_entries: int = MAX_TREE_ENTRIES,
     cancel_event: threading.Event | None = None,
 ) -> Path:
     repo_root = clone_repo(url)
@@ -48,7 +49,7 @@ def discover_from_url(
         repo_root=repo_root,
         discovery_dir=out_dir / "00_discovery",
     )
-    tree = build_tree_summary(repo_root)
+    tree = build_tree_summary(repo_root, max_entries=max_tree_entries)
     # Persistimos el árbol que el agente recibe en su primer mensaje user.
     # Es la única "vista del mundo" que tiene de partida; saber exactamente
     # qué vio es imprescindible para diagnosticar runs donde el agente "no
@@ -56,7 +57,7 @@ def discover_from_url(
     (state.discovery_dir / "tree.txt").write_text(tree, encoding="utf-8")
     log(
         f"Agente arrancado (max_iters={max_iters}, max_files={max_files}, "
-        f"árbol={len(tree.splitlines())} entradas)"
+        f"max_tree={max_tree_entries}, árbol={len(tree.splitlines())} entradas)"
     )
 
     messages: list[Message] = [

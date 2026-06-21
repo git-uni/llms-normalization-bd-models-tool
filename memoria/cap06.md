@@ -1,6 +1,6 @@
 # Capítulo 6. Diseño
 
-Este capítulo describe el diseño del sistema a partir de los requisitos enunciados en el capítulo 5. Se organiza en tres apartados: la **arquitectura general** (6.1) describe los componentes lógicos del sistema y su despliegue; el **diseño de detalle** (6.2) explica la estructura interna del código, el flujo de ejecución y los patrones de diseño empleados; y el **diseño de pruebas** (6.3) define qué se prueba en cada subsistema, sobre la base del plan de pruebas presentado en §5.3.
+Este capítulo describe el diseño del sistema a partir de los requisitos enunciados en el capítulo 5. Se organiza en dos apartados: la **arquitectura general** (6.1) describe los componentes lógicos del sistema y su despliegue; el **diseño de detalle** (6.2) explica la estructura interna del código, el flujo de ejecución y los patrones de diseño empleados.
 
 ## 6.1 Diseño de la arquitectura
 
@@ -21,7 +21,7 @@ Por último, el sistema ofrece **dos interfaces equivalentes** —una de línea 
 
 ### 6.1.2 Diagrama de bloques general
 
-La **Figura 6.1** descompone el sistema en cuatro capas. Las flechas continuas son invocaciones en tiempo de ejecución; las punteadas, dependencias transversales (carga de configuración o emisión de traza).
+La **Figura 6.1** agrupa el sistema en tres capas —interfaces, núcleo y soporte— y los sistemas externos con los que se comunica. Las flechas recogen las relaciones principales a nivel de bloque: la interfaz **invoca** al núcleo, que a su vez **usa los servicios** de soporte; las dos únicas conexiones con el exterior son la **API de LLM** (HTTPS, siempre a través de `LLMProvider`) y el **repositorio Git** que el agente clona.
 
 ![Figura 6.1. Diagrama de bloques general del sistema](assets/diagramas/bloques.png)
 
@@ -31,7 +31,7 @@ La **Figura 6.1** descompone el sistema en cuatro capas. Las flechas continuas s
   - **`LLMProvider`**: acceso uniforme al modelo de lenguaje (`generate`, `chat` y `list_models`; véase §6.2.2).
   - **Prompts**: un fichero Markdown por fase del *pipeline* y por agente, editables sin tocar el código.
   - **Persistencia**: un directorio de salida por ejecución donde se escriben todos los artefactos.
-  - **Observabilidad**: traza por la salida de error con sello `[mm:ss]`, que la GUI también consume.
+  - **Observabilidad**: traza por la salida de error con sello de tiempo, que la GUI también consume.
 - **Sistemas externos.** Las APIs de los proveedores de LLM (vía HTTPS, siempre a través de `LLMProvider`) y los repositorios Git públicos (clonado superficial, únicamente desde el agente).
 
 El traspaso de la evidencia que el agente selecciona al *pipeline* se aprecia en la figura de proceso de §6.2.3.
@@ -99,7 +99,7 @@ El sistema se implementa como un único **paquete Python llamado `normalizer`** 
 | `normalizer.prompts` | Almacén de los *prompts* del sistema en formato Markdown (un fichero por *prompt*) y rutinas de carga. |
 | `normalizer.discovery` | Agente de descubrimiento sobre repositorios remotos: bucle de `chat`, gestión del estado (`DiscoveryState`), definición y despacho de las herramientas (`ALL_TOOLS`, `dispatch`), clonado del repositorio y construcción del árbol filtrado. |
 | `normalizer.providers` | Abstracción del proveedor de LLM (`LLMProvider`) e implementaciones concretas (`GoogleProvider`, `GroqProvider`), junto con las estructuras de datos neutras (`Message`, `ToolSpec`, `ToolCall`, `ChatResponse`) y la *factory* de instanciación dinámica (`build_provider`). |
-| `normalizer._log` | Utilidad de registro estructurado: emite eventos por la salida de error estándar con un sello de tiempo relativo al arranque del proceso (`[mm:ss]`). Expone además un registro de *callbacks* (`register_callback`, `unregister_callback`) que la GUI consume para reinyectar cada línea como evento de su cola, y `reset_clock` para reiniciar el sello al inicio de cada corrida de la GUI sin afectar a la CLI. |
+| `normalizer._log` | Utilidad de registro estructurado: emite los eventos del sistema por la salida de error estándar con un sello de tiempo relativo al arranque del proceso. Ofrece además un punto de suscripción que la GUI aprovecha para consumir esa misma traza como eventos de su interfaz, y la posibilidad de reiniciar el sello al comienzo de cada ejecución sin afectar a la CLI. |
 
 Esta organización refleja las capas de la arquitectura: `cli` y `gui` son la presentación; `pipeline` y `discovery`, el núcleo; y `providers`, `prompts` y `_log`, los servicios de soporte. Los apartados siguientes detallan los aspectos de diseño que la tabla no recoge: el modelo de objetos del proveedor (§6.2.2), el flujo de ejecución (§6.2.3), el bucle del agente (§6.2.4), el diseño de los *prompts* (§6.2.5) y los patrones empleados (§6.2.6).
 
@@ -113,7 +113,16 @@ El *pipeline* y el agente interactúan con el LLM a través de un conjunto reduc
 
 ![Figura 6.4. Diagrama de clases del subsistema de proveedor](assets/diagramas/clases-proveedor.png)
 
-`LLMProvider` es una **interfaz** con tres operaciones: `generate` (texto a texto, para el *pipeline*), `chat` (diálogo con *function calling*, para el agente) y `list_models` (catálogo de modelos, para la GUI). `Message`, `ToolSpec`, `ToolCall` y `ChatResponse` son las estructuras neutras con las que el resto del sistema describe la interacción; cada implementación concreta (`GoogleProvider`, `GroqProvider`) traduce entre ellas y el formato de su SDK (véase el patrón *Adapter* en §6.2.6).
+`LLMProvider` es una **interfaz** con tres operaciones: `generate` (texto a texto, para el *pipeline*), `chat` (diálogo con *function calling*, para el agente) y `list_models` (catálogo de modelos, para la GUI).
+
+Las demás clases son las **estructuras neutras** con las que el sistema describe ese diálogo sin atarse al vocabulario de ningún proveedor concreto. Intervienen únicamente en la operación `chat` —la del agente, la única conversacional—, ya que `generate` se limita a texto plano. Cada una representa una pieza del intercambio:
+
+- **`Message`** — un turno del historial de la conversación. Indica quién emite el turno (la instrucción de sistema, el usuario u orquestador, el modelo o el resultado de una herramienta) y qué transporta (texto, una o varias peticiones de herramienta, o el resultado de haber ejecutado una). La sucesión de mensajes constituye la *memoria conversacional* que el agente mantiene entre iteraciones (§6.2.4).
+- **`ToolSpec`** — la **descripción de una herramienta** que se pone a disposición del modelo: su nombre, para qué sirve y qué argumentos admite. Es la forma en que el sistema le anuncia *qué* puede hacer, sin revelarle *cómo* está implementada.
+- **`ToolCall`** — la **decisión del modelo** de emplear una de esas herramientas en un turno concreto: cuál y con qué argumentos. Es una petición todavía no ejecutada; el agente la recibe, la ejecuta sobre el repositorio y le devuelve el resultado en un nuevo `Message`.
+- **`ChatResponse`** — el **resultado de un turno** de `chat`: o bien una respuesta de texto, o bien el conjunto de invocaciones de herramienta que el modelo quiere que se ejecuten. Es lo que el bucle del agente examina para decidir si prosigue o cierra el descubrimiento.
+
+Cada implementación concreta (`GoogleProvider`, `GroqProvider`) traduce entre estas estructuras y el formato propio del SDK de su proveedor, en ambos sentidos (véase el patrón *Adapter* en §6.2.6). Gracias a esa traducción, ni el *pipeline* ni el agente conocen nunca el vocabulario de un proveedor concreto: razonan siempre sobre este conjunto reducido de tipos comunes.
 
 ### 6.2.3 Flujo de ejecución según el modo de entrada
 
@@ -124,15 +133,33 @@ Los tres modos de entrada comparten el *pipeline* pero difieren en la fase previ
 - **Fichero único / directorio:** la evidencia ya está preparada; el sistema la concatena en `01_input.txt` (anteponiendo a cada fichero una marca con su ruta) y arranca el *pipeline*.
 - **URL de repositorio:** el agente de descubrimiento (§6.2.4) selecciona la evidencia y la entrega como un directorio, que el *pipeline* trata igual que en el modo directorio.
 
-La **Figura 6.6** detalla, como diagrama de secuencia, el modo URL —el más completo por incluir el descubrimiento.
+Las **Figuras 6.6 y 6.7** detallan ambos casos como diagramas de secuencia, en orden de complejidad creciente. La **Figura 6.6** corresponde a los modos fichero y directorio, que comparten exactamente el mismo flujo: la única diferencia es que el modo fichero lee un solo archivo mientras que el modo directorio concatena todos los del primer nivel. En ninguno de los dos interviene el agente; la entrada pasa directamente al *pipeline*.
 
-![Figura 6.6. Secuencia de una ejecución en modo URL](assets/diagramas/secuencia-url.png)
+![Figura 6.6. Secuencia de una ejecución en modo fichero / directorio](assets/diagramas/secuencia-archivo.png)
+
+El recorrido numerado de la figura se resume en dos tramos:
+
+- **Pasos 1–3 (lectura).** El usuario indica la ruta y el sistema arranca el *pipeline*, cuya primera fase lee la entrada y la concatena en el artefacto `01_input.txt` —un único fichero o todos los del primer nivel del directorio, según el modo.
+- **Pasos 4–10 (transformación).** El *pipeline* encadena las tres generaciones —análisis del modelo documental, diseño relacional y DDL— persistiendo tras cada una su artefacto (`02_analysis.md`, `03_design.md` y `04_ddl.sql`), y devuelve a la interfaz el DDL final.
+
+La **Figura 6.7** detalla el modo URL —el más completo por incluir el descubrimiento.
+
+![Figura 6.7. Secuencia de una ejecución en modo URL](assets/diagramas/secuencia-url.png)
+
+El recorrido numerado de la figura puede leerse en cuatro tramos:
+
+- **Pasos 1–4 (preparación).** El usuario proporciona la URL y el sistema delega el caso en el agente de descubrimiento, que clona el repositorio —reutilizando la caché local si ya estaba clonado— y construye el árbol de archivos filtrado que le sirve de mapa inicial.
+- **Pasos 5–10 (bucle de descubrimiento).** En cada iteración el agente envía al proveedor el historial de la conversación junto con las herramientas disponibles; el proveedor traduce la petición a la API del LLM y devuelve, ya en formato neutro, las invocaciones de herramienta que el modelo decide; el agente las ejecuta sobre el repositorio clonado (listar, leer, buscar o seleccionar evidencia) y le reinyecta el resultado. El bucle se repite hasta que el modelo cierra el descubrimiento o se agota el presupuesto de iteraciones.
+- **Pasos 11–13 (transición al *pipeline*).** El agente entrega la evidencia seleccionada y el sistema arranca el *pipeline* sobre ella; su primera fase lee y concatena esa evidencia en el artefacto `01_input.txt`, igual que en los modos fichero y directorio.
+- **Pasos 14–20 (transformación).** El *pipeline* encadena las tres generaciones —análisis del modelo documental, diseño relacional y DDL—, persiste tras cada una su artefacto (`02_analysis.md`, `03_design.md` y `04_ddl.sql`) y devuelve a la interfaz el DDL final.
+
+A partir del paso 11, el flujo es idéntico al de la Figura 6.6: el modo URL solo añade, por delante, la fase de descubrimiento (pasos 1–10).
 
 ### 6.2.4 El bucle del agente
 
-El agente de descubrimiento se organiza como un **bucle de turnos** sobre un historial de mensajes: en cada turno envía al proveedor de LLM ese historial junto con las herramientas disponibles; si el modelo responde con invocaciones de herramienta, el sistema las ejecuta y le reinyecta sus resultados; el bucle continúa hasta que el modelo da por terminado el descubrimiento (herramienta `done`) o se agota un presupuesto de iteraciones. La **Figura 6.7** recoge esta lógica y sus salidas.
+El agente de descubrimiento se organiza como un **bucle de turnos** sobre un historial de mensajes: en cada turno envía al proveedor de LLM ese historial junto con las herramientas disponibles; si el modelo responde con invocaciones de herramienta, el sistema las ejecuta y le reinyecta sus resultados; el bucle continúa hasta que el modelo da por terminado el descubrimiento (herramienta `done`) o se agota un presupuesto de iteraciones. La **Figura 6.8** recoge esta lógica y sus salidas.
 
-![Figura 6.7. Bucle del agente de descubrimiento](assets/diagramas/agente-bucle.png)
+![Figura 6.8. Bucle del agente de descubrimiento](assets/diagramas/agente-bucle.png)
 
 Dos rasgos de diseño merecen destacarse:
 
@@ -149,12 +176,12 @@ El sistema define cuatro *prompts* —tres para el *pipeline* y uno para el agen
 
 | *Prompt* | Consumidor | Entrada | Salida |
 |---|---|---|---|
-| `analyze` | Fase de análisis | Evidencia agregada (`{evidence}`) | `02_analysis.md` |
-| `design` | Fase de diseño | Análisis del modelo documental (`{analysis}`) | `03_design.md` |
-| `ddl` | Fase de generación | Diseño relacional (`{design}`) | `04_ddl.sql` |
+| `analyze` | Fase de análisis | Evidencia agregada | `02_analysis.md` |
+| `design` | Fase de diseño | Análisis del modelo documental | `03_design.md` |
+| `ddl` | Fase de generación | Diseño relacional | `04_ddl.sql` |
 | `discovery_system` | Agente de descubrimiento | — (instrucción de sistema) | Evidencia seleccionada |
 
-Los tres *prompts* del *pipeline* se parametrizan por **sustitución textual**: cada uno declara un hueco (`{evidence}`, `{analysis}`, `{design}`) que el *pipeline* rellena con el artefacto de la fase anterior antes de enviarlo al proveedor. Es la concreción del acoplamiento por ficheros del patrón *Pipes and Filters* (§6.2.6): el contrato entre fases es el texto del artefacto, no una estructura en memoria.
+Cada *prompt* del *pipeline* se parametriza con un único dato: el artefacto que produjo la fase anterior, que el *pipeline* inserta en el *prompt* antes de enviarlo al proveedor. Es la concreción del acoplamiento por ficheros del patrón *Pipes and Filters* (§6.2.6): el contrato entre fases es el texto del artefacto, no una estructura en memoria.
 
 Tres decisiones de diseño gobiernan los *prompts* del *pipeline*:
 
@@ -162,7 +189,7 @@ Tres decisiones de diseño gobiernan los *prompts* del *pipeline*:
 - **Reconciliación de redundancias en el diseño.** El *prompt* de diseño incorpora una regla explícita: cuando dos atributos de una misma entidad referencian el mismo registro de otra (por ejemplo, uno guarda el identificador y otro un campo denormalizado del mismo destino), debe conservarse una sola clave foránea canónica. Sin esa regla, la evidencia difusa —donde un mismo dato aparece copiado en varias colecciones— produce tablas con referencias duplicadas.
 - **Contrato de salida estricto en el DDL.** El *prompt* de generación exige tipos de Oracle, definición explícita de claves y restricciones, un orden de creación que respete las dependencias de clave foránea y una salida limpia, sin envoltorios Markdown, de modo que el artefacto final sea directamente utilizable.
 
-El *prompt* del agente (`discovery_system`) es de naturaleza distinta: no se parametriza —su contenido incluye fragmentos de código con llaves literales, como `new Schema({...})`, que romperían la sustitución textual— y actúa como instrucción de sistema que rige el bucle de §6.2.4. Su diseño responde a un sesgo observado en los modelos menos capaces, que tienden a cerrar el descubrimiento tras inspeccionar los primeros archivos de un directorio de modelos y a descartar el resto como secundarios. Para contrarrestarlo, el *prompt* fija tres reglas: una **doble pasada** obligatoria —declarativa, buscando *schemas* explícitos con patrones de varias tecnologías; e implícita, revisando el resto del árbol en busca de escrituras o accesos que revelen entidades no declaradas—; el **principio del hermano**, según el cual hallar un modelo en un directorio obliga a examinar los archivos hermanos antes de cerrar; y el **agrupamiento de decisiones** (*batching*), que pide emitir en una sola respuesta las selecciones ya firmes para no malgastar cuota. El filtrado entre evidencia principal y secundaria se delega deliberadamente en el *pipeline* posterior, no en el agente.
+El *prompt* del agente (`discovery_system`) es de naturaleza distinta: no recibe parámetros y actúa como instrucción de sistema fija que rige el bucle de §6.2.4. Su diseño responde a un sesgo observado en los modelos menos capaces, que tienden a cerrar el descubrimiento tras inspeccionar los primeros archivos de un directorio de modelos y a descartar el resto como secundarios. Para contrarrestarlo, el *prompt* fija tres reglas: una **doble pasada** obligatoria —declarativa, buscando *schemas* explícitos con patrones de varias tecnologías; e implícita, revisando el resto del árbol en busca de escrituras o accesos que revelen entidades no declaradas—; el **principio del hermano**, según el cual hallar un modelo en un directorio obliga a examinar los archivos hermanos antes de cerrar; y el **agrupamiento de decisiones** (*batching*), que pide emitir en una sola respuesta las selecciones ya firmes para no malgastar cuota. El filtrado entre evidencia principal y secundaria se delega deliberadamente en el *pipeline* posterior, no en el agente.
 
 ### 6.2.6 Patrones de diseño
 
@@ -235,74 +262,3 @@ La interfaz gráfica se construye sobre **CustomTkinter** (la justificación de 
 
 De esta separación se siguen tres propiedades —el **progreso en tiempo real** (la GUI consume la misma traza de observabilidad que la CLI), la **cancelación cooperativa** de una ejecución en curso y un **catálogo de modelos dinámico** por proveedor—, cuya mecánica se detalla en el capítulo de implementación (§7.1.5). La consecuencia de fondo es la **paridad funcional CLI / GUI**: cualquier ampliación del núcleo queda disponible en ambas interfaces sin tocar la presentación.
 
----
-
-## 6.3 Diseño de pruebas
-
-### 6.3.1 Encuadre
-
-La estrategia general de pruebas se define en el plan presentado en §5.3. Esta sección detalla, para cada subsistema identificado en la arquitectura, **qué se prueba** y en qué nivel se prueba, sin descender al detalle de los casos de prueba concretos, que pertenecen al capítulo de implementación.
-
-El diseño contempla los dos ejes anunciados en el plan: la **verificación funcional** mediante una pirámide clásica de pruebas automatizables y la **validación cualitativa** del resultado mediante comparación con un modelo de referencia humano. El primer eje se aplica a la parte determinista del sistema; el segundo, a la parte probabilística introducida por las decisiones del LLM.
-
-### 6.3.2 Objetos de la prueba
-
-La tabla siguiente recoge, para cada subsistema, las propiedades que la verificación debe cubrir.
-
-| Subsistema | Propiedades verificadas |
-|---|---|
-| Lectura de la entrada | Lectura correcta del fichero único; concatenación correcta del directorio con marcas de origen; descarte silencioso de binarios y de ficheros que excedan el umbral configurado; manejo de entrada inexistente o inaccesible con mensaje claro. |
-| *Pipeline* | Generación de los cuatro artefactos esperados en el directorio de salida; carga correcta de los *prompts* desde el subsistema correspondiente; propagación ordenada de errores producidos en cada fase con identificación de la fase fallida. |
-| Agente de descubrimiento | Cumplimiento del presupuesto de iteraciones; clonado y reutilización correctos de la caché de repositorios; construcción del árbol filtrado con BFS y *cap* de entradas; despacho correcto de cada herramienta; producción de la traza (`discovery.md`) con la lista de archivos seleccionados y sus justificaciones; salida limpia tanto en el caso normal como en los dos casos anómalos. |
-| Herramientas confinadas | Rechazo de rutas que escapen del directorio del repositorio clonado o del directorio de salida; validación de los argumentos recibidos del LLM con mensajes de error estructurados; comportamiento determinista en lecturas, listados y búsquedas. |
-| Abstracción del proveedor | Traducción correcta entre el formato neutro y el formato del SDK en ambos sentidos; reintentos con espera exponencial sobre los códigos transitorios definidos; selección correcta de la clase y del modelo por la *factory* en función de los parámetros. |
-| Interfaces (CLI y GUI) | Paridad funcional entre ambas; emisión de mensajes de progreso por cada fase; presentación al usuario de los errores del proveedor con indicación de la fase de origen. |
-
-### 6.3.3 Diseño por niveles
-
-Para cada nivel se describe **qué se prueba**; el grado en que cada uno está hoy ejecutado o planificado se detalla en §6.3.5.
-
-#### Pruebas unitarias
-
-Se aplican sobre las piezas deterministas del sistema, en aislamiento. El conjunto incluye, entre otras: la lectura y normalización de la entrada, la construcción del árbol filtrado del repositorio con sus reglas de exclusión, el despacho individual de cada herramienta del agente, el confinamiento del acceso al sistema de archivos (`resolve_within`), la rutina de reintentos sobre códigos sintéticos cubriendo tanto los casos exitosos como los de agotamiento, y los adaptadores de cada proveedor sobre *fixtures* JSON capturadas de respuestas reales del SDK.
-
-#### Pruebas de integración
-
-Comprueban la cooperación de varios subsistemas sustituyendo el LLM por un doble de prueba (`MockProvider`) que cumple la interfaz `LLMProvider` y devuelve respuestas grabadas previamente. Se identifican dos conjuntos relevantes:
-
-- ***Pipeline* end-to-end con doble del LLM*: ejecuta las cuatro fases sobre una entrada conocida y verifica la existencia, el formato y el contenido estructural de cada artefacto.
-- *Agente de descubrimiento sobre un repositorio sintético*: el repositorio incluye un *schema* explícito, un *schema* implícito en código de aplicación y un fichero de ruido; la prueba verifica que el agente selecciona los dos primeros y descarta el tercero.
-
-#### Pruebas de sistema
-
-Invocan la CLI sobre los *datasets* de prueba y verifican la estructura externa de los artefactos producidos (existencia, no vacuidad, validez sintáctica del DDL con `sqlparse`) y los códigos de retorno. La GUI se ejercita en este nivel mediante una versión sin interfaz visual de su capa de aplicación (`GuiController`), que invoca exactamente el mismo flujo que la presentación. La evaluación semántica del modelo relacional generado pertenece al nivel siguiente.
-
-#### Pruebas de aceptación cualitativa
-
-Se ejecutan sobre los *datasets* de referencia, cada uno con un modelo de referencia elaborado manualmente por un experto (un diagrama UML del autor del repositorio o del autor del TFG). Para cada *dataset* y modelo de LLM, la prueba calcula y registra:
-
-- **Cobertura de entidades**: cociente entre el número de entidades del modelo de referencia recuperadas en el DDL generado y el número total de entidades del modelo de referencia.
-- **Entidades extra**: clasificadas en *legítimas* (sobre-normalización razonable, como la separación en tablas independientes de arrays embebidos) y *ruido* (entidades sin justificación en la entrada).
-- **Invariantes estructurales**: toda tabla declara una clave primaria; toda clave foránea referencia una tabla y columna existentes; los atributos reconciliados por la regla de reconciliación de atributos redundantes no producen duplicidades.
-- **Reproducibilidad inter-runs**: estabilidad de la cobertura a lo largo de varias ejecuciones con la misma entrada, el mismo proveedor y el mismo modelo, como concreción de RNF-2.1.
-- **Cobertura cruzada modelo × dataset**: una tabla que cruza los modelos de LLM disponibles con los *datasets* de referencia y registra la cobertura observada. Esta tabla constituye la evidencia empírica del comportamiento del sistema bajo distintos modelos y permite documentar, sin ocultarlo, que la capacidad del modelo elegido es un factor determinante en la calidad del resultado.
-
-### 6.3.4 Datasets de prueba
-
-El banco de pruebas se compone de los siguientes *datasets*, agrupados según su grado de formalización.
-
-**Datasets de cobertura con *checklist* de referencia:**
-
-- **`data/spruce/`**: caso de control con cuatro *schemas* Mongoose explícitos. El modelo documental está declarado de forma íntegra y la prueba ejercita el *pipeline* aislado del agente de descubrimiento.
-- **`data/spruce-difuso/`**: el mismo modelo documental que el anterior pero distribuido implícitamente en código de aplicación (rutas Express, manejadores de socket) sin *schemas* declarados. Ejercita la capacidad del *prompt* de análisis para inferir el modelo a partir de evidencia heterogénea.
-- **URL pública del repositorio de Spruce**: el repositorio completo, suministrado únicamente como URL, ejercita el agente de descubrimiento sobre un proyecto pequeño con *schemas* explícitos.
-
-**Datasets de validación cualitativa adicional:**
-
-- **URL pública del repositorio de Habitica**: una aplicación real de tamaño realista, con muchos directorios irrelevantes para el modelo documental. Se utiliza para observar la varianza del agente frente a repositorios grandes y para detectar las fronteras de cuota de los proveedores en condiciones reales. No dispone de un *checklist* formal: la comparación es cualitativa contra una lista no exhaustiva de entidades esperadas elaborada por inspección del código fuente del repositorio.
-
-### 6.3.5 Grado de automatización y herramientas
-
-El diseño contempla dos regímenes de ejecución muy distintos. Las pruebas de **aceptación cualitativa** se realizan de forma **manual asistida** y son las que se han ejecutado efectivamente para validar el prototipo (§7.2): un procedimiento auxiliar lanza la herramienta sobre cada *dataset* con cada modelo de LLM disponible, recoge los artefactos producidos, los compara contra la lista de entidades de referencia del *dataset* y registra el informe cruzado modelo × *dataset*. Los niveles **unitario, integración y sistema** descritos en §6.3.3 están diseñados para una ejecución plenamente automatizada y desacoplada del LLM mediante el doble de prueba; su materialización como suite ejecutable constituye la **Ampliación C** del capítulo 9 —y su integración continua, la Ampliación D—, no una capacidad ya disponible a la fecha de entrega de este TFG (§5.3.4, §7.2.1).
-
-El instrumental **previsto** para esos niveles automatizados es el enunciado en el plan de pruebas (§5.3.5): `pytest` como armazón; un doble de prueba `MockProvider` que cumple la interfaz `LLMProvider` y devuelve respuestas grabadas; *fixtures* JSON con respuestas reales del SDK para las pruebas de los adaptadores; `sqlparse` para la verificación sintáctica del DDL; *checklists* en YAML bajo `tests/baseline/<dataset>.yaml` como especificación operativa del modelo de referencia de cada *dataset*; y, opcionalmente, un contenedor con Oracle Database Express Edition para una verificación por ejecución real del DDL. La evidencia efectivamente conservada de la validación realizada son los artefactos de las ejecuciones en los directorios `out-*` (§7.2.3).

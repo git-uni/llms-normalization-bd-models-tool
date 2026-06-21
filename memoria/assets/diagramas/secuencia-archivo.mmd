@@ -1,0 +1,19 @@
+sequenceDiagram
+    autonumber
+    actor U as Usuario
+    participant CLI as CLI / GUI
+    participant PROV as LLMProvider
+    participant PIPE as Pipeline
+
+    U->>CLI: ruta de archivo o directorio
+    CLI->>PIPE: ejecuta el pipeline sobre la entrada
+    PIPE->>PIPE: lee y concatena la evidencia (01_input.txt)
+    Note over PIPE: archivo: un único fichero · directorio: todos los del primer nivel
+
+    PIPE->>PROV: genera el análisis del modelo documental
+    PROV-->>PIPE: análisis (02_analysis.md)
+    PIPE->>PROV: genera el diseño relacional
+    PROV-->>PIPE: diseño (03_design.md)
+    PIPE->>PROV: genera el DDL Oracle
+    PROV-->>PIPE: DDL (04_ddl.sql)
+    PIPE-->>CLI: DDL final

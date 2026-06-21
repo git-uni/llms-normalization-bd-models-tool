@@ -73,6 +73,13 @@ EXCLUDED_SUFFIXES: frozenset[str] = frozenset(
 
 MAX_FILE_BYTES = 200_000
 
+# Tope por defecto de entradas del árbol que se vuelca en el primer mensaje del
+# agente. Configurable por el usuario (CLI `--max-tree-entries` / campo en la
+# GUI): repos grandes desbordan el TPM del free tier de Groq (riesgo R-02),
+# mientras que repos pequeños se benefician de un árbol completo. Ver la nota de
+# `build_tree_summary` sobre por qué 2000 es el compromiso por defecto.
+MAX_TREE_ENTRIES = 2000
+
 # Sufijos de archivos que se omiten del DUMP del árbol inicial pero NO se
 # excluyen globalmente. El agente puede seguir leyéndolos o grepeándolos si
 # encuentra su path por otra vía (p. ej. un `grep` da hit en un .test.js
@@ -132,7 +139,7 @@ def _is_relative_to(child: Path, parent: Path) -> bool:
         return False
 
 
-def build_tree_summary(repo_root: Path, max_entries: int = 2000) -> str:
+def build_tree_summary(repo_root: Path, max_entries: int = MAX_TREE_ENTRIES) -> str:
     """Listado plano del repo, filtrado, con tamaño en bytes.
 
     Formato por línea: `<tipo> <ruta-relativa> [<bytes>]`

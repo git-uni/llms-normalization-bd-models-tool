@@ -1,13 +1,16 @@
 // Diagrama de paquetes del paquete `normalizer`.
 // Nodos = paquetes/módulos (namespaces Python), agrupados por capa.
 // Aristas discontinuas de punta abierta = dependencias «import» (cliente -> proveedor).
+// `cli` y `gui` son interfaces equivalentes con dependencias idénticas: sus aristas
+// se agrupan en un punto de unión (`presj`) para que cada destino reciba una sola
+// punta de flecha en lugar de dos solapadas, reduciendo el ruido del diagrama.
 // `_log` (observabilidad) es transversal a todas las capas; se marca «transversal»
 // y sus aristas se omiten por claridad. Las dependencias externas (SDKs de LLM en
 // `providers`, git en `discovery`, toolkits gráficos en `gui`) se describen en el texto.
 // Render: dot -Tpng paquetes.dot -o paquetes.png   (y -Tsvg para paquetes.svg)
 digraph paquetes {
     rankdir=TB; compound=true; bgcolor="white"; pad=0.4;
-    nodesep=0.7; ranksep=1.1; fontname="Helvetica";
+    nodesep=0.6; ranksep=0.85; fontname="Helvetica";
     splines=spline; concentrate=true;
     labelloc="t"; fontsize=20;
     label="Diagrama de paquetes del paquete normalizer";
@@ -26,31 +29,33 @@ digraph paquetes {
     subgraph cluster_core {
         label="Núcleo"; fontsize=14; style="filled,rounded";
         fillcolor="#eaf0fb"; color="#8fa9d6"; margin=16;
-        discovery [label="discovery", fillcolor="#cdddf6"];
         pipeline  [label="pipeline", fillcolor="#cdddf6"];
+        discovery [label="discovery", fillcolor="#cdddf6"];
     }
     subgraph cluster_sup {
         label="Soporte"; fontsize=14; style="filled,rounded";
         fillcolor="#f3eef9"; color="#b69fd0"; margin=16;
-        providers [label="providers", fillcolor="#f7d7dc"];
-        prompts   [label="prompts", fillcolor="#e6dcf3"];
         logp      [label="_log\n«transversal»", fillcolor="#e3e8ee", color="#9aa6b2"];
+        prompts   [label="prompts", fillcolor="#e6dcf3"];
+        providers [label="providers", fillcolor="#f7d7dc"];
     }
 
-    // Dependencias estructurales (descendentes: presentación -> núcleo -> soporte).
-    cli -> discovery;
-    cli -> pipeline;
-    cli -> providers;
-    gui -> discovery;
-    gui -> pipeline;
-    gui -> providers;
-    discovery -> pipeline [constraint=false];   // única intra-capa (PipelineCancelled)
+    // cli y gui comparten exactamente las mismas dependencias: se agrupan en un
+    // punto de unión para que cada destino reciba una sola punta de flecha.
+    presj [shape=point, width=0.03, color="#5b6b7a"];
+    cli -> presj [dir=none];
+    gui -> presj [dir=none];
+    presj -> pipeline;
+    presj -> discovery;
+    presj -> providers;
+
+    // Núcleo -> soporte y la única arista intra-capa (PipelineCancelled).
+    discovery -> pipeline [constraint=false];
+    pipeline  -> prompts;
+    pipeline  -> providers;
     discovery -> prompts;
     discovery -> providers;
-    pipeline -> prompts;
-    pipeline -> providers;
 
-    // Ancla invisible: fija `_log` en la banda de soporte sin dibujar arista
-    // (su dependencia transversal se explica en el texto, no se traza).
+    // Ancla invisible: fija `_log` en la banda de soporte sin dibujar arista.
     pipeline -> logp [style=invis];
 }

@@ -185,6 +185,9 @@ class GuiController:
                     url=state.input_value,
                     agent_provider=agent_provider,
                     out_dir=out_dir,
+                    max_iters=state.max_iters,
+                    max_files=state.max_files,
+                    max_tree_entries=state.max_tree_entries,
                     cancel_event=self._cancel,
                 )
             else:

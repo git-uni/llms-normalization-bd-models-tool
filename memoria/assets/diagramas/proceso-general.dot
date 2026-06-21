@@ -1,6 +1,14 @@
+// Proceso completo de la herramienta: de la evidencia documental al DDL Oracle.
+// Distribución: el *pipeline* es la espina vertical central (group=spine + weight,
+// borde reforzado), eje del que cuelga todo. A su alrededor, como carriles, los
+// servicios y el agente: prompts a la izquierda, LLMProvider entre el pipeline y el
+// agente, y el agente de descubrimiento (solo modo URL) a la derecha. Las aristas
+// laterales (prompt→fase, fase→generate) llevan constraint=false para flotar a la
+// altura de su fase sin estirar la espina; una sola arista de cada servicio conserva
+// la restricción para fijar su altura. Render: dot -Tpng proceso-general.dot -o proceso-general.png
 digraph proceso {
     rankdir=TB; compound=true; bgcolor="white"; pad=0.5;
-    nodesep=0.45; ranksep=0.7; fontname="Helvetica";
+    nodesep=0.45; ranksep=0.55; fontname="Helvetica";
     labelloc="t"; fontsize=20;
     label="Proceso completo: de la evidencia documental al DDL Oracle";
     node [fontname="Helvetica", fontsize=11, shape=box, style="filled,rounded", color="#333333"];
@@ -19,6 +27,45 @@ digraph proceso {
         IN_DIR  [label="Directorio curado", fillcolor="#cfe8d6"];
         IN_URL  [label="URL de repositorio", fillcolor="#cfe8d6"];
     }
+
+    // ---- Prompts: carril izquierdo ----
+    subgraph cluster_prompts {
+        label="Prompts (.md)"; style="filled,rounded";
+        fillcolor="#f3eef9"; color="#b69fd0";
+        P_ANA [label="analyze", fillcolor="#e6dcf3"];
+        P_DES [label="design", fillcolor="#e6dcf3"];
+        P_DDL [label="ddl", fillcolor="#e6dcf3"];
+        P_SYS [label="discovery_system", fillcolor="#e6dcf3"];
+    }
+
+    // ---- Pipeline: espina central recta y reforzada ----
+    subgraph cluster_pipe {
+        label="Pipeline (4 fases)"; style="filled,rounded";
+        fillcolor="#eaf0fb"; color="#8fa9d6"; penwidth=2.2;
+        READ [label="Fase 1 · Lectura", fillcolor="#cdddf6", group=spine];
+        A01  [label="01_input.txt", shape=note, fillcolor="#fff4cc", group=spine];
+        ANA  [label="Fase 2 · Análisis", fillcolor="#cdddf6", group=spine];
+        A02  [label="02_analysis.md", shape=note, fillcolor="#fff4cc", group=spine];
+        DES  [label="Fase 3 · Diseño relacional", fillcolor="#cdddf6", group=spine];
+        A03  [label="03_design.md", shape=note, fillcolor="#fff4cc", group=spine];
+        DDLF [label="Fase 4 · DDL Oracle", fillcolor="#cdddf6", group=spine];
+        A04  [label="04_ddl.sql", shape=note, fillcolor="#ffe0b3", color="#cc7a00", penwidth=2, group=spine];
+        READ -> A01 [weight=20]; A01 -> ANA [weight=20]; ANA -> A02 [weight=20];
+        A02 -> DES [weight=20]; DES -> A03 [weight=20]; A03 -> DDLF [weight=20];
+        DDLF -> A04 [weight=20];
+    }
+
+    // ---- LLMProvider: entre el pipeline y el agente ----
+    subgraph cluster_prov {
+        label="LLMProvider"; style="filled,rounded";
+        fillcolor="#fdeef0"; color="#dba0a8";
+        GEN  [label="generate()\nmodelo pipeline", fillcolor="#f7d7dc"];
+        CHT  [label="chat()\nmodelo agente", fillcolor="#f7d7dc"];
+        IMPL [label="Google · Groq", fillcolor="#f3c6cd"];
+        GEN -> IMPL [arrowhead=none]; CHT -> IMPL [arrowhead=none];
+    }
+
+    // ---- Agente de descubrimiento: carril derecho (solo modo URL) ----
     subgraph cluster_disc {
         label="Agente de descubrimiento (solo modo URL)"; style="filled,rounded";
         fillcolor="#fdf3e7"; color="#e0b277";
@@ -36,49 +83,24 @@ digraph proceso {
     LOOP -> ART_DTRACE [style=dashed];
     LOOP -> ART_EVID [label="selección"];
 
-    subgraph cluster_pipe {
-        label="Pipeline (4 fases)"; style="filled,rounded";
-        fillcolor="#eaf0fb"; color="#8fa9d6";
-        READ [label="Fase 1 · Lectura", fillcolor="#cdddf6"];
-        ANA  [label="Fase 2 · Análisis", fillcolor="#cdddf6"];
-        DES  [label="Fase 3 · Diseño relacional", fillcolor="#cdddf6"];
-        DDLF [label="Fase 4 · DDL Oracle", fillcolor="#cdddf6"];
-        A01 [label="01_input.txt", shape=note, fillcolor="#fff4cc"];
-        A02 [label="02_analysis.md", shape=note, fillcolor="#fff4cc"];
-        A03 [label="03_design.md", shape=note, fillcolor="#fff4cc"];
-        A04 [label="04_ddl.sql", shape=note, fillcolor="#ffe0b3", color="#cc7a00", penwidth=2];
-        READ -> A01 -> ANA -> A02 -> DES -> A03 -> DDLF -> A04;
-    }
-    subgraph cluster_prompts {
-        label="Prompts (.md)"; style="filled,rounded";
-        fillcolor="#f3eef9"; color="#b69fd0";
-        P_ANA [label="analyze", fillcolor="#e6dcf3"];
-        P_DES [label="design", fillcolor="#e6dcf3"];
-        P_DDL [label="ddl", fillcolor="#e6dcf3"];
-        P_SYS [label="discovery_system", fillcolor="#e6dcf3"];
-    }
-    P_ANA -> ANA [style=dotted];
-    P_DES -> DES [style=dotted];
-    P_DDL -> DDLF [style=dotted];
-    P_SYS -> LOOP [style=dotted];
-
-    subgraph cluster_prov {
-        label="Proveedor LLM"; style="filled,rounded";
-        fillcolor="#fdeef0"; color="#dba0a8";
-        GEN  [label="generate()\nmodelo pipeline", fillcolor="#f7d7dc"];
-        CHT  [label="chat()\nmodelo agente", fillcolor="#f7d7dc"];
-        IMPL [label="Google · Groq", fillcolor="#f3c6cd"];
-        GEN -> IMPL [arrowhead=none]; CHT -> IMPL [arrowhead=none];
-    }
     LLM [label="API de LLM", shape=cylinder, fillcolor="#e9ecef", color="#888888"];
     GIT [label="Repositorio Git", shape=cylinder, fillcolor="#e9ecef", color="#888888"];
 
+    // Carriles laterales: una arista de cada servicio fija su altura (a la de su
+    // fase) y las demás van con constraint=false para no estirar la espina.
+    P_ANA -> ANA  [style=dotted, constraint=false];
+    P_DES -> DES  [style=dotted];
+    P_DDL -> DDLF [style=dotted, constraint=false];
+    P_SYS -> LOOP [style=dotted, constraint=false];
+    ANA -> GEN [constraint=false];
+    DES -> GEN [constraint=false];
+    DDLF -> GEN [label="generate", constraint=false];
+    LOOP -> CHT [label="chat", lhead=cluster_prov];
+
     CLI -> IN_DIR [ltail=cluster_ui, lhead=cluster_in];
-    IN_FILE -> READ; IN_DIR -> READ;
+    IN_FILE -> READ [weight=20]; IN_DIR -> READ [weight=20];
     IN_URL -> CLONE [lhead=cluster_disc];
     ART_EVID -> READ [label="evidencia"];
     CLONE -> GIT [dir=both, label="HTTPS"];
-    ANA -> GEN; DES -> GEN; DDLF -> GEN [label="generate"];
-    LOOP -> CHT [label="chat", lhead=cluster_prov];
     GEN -> LLM [label="HTTPS"]; CHT -> LLM [label="HTTPS"];
 }

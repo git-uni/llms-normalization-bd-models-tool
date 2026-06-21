@@ -214,14 +214,14 @@ El agente debe registrar, en un artefacto adicional dentro del directorio de sal
 
 ##### RF-3.5 Límites operativos del agente
 
-La ejecución del agente debe estar acotada por límites configurables de número de pasos (`max_iters`) y número de archivos seleccionados (`max_files`), abortando la operación con un mensaje claro si se exceden y registrando la causa en la traza.
+La ejecución del agente debe estar acotada por límites **configurables por el usuario desde la CLI y la GUI**: el número de pasos (`max_iters`) y de archivos seleccionados (`max_files`) —al excederse, la operación aborta con un mensaje claro y registra la causa en la traza— y el número máximo de entradas del árbol del repositorio que se le entrega en el primer mensaje (`max_tree_entries`, véase RNF-1.2).
 
 | Atributo | Valor |
 |---|---|
 | Fuente | RNF-1.3 (coste). |
 | Prioridad | Media. |
 | Necesidad | Must. |
-| Verificación | Configuración artificial de `max_iters=2` sobre un repositorio mediano; comprobación de que la ejecución termina con la marca de "presupuesto agotado" en la traza. |
+| Verificación | Invocación con `--max-iters 2` sobre un repositorio mediano; comprobación de que la ejecución termina con la marca de "presupuesto agotado" en la traza. Invocación con `--max-tree-entries` reducido; comprobación de que el árbol de `00_discovery/tree.txt` se trunca al valor indicado. |
 | Dependencias | RNF-1.3. |
 
 #### RF-4. Herramientas operativas del agente (traza: RU-5)
@@ -529,24 +529,24 @@ Para una entrada de hasta unos 30 KB de texto —el tamaño de la evidencia agre
 | Fuente | Expectativa de uso interactivo en GUI; experiencia del autor con tiempos aceptables en entornos de defensa. |
 | Prioridad | Media. |
 | Necesidad | Should. |
-| Verificación | Medición puntual de la duración del *pipeline* sobre `data/spruce/` y `data/spruce-difuso/` con cada uno de los dos proveedores, a partir de la traza `[mm:ss]` de `_log.py` conservada en los directorios `out-*` (§7.2.3). Peor caso medido: del orden de 4 min sobre el difuso con `gemma-4-31b-it` (Google); el mismo input se resolvió en unos 18 s con `llama-3.3-70b-versatile` (Groq). Ambos por debajo del umbral. |
+| Verificación | Medición puntual de la duración del *pipeline* sobre `data/spruce/` y `data/spruce-difuso/` con cada uno de los dos proveedores, a partir de la traza `[mm:ss]` de `_log.py` conservada en los directorios `out-*` (§11.3.4). Peor caso medido: del orden de 4 min sobre el difuso con `gemma-4-31b-it` (Google); el mismo input se resolvió en unos 18 s con `llama-3.3-70b-versatile` (Groq). Ambos por debajo del umbral. |
 | Dependencias | — |
 
 #### RNF-1.2 Acotación del contexto del agente
 
-El contexto que el agente de descubrimiento envía al LLM debe estar acotado, para no depender de límites de *tokens* abundantes en el proveedor. En concreto, el árbol del repositorio que el agente recibe en su primer mensaje se limita a un máximo de 2 000 entradas (~30 K *tokens*) mediante un recorrido por anchura (BFS), de modo que todos los directorios de primer nivel queden cubiertos aunque el corte se agote. Además, los archivos que no se pueden decodificar como texto se descartan al construir la evidencia del *pipeline*.
+El contexto que el agente de descubrimiento envía al LLM debe estar acotado, para no depender de límites de *tokens* abundantes en el proveedor. En concreto, el árbol del repositorio que el agente recibe en su primer mensaje se limita a un máximo de entradas **configurable por el usuario** —opción `--max-tree-entries` en la CLI y campo equivalente en la GUI—, **por defecto 2 000** (~30 K *tokens*), mediante un recorrido por anchura (BFS), de modo que todos los directorios de primer nivel queden cubiertos aunque el corte se agote. Poder reducir este límite permite adaptar el tamaño del primer mensaje a las cuotas de *tokens* del proveedor (frontera Groq, RNF-1.3). Además, los archivos que no se pueden decodificar como texto se descartan al construir la evidencia del *pipeline*.
 
 | Atributo | Valor |
 |---|---|
-| Fuente | Frontera observada con Groq sobre repositorios medianos durante la validación experimental (§7.2). |
+| Fuente | Frontera observada con Groq sobre repositorios medianos durante la validación experimental (§11.3). |
 | Prioridad | Alta. |
 | Necesidad | Must. |
-| Verificación | Inspección de `build_tree_summary` en `discovery/filesystem.py`: recorrido BFS con corte a 2 000 entradas. Las corridas sobre Habitica de §7.2 evidencian el efecto del corte sobre el tamaño del primer mensaje del agente. |
+| Verificación | Inspección de `build_tree_summary` en `discovery/filesystem.py`: recorrido BFS con corte configurable (`MAX_TREE_ENTRIES`, por defecto 2 000). Reducir `--max-tree-entries` disminuye el número de líneas de `tree.txt`; las corridas sobre Habitica de §11.3 evidencian el efecto del corte sobre el tamaño del primer mensaje del agente. |
 | Dependencias | RF-1.5. |
 
 #### RNF-1.3 Coste de las ejecuciones con agentes
 
-La ejecución del agente (RF-3) debe estar acotada por un número máximo de iteraciones (`max_iters`) y de archivos seleccionables (`max_files`), configurables por el usuario, para evitar consumos imprevistos de cuota.
+La ejecución del agente (RF-3) debe estar acotada por un número máximo de iteraciones (`max_iters`) y de archivos seleccionables (`max_files`), configurables por el usuario desde la CLI (`--max-iters`, `--max-files`) y la GUI, para evitar consumos imprevistos de cuota.
 
 | Atributo | Valor |
 |---|---|
@@ -567,7 +567,7 @@ Dadas la misma entrada, el mismo proveedor, el mismo modelo y los mismos *prompt
 | Fuente | Casuística observada durante el desarrollo: rango de cobertura inter-*runs* documentado en la traza experimental del proyecto. |
 | Prioridad | Media. |
 | Necesidad | Should. |
-| Verificación | Conservación de los artefactos de las ejecuciones reportadas (directorios `out-*`, §7.2.3) e inspección de su equivalencia estructural. La varianza inherente a los LLMs se reporta de forma explícita —por ejemplo, el rango de 5 a 22 archivos seleccionados por el agente en tres corridas sobre Habitica (§7.2.2, §9.1.2)— en lugar de fijarse una banda numérica artificial. |
+| Verificación | Conservación de los artefactos de las ejecuciones reportadas (directorios `out-*`, §11.3.4) e inspección de su equivalencia estructural. La varianza inherente a los LLMs se reporta de forma explícita —por ejemplo, el rango de 5 a 22 archivos seleccionados por el agente en tres corridas sobre Habitica (§11.3.3, §9.1.2)— en lugar de fijarse una banda numérica artificial. |
 | Dependencias | — |
 
 #### RNF-2.2 Robustez ante fallos transitorios del proveedor
@@ -579,7 +579,7 @@ Los fallos transitorios del proveedor (*timeouts*, *rate limits*, errores 5xx) d
 | Fuente | Casuística observada con Gemma (códigos 500 / 503 frecuentes) y con Groq (cuota agotada). |
 | Prioridad | Alta. |
 | Necesidad | Must. |
-| Verificación | Inspección de `_call_with_retry` en `providers/google.py` (códigos `{429, 500, 502, 503, 504}`) y en `providers/groq.py` (`RateLimitError`). Los reintentos reales quedan registrados en las trazas `[mm:ss]` de las corridas de §7.2 (por ejemplo, dos respuestas 429 absorbidas en la ejecución de Habitica). La conservación de los artefactos parciales se sigue de que cada fase escribe su artefacto antes de continuar (`pipeline/pipeline.py`). |
+| Verificación | Inspección de `_call_with_retry` en `providers/google.py` (códigos `{429, 500, 502, 503, 504}`) y en `providers/groq.py` (`RateLimitError`). Los reintentos reales quedan registrados en las trazas `[mm:ss]` de las corridas de §11.3 (por ejemplo, dos respuestas 429 absorbidas en la ejecución de Habitica). La conservación de los artefactos parciales se sigue de que cada fase escribe su artefacto antes de continuar (`pipeline/pipeline.py`). |
 | Dependencias | RF-7.3. |
 
 ### 5.2.3 RNF-3. Usabilidad
@@ -681,70 +681,6 @@ El DDL generado debe ser compatible con Oracle Database. La versión mínima obj
 | Fuente | RU-3.3, y casuística del entorno *legacy* del autor. |
 | Prioridad | Media. |
 | Necesidad | Must. |
-| Verificación | Inspección del DDL generado (`04_ddl.sql`) sobre los datasets de referencia: sentencias `CREATE TABLE` de Oracle con sus claves primarias y foráneas. El uso de columnas `BOOLEAN` se documenta como condicionante de la versión mínima (cf. Ampliación E del capítulo 9). |
+| Verificación | Inspección del DDL generado (`04_ddl.sql`) sobre los datasets de referencia: sentencias `CREATE TABLE` de Oracle con sus claves primarias y foráneas. El uso de columnas `BOOLEAN` se documenta como condicionante de la versión mínima (cf. Ampliación C del capítulo 9). |
 | Dependencias | — |
 
-## 5.3 Plan de pruebas
-
-Este apartado describe la **estrategia general** de pruebas del sistema: tipos, niveles, objetos, grado de automatización y herramientas. El detalle de qué se prueba en cada caso se especifica en el capítulo 6, apartado 6.3 ("Diseño de pruebas").
-
-### 5.3.1 Estrategia
-
-El sistema combina dos clases de componentes con propiedades muy distintas de cara a las pruebas. Por un lado, una **parte determinista** —lectura de la entrada, persistencia de artefactos, despacho de herramientas del agente, traducción entre el formato neutro y los SDK de cada proveedor, control de presupuestos y reintentos— cuyo comportamiento puede verificarse de forma mecánica. Por otro, una **parte probabilística** —las decisiones del LLM en cada fase del *pipeline* y en cada turno del agente— cuyo resultado correcto no es objetivamente definible y, por tanto, se valida cualitativamente por comparación con un modelo de referencia elaborado por un experto humano.
-
-La estrategia de pruebas aborda ambas clases en paralelo, **sin reducir una a la otra**:
-
-- La parte determinista se verifica mediante una pirámide clásica de pruebas (unitarias, integración, sistema) con un alto grado de automatización.
-- La parte probabilística se valida mediante un conjunto de **pruebas de aceptación cualitativas** sobre un banco de *datasets* de referencia, midiendo la cobertura del modelo relacional generado frente al modelo objetivo y observando la varianza entre ejecuciones y entre modelos.
-
-Esta separación es deliberada: la calidad del software (lo determinista) se mide con métricas binarias (pasa / falla), mientras que la calidad del resultado (lo probabilístico) se mide con métricas continuas de cobertura y de coherencia estructural.
-
-### 5.3.2 Tipos y niveles de prueba
-
-| Nivel | Tipo | Caja | Objetivo |
-|---|---|---|---|
-| Unitario | Funcional | Blanca | Verificar cada función o clase aislada de la parte determinista. |
-| Integración | Funcional | Negra (con dobles de prueba para el LLM) | Comprobar la cooperación entre subsistemas sin depender de la API real del proveedor. |
-| Sistema | Funcional | Negra | Ejecutar la herramienta de extremo a extremo y comprobar la estructura de los artefactos producidos. |
-| Aceptación | Cualitativa | Negra | Comparar el modelo relacional generado con el modelo de referencia para cada *dataset*. |
-
-Quedan **fuera del alcance** las pruebas de carga y de rendimiento sostenido: el sistema no se concibe como un servicio de producción multiusuario, por lo que sus requisitos de rendimiento (RNF-1) se cubren con mediciones puntuales durante la validación de sistema.
-
-### 5.3.3 Objetos de la prueba
-
-La estrategia se aplica a los siguientes subsistemas, identificables a partir de la arquitectura descrita en el capítulo 6:
-
-- **Lectura y normalización de la entrada** (modos archivo, directorio y URL).
-- ***Pipeline* lineal** de cuatro fases (lectura, análisis, diseño relacional, generación de DDL).
-- **Agente de descubrimiento** sobre repositorios remotos.
-- **Herramientas operativas** invocables por el agente (`list_dir`, `read_file`, `grep`, `select_evidence`, `done`).
-- **Abstracción de proveedor LLM** y sus implementaciones concretas (Google, Groq).
-- **Interfaces de usuario** (CLI y GUI), incluyendo paridad funcional entre ambas.
-
-Para cada uno de estos subsistemas, el apartado 6.3 detalla las invariantes y los criterios de aceptación que las pruebas deben verificar.
-
-### 5.3.4 Grado de automatización
-
-| Categoría | Grado | Justificación |
-|---|---|---|
-| Unitarias e integración | Plenamente automatizadas | Ejecución desacoplada del LLM mediante dobles de prueba; coste por ejecución despreciable. |
-| Sistema | Semiautomatizadas | Lanzamiento automatizado con un proveedor simulado para el flujo de integración continua; ejecuciones con proveedor real fuera de CI por motivos de cuota. |
-| Aceptación cualitativa | Manuales asistidas | La comparación con el modelo de referencia requiere juicio humano; se apoya en *checklists* versionadas que reducen la subjetividad y permiten reproducir la evaluación. |
-
-La automatización persigue dos objetivos: garantizar la regresión de la parte determinista en cada cambio del código y aislar la evaluación del modelo del proveedor de LLM concreto, de modo que el *pipeline* de integración continua no se vea afectado por cuotas, latencias ni costes externos.
-
-A fecha de entrega de este TFG, y conforme a §7.2.1, solo se ha ejecutado el nivel de **aceptación cualitativa** sobre los *datasets* de referencia. Los niveles unitario, integración y sistema descritos en esta sección —junto con el instrumental que sigue— constituyen la **suite automatizada planificada** (Ampliación C del capítulo 9), no una capacidad ya materializada.
-
-### 5.3.5 Herramientas
-
-El instrumental que da soporte a esta estrategia es el que sigue. Conforme a §5.3.4, a la fecha de entrega de este TFG solo se ha empleado el necesario para la validación cualitativa; el resto corresponde a la suite automatizada planificada (Ampliaciones C y D del capítulo 9).
-
-- **`pytest`** como armazón de pruebas unitarias, de integración y de sistema.
-- **Dobles de prueba (`MockProvider`)** que implementan la interfaz `LLMProvider` y devuelven respuestas grabadas previamente, lo que permite ejercitar el *pipeline* y el agente de forma determinista.
-- **Ficheros de respuesta del SDK** versionados como *fixtures* JSON, capturados a partir de invocaciones reales y reutilizados en las pruebas de los adaptadores.
-- **`sqlparse`** para verificar la validez sintáctica del DDL Oracle generado.
-- **Contenedor de Oracle Database (Express Edition)** opcional para una validación de ejecución del DDL más exhaustiva en un *pipeline* extendido.
-- **GitHub Actions** como infraestructura de integración continua **prevista** para ejecutar los niveles automatizados en cada *commit* y los semiautomatizados de forma programada (su activación es la Ampliación D del capítulo 9).
-- ***Checklists* en YAML** versionadas en `tests/baseline/<dataset>.yaml` que enumeran las entidades, claves y relaciones esperadas para cada *dataset* de referencia, y un *script* auxiliar que produce el informe de cobertura por modelo y *dataset* utilizado en la sección 6.3.
-
-Esta combinación de herramientas se concibe como un flujo de pruebas ejecutable, repetible y suficientemente independiente del proveedor de LLM utilizado en la ejecución real.

@@ -68,7 +68,7 @@ La instalación se realiza en cuatro pasos, desde una terminal abierta en el dir
 La invocación general del CLI es:
 
 ```
-python -m normalizer <entrada> [--provider NOMBRE] [--model MODELO] [--agent-model MODELO] [--out-dir DIR]
+python -m normalizer <entrada> [--provider NOMBRE] [--model MODELO] [--agent-model MODELO] [--out-dir DIR] [--max-tree-entries N] [--max-iters N] [--max-files N]
 ```
 
 | Argumento | Tipo | Valor por defecto | Descripción |
@@ -78,6 +78,9 @@ python -m normalizer <entrada> [--provider NOMBRE] [--model MODELO] [--agent-mod
 | `--model` | texto libre | Por proveedor | Modelo concreto del *pipeline* (texto a texto). |
 | `--agent-model` | texto libre | Por proveedor | Modelo concreto del agente. Solo aplica si la entrada es una URL. |
 | `--out-dir` | ruta | `out` | Directorio de salida para los artefactos. |
+| `--max-tree-entries` | entero | `2000` | Máximo de entradas del árbol del repositorio entregado al agente. Solo aplica en modo URL. Reducirlo ayuda con cuotas de *tokens* (TPM) estrechas sobre repositorios grandes. |
+| `--max-iters` | entero | `30` | Máximo de iteraciones del agente. Solo aplica en modo URL. |
+| `--max-files` | entero | `30` | Máximo de archivos que el agente puede seleccionar como evidencia. Solo aplica en modo URL. |
 
 Los valores por defecto para cada proveedor son:
 
@@ -120,6 +123,12 @@ Adecuado cuando el usuario solo dispone de la URL del repositorio y delega en el
 python -m normalizer https://github.com/dan-divy/spruce --out-dir out-spruce-url/
 ```
 
+Para repositorios grandes, o contra proveedores con cuota de *tokens* estrecha, el presupuesto del agente puede ajustarse en la misma invocación —por ejemplo, reduciendo el árbol que se le entrega y acotando sus pasos:
+
+```
+python -m normalizer https://github.com/HabitRPG/habitica --max-tree-entries 800 --max-iters 40 --out-dir out-habitica/
+```
+
 Adicionalmente al *pipeline*, esta invocación genera el directorio `00_discovery/`:
 
 ```
@@ -141,7 +150,7 @@ Durante la ejecución, la CLI emite por la salida de error estándar (`stderr`) 
 ```
 [00:00] Provider: google | pipeline=gemma-4-31b-it | agent=gemini-3.1-flash-lite | out=out-spruce-url/
 [00:00] Descubriendo evidencia desde https://github.com/dan-divy/spruce ...
-[00:01] Agente arrancado (max_iters=30, max_files=30, árbol=187 entradas)
+[00:01] Agente arrancado (max_iters=30, max_files=30, max_tree=2000, árbol=187 entradas)
 [00:14] [iter 01] -> grep('Schema|model'), list_dir(utils/models)
 [00:28] [iter 02] -> read_file(utils/models/user.js), read_file(utils/models/room.js)
 ...
@@ -161,9 +170,9 @@ Durante la ejecución, la CLI emite por la salida de error estándar (`stderr`) 
 | Síntoma | Causa probable | Acción recomendada |
 |---|---|---|
 | Ejecuciones con cuota agotada (HTTP 429) | Excede el *free tier* del proveedor. | El sistema reintenta automáticamente respetando el `retry-after`. Si persiste, esperar a la recarga de cuota o cambiar de proveedor (`--provider groq` / `--provider google`). |
-| El agente devuelve "presupuesto agotado" | Repositorio demasiado grande o *prompt* mal sintonizado. | Inspeccionar `00_discovery/discovery.md` y `00_discovery/tree.txt`. Considerar invocar con un valor mayor de `max_iters` (requiere modificación del código). |
+| El agente devuelve "presupuesto agotado" | Repositorio demasiado grande o *prompt* mal sintonizado. | Inspeccionar `00_discovery/discovery.md` y `00_discovery/tree.txt`. Reintentar con un valor mayor de `--max-iters` (y, si procede, `--max-files`). |
 | Cobertura del DDL inferior a la esperada | Varianza del agente (riesgo R-04). | Repetir la ejecución; comparar con la traza turno-a-turno; si la varianza es sistemática, probar otro modelo del agente. |
-| HTTP 413 sobre el primer mensaje al LLM | Frontera Groq × tamaño del árbol (riesgo R-02). | Usar `--provider google` para el modo URL sobre repositorios medianos+. |
+| HTTP 413 sobre el primer mensaje al LLM | Frontera Groq × tamaño del árbol (riesgo R-02). | Reducir el árbol con `--max-tree-entries` (p. ej. `800`) o usar `--provider google` para el modo URL sobre repositorios medianos+. |
 
 ## 8.3 Manual de usuario GUI
 
@@ -179,7 +188,7 @@ La ventana principal de la aplicación se organiza en torno a una **secuencia de
 
 ### 8.3.2 Pantalla 1 — Configuración
 
-La primera pantalla presenta un único formulario con tres bloques:
+La primera pantalla presenta un único formulario con cuatro bloques:
 
 **Bloque 1 — Entrada.** Un selector segmentado escoge el modo (`Archivo`, `Directorio`, `URL`). Bajo el selector, un campo y un botón "Examinar..." adaptan su comportamiento al modo:
 
@@ -200,6 +209,8 @@ La aplicación valida inmediatamente: el archivo o directorio debe existir, y la
 
 - Si la variable de entorno asociada (`GOOGLE_API_KEY` o `GROQ_API_KEY`) ya está definida —ya sea exportada en el *shell* o cargada del fichero `.env`—, el campo aparece relleno con un marcador opaco y deshabilitado. Un botón "Cambiar" lo desbloquea por si el usuario quiere sustituir la clave.
 - Si la variable no está definida, el campo aparece vacío y editable. Cuando el usuario introduce una clave y pulsa "Ejecutar", la aplicación la inyecta en el entorno del proceso y la persiste automáticamente en el fichero `.env` del directorio de trabajo (creándolo si no existe) mediante `dotenv.set_key`. El fichero `.env` está excluido del control de versiones por `.gitignore` (véase 8.1.2).
+
+**Bloque 4 — Agente de descubrimiento (modo URL).** Tres campos numéricos —máximo de iteraciones, máximo de archivos seleccionables y máximo de entradas del árbol del repositorio— prerrellenados con los valores por defecto (30, 30 y 2 000). Solo se habilitan cuando la entrada es una URL; en los modos archivo y directorio permanecen deshabilitados, pues el agente no interviene. Reducir el máximo de entradas del árbol es la palanca recomendada cuando el repositorio es grande o el proveedor tiene una cuota de *tokens* estrecha (véase 8.2.4). La validación exige enteros positivos antes de habilitar "Ejecutar".
 
 Un botón "Ejecutar" en la esquina inferior derecha pasa a la siguiente pantalla cuando todos los campos obligatorios están completos.
 
@@ -270,13 +281,13 @@ Los *prompts* del sistema residen en `normalizer/prompts/`, uno por fichero (`an
 
 ### 8.4.3 Cambiar los límites del agente
 
-Los presupuestos del agente se controlan mediante constantes en módulos específicos:
+Los tres presupuestos principales del agente son **configurables por ejecución** sin tocar código: desde la CLI con las opciones `--max-iters`, `--max-files` y `--max-tree-entries`, y desde la GUI con el bloque "Agente (modo URL)". Sus valores por defecto viven como constantes en módulos específicos, que también pueden editarse para cambiar el comportamiento base:
 
-- `normalizer/discovery/agent.py`: `MAX_ITERS = 30` (iteraciones máximas por sesión), `MAX_FILES = 30` (archivos seleccionables máximos). También configurables al invocar `discover_from_url` con los *keyword* `max_iters` y `max_files`.
-- `normalizer/discovery/tools.py`: `READ_FILE_CAP = 50_000` *bytes* (tamaño máximo de un archivo leído por `read_file`), `GREP_MAX_HITS = 50` (número máximo de coincidencias devueltas por `grep`).
-- `normalizer/discovery/filesystem.py`: `MAX_FILE_BYTES` (tamaño máximo de un archivo aceptado en el árbol), `max_entries` por defecto en `build_tree_summary` (`2000`).
+- `normalizer/discovery/agent.py`: `MAX_ITERS = 30` (iteraciones máximas por sesión) y `MAX_FILES = 30` (archivos seleccionables máximos), defaults de los *keyword* `max_iters` y `max_files` de `discover_from_url`.
+- `normalizer/discovery/filesystem.py`: `MAX_TREE_ENTRIES = 2000` (default de `build_tree_summary` y de la opción `--max-tree-entries`) y `MAX_FILE_BYTES` (tamaño máximo de un archivo aceptado en el árbol).
+- `normalizer/discovery/tools.py`: `READ_FILE_CAP = 50_000` *bytes* (tamaño máximo de un archivo leído por `read_file`) y `GREP_MAX_HITS = 50` (coincidencias máximas devueltas por `grep`); estos dos siguen siendo solo constantes de código.
 
-Modificar estos valores tiene efectos directos en el consumo del *free tier* de los proveedores: por ejemplo, subir `MAX_ITERS` a 50 puede duplicar el número de peticiones al LLM por sesión, agotando antes la cuota diaria.
+Modificar estos valores tiene efectos directos en el consumo del *free tier* de los proveedores: por ejemplo, subir `--max-iters` a 50 puede duplicar el número de peticiones al LLM por sesión, agotando antes la cuota diaria; subir `--max-tree-entries` aumenta el tamaño del primer mensaje y puede chocar con el TPM de Groq (riesgo R-02).
 
 ### 8.4.4 Añadir un nuevo *dataset*
 
@@ -284,4 +295,4 @@ Los *datasets* de control viven en `data/`. Para añadir uno nuevo:
 
 1. Crear un directorio `data/<nombre>/` con los archivos curados.
 2. Documentar el modelo de referencia esperado (por ejemplo, un diagrama UML manual o una lista de entidades) para poder comparar la cobertura cualitativa.
-3. Si se planea integrar el *dataset* en la suite de aceptación cualitativa (§6.3.3), añadir un *checklist* en `tests/baseline/<nombre>.yaml` con las entidades, claves y relaciones esperadas.
+3. Ejecutar la herramienta sobre el *dataset* y comparar el DDL generado con esa lista de referencia, registrando la cobertura de entidades según el procedimiento de validación cualitativa (§11.2.4).

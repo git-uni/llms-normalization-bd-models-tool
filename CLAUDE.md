@@ -66,7 +66,7 @@ normalizer/
 ├── _log.py                 # log() a stderr + registro de callbacks para la GUI
 ├── cli/                    # paquete CLI (código en cli.py; __init__ re-exporta main)
 │   ├── __init__.py
-│   └── cli.py              # click CLI: --provider, --model, --agent-model, --out-dir
+│   └── cli.py              # click CLI: --provider, --model, --agent-model, --out-dir, --max-tree-entries, --max-iters, --max-files
 ├── pipeline/               # paquete del pipeline (__init__ re-exporta API pública)
 │   ├── __init__.py
 │   └── pipeline.py         # 3 fases LLM + PipelineCancelled + cancel_event
@@ -147,9 +147,12 @@ Por qué el código es como es (sin telemetría de corridas concretas):
   pasadas obligatorias** — declarativa (grep de schemas explícitos, multi-stack) e implícita (mirar
   el árbol restante buscando escrituras/accesos/seeds); (c) **batching como regla dura** — una
   respuesta = una petición; `select_evidence` consecutivos van en una sola respuesta.
-- **Árbol BFS + cap 2000** (`filesystem.build_tree_summary`): recorrido por niveles (no DFS) para
-  que el agente vea **todos los top-level dirs** antes de profundizar. Sufijos `.test.*`/`.spec.*`
-  se excluyen solo del dump del árbol, no globalmente (siguen accesibles vía `read_file`/`grep`).
+- **Árbol BFS + cap configurable, default 2000** (`filesystem.build_tree_summary`, constante
+  `MAX_TREE_ENTRIES`): recorrido por niveles (no DFS) para que el agente vea **todos los top-level
+  dirs** antes de profundizar. El cap se expone como `--max-tree-entries` (CLI) y campo de la GUI,
+  y viaja por `discover_from_url(max_tree_entries=...)` (junto a `--max-iters`/`--max-files`, ya
+  cableados). Sufijos `.test.*`/`.spec.*` se excluyen solo del dump del árbol, no globalmente
+  (siguen accesibles vía `read_file`/`grep`).
 - **Observabilidad por stderr** (`_log.py`): helper único `log()` que emite `[mm:ss] mensaje`.
   Default siempre on. La GUI consume el mismo flujo registrando un callback con `register_callback()`,
   sin parsear stderr ni duplicar canales; `reset_clock()` reinicia el reloj al arrancar la corrida.

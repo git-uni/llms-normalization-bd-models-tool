@@ -43,7 +43,7 @@ pandoc \
   --resource-path=. \
   -f markdown+pipe_tables+grid_tables+raw_html+fenced_code_blocks \
   -t docx \
-  cap01.md cap02.md cap03.md cap04.md cap05.md cap06.md cap07.md cap08.md cap09.md cap10.md \
+  cap01.md cap02.md cap03.md cap04.md cap05.md cap06.md cap07.md cap08.md cap09.md cap10.md cap11.md \
   -o MemoriaTFG.v1.docx
 
 ls -lh MemoriaTFG.v1.docx

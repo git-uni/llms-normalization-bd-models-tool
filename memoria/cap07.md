@@ -1,6 +1,6 @@
 # Capítulo 7. Implementación
 
-Este capítulo documenta la implementación de la herramienta, partiendo del diseño descrito en el capítulo 6. Se centra en la estructura organizativa del código y en la implementación del plan de pruebas, sin sustituir al propio código fuente, que se entrega como anexo conforme a la recomendación de la plantilla.
+Este capítulo documenta la implementación de la herramienta, partiendo del diseño descrito en el capítulo 6. Se centra en la estructura organizativa del código y en los aspectos de implementación más relevantes, sin sustituir al propio código fuente, que se entrega como anexo conforme a la recomendación de la plantilla.
 
 ## 7.1 Estructura de la aplicación
 
@@ -114,7 +114,7 @@ A continuación se subrayan cuatro aspectos cuya implementación encierra decisi
 `discovery/filesystem.py` materializa el árbol que se entrega al agente en su primer mensaje. Tres decisiones se destacan:
 
 - **Recorrido BFS por niveles, no DFS.** Garantiza que, si el corte de entradas se agota, todos los directorios de primer nivel ya han aparecido completos. Una primera implementación DFS hacía invisible directorios _top-level_ enteros en repositorios grandes (Habitica con `website/` sin entrar en el árbol).
-- **Corte a 2 000 entradas** (~30 K _tokens_ en _prompt_). Compromiso entre cobertura del árbol y consumo de contexto. La elección del valor es empírica: con 600 entradas (el valor original) varios _top-level_ de Habitica no aparecían; con 4 000 se desbordaba el TPM de los modelos _free_ de Groq.
+- **Corte de entradas configurable, por defecto 2 000** (~30 K _tokens_ en _prompt_). El valor por defecto (constante `MAX_TREE_ENTRIES`) es un compromiso empírico entre cobertura del árbol y consumo de contexto: con 600 entradas (el valor original) varios _top-level_ de Habitica no aparecían; con 4 000 se desbordaba el TPM de los modelos _free_ de Groq. El usuario puede ajustarlo por ejecución con la opción `--max-tree-entries` (CLI) o el campo equivalente de la GUI —`discover_from_url` lo recibe como `max_tree_entries` y lo propaga a `build_tree_summary`—, de modo que repositorios grandes contra proveedores con cuota estrecha puedan reducirlo sin tocar código.
 - **Omisión local de sufijos de pruebas** (`.test.js`, `.spec.ts`, etc.) del _dump_ del árbol, **no** de la accesibilidad: el agente sigue pudiendo leerlos vía `read_file` o `grep` si los encuentra por otra vía. La omisión sirve únicamente para evitar que las baterías de tests acaparen el corte de entradas.
 
 #### Confinamiento de las herramientas en `resolve_within`
@@ -149,41 +149,3 @@ Las **tablas dentro del visor de Markdown** se renderizan como _widgets_ reales 
 
 La GUI no implementa ninguna lógica de transformación; solamente invoca `run_pipeline(input_path, provider, out_dir, cancel_event)` y `discover_from_url(url, agent_provider, out_dir, cancel_event)`. Cualquier modificación del _pipeline_ o del agente queda automáticamente accesible desde la GUI sin tocar la capa de presentación, lo que materializa el requisito de paridad funcional RF-6.3.
 
-## 7.2 Implementación de las pruebas
-
-### 7.2.1 Estado de la validación efectivamente ejecutada
-
-La validación del prototipo se ha materializado fundamentalmente en el nivel de **aceptación cualitativa** descrito en §6.3.3, sobre los _datasets_ de referencia identificados en §6.3.4. Los niveles unitario, integración y sistema —diseñados en §6.3 y con el instrumental enunciado en §5.3.5— constituyen la **suite automatizada planificada** (Ampliación C del capítulo 9, con su integración continua en la Ampliación D): a la fecha de entrega de este TFG, el esfuerzo se concentró en el desarrollo del agente y de la GUI, de modo que el nivel efectivamente ejecutado es el de aceptación cualitativa. Esta priorización es coherente con la planificación del proyecto (capítulo 3) y se documenta aquí de forma explícita.
-
-Esto no significa que el sistema no se haya verificado: el banco de pruebas cualitativas se ha ejecutado de forma sistemática sobre los tres _datasets_ de cobertura y, de forma adicional, sobre Habitica. Los resultados se resumen en la tabla siguiente.
-
-### 7.2.2 Resultados de la validación cualitativa
-
-La tabla siguiente resume las ejecuciones realizadas para validar el sistema. La métrica de cobertura es entidad-a-entidad contra el modelo UML manual; las celdas vacías indican combinaciones que el _free tier_ no permite (por ejemplo, agente Groq sobre Habitica por la frontera de TPM documentada en R-02).
-
-| Dataset               | Modo       | Proveedor _pipeline_ | Modelo _pipeline_       | Proveedor agente | Modelo agente         | Iter. agente | Archivos sel. | DDL tablas | Cobertura UML           |
-| --------------------- | ---------- | -------------------- | ----------------------- | ---------------- | --------------------- | -----------: | ------------: | ---------: | ----------------------- |
-| `data/spruce/`        | Directorio | Google               | gemma-4-31b-it          | —                | —                     |            — |             — |         11 | 11 / 11                 |
-| `data/spruce/`        | Directorio | Groq                 | llama-3.3-70b-versatile | —                | —                     |            — |             — |        ≈11 | 10 / 11                 |
-| `data/spruce-difuso/` | Directorio | Google               | gemma-4-31b-it          | —                | —                     |            — |             — |         11 | 11 / 11                 |
-| `data/spruce-difuso/` | Directorio | Groq                 | llama-3.3-70b-versatile | —                | —                     |            — |             — |          9 | 7 / 11                  |
-| Spruce URL pública    | URL        | Google               | gemma-4-31b-it          | Google           | gemini-3.1-flash-lite |            5 |             4 |         11 | 11 / 11                 |
-| Habitica URL pública  | URL        | Google               | gemma-4-31b-it          | Google           | gemini-3.1-flash-lite |           13 |            11 |         31 | cualitativa adicional   |
-| Habitica URL pública  | URL        | Groq                 | llama-3.3-70b-versatile | Groq             | qwen/qwen3-32b        |            — |             — |          — | no completada — 413 TPM |
-
-Las dos primeras filas muestran que la cobertura del _pipeline_ sobre el dataset de control no depende fuertemente del proveedor (Spruce con _schemas_ explícitos cae bien para ambos), mientras que la cuarta fila evidencia el _trade-off_ identificado como riesgo R-06 (diferencia de cobertura inter-proveedor): sobre el dataset difuso, Groq pierde las familias `keys` / `key_stats` y `analytics` / `analytics_stats`, las menos representadas en el corpus. La quinta fila confirma RU-5.1: el agente recupera los cuatro _schemas_ declarativos de Spruce sin intervención manual. La sexta fila documenta el caso end-to-end más rico ejecutado durante el proyecto; la séptima refleja la materialización de R-02.
-
-Tres ejecuciones independientes del agente sobre Habitica con Google (el mismo _prompt_, el mismo modelo) produjeron 5, 11 y 22 archivos seleccionados respectivamente. Este rango se reporta de forma intencional para alinearse con la lección L7 del capítulo 3 (honestidad estadística).
-
-### 7.2.3 Reproducibilidad de los resultados reportados
-
-Los artefactos de las ejecuciones reportadas en §7.2.2 se conservan en el repositorio bajo `out-*` por dataset (`out-spruce/`, `out-difuso/`, `out-spruce-url/`, `out-habitica-2026-06-01/`). La marca temporal y el modelo concreto utilizado en cada ejecución se identifican por la cabecera del propio directorio y por la traza `[mm:ss]` de `_log.py`. Las invocaciones exactas reproducibles son:
-
-```
-python -m normalizer data/spruce/ --out-dir out-spruce/
-python -m normalizer data/spruce-difuso/ --provider groq --out-dir out-difuso-groq/
-python -m normalizer https://github.com/dan-divy/spruce --out-dir out-spruce-url/
-python -m normalizer https://github.com/HabitRPG/habitica --out-dir out-habitica/
-```
-
-Esta política de reproducibilidad responde a RNF-2.1: los artefactos quedan disponibles para inspección por la dirección académica y por el tribunal, y constituyen la evidencia empírica que sustenta las afirmaciones del capítulo 9 (Conclusiones).

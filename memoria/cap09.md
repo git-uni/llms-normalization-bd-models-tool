@@ -21,7 +21,7 @@ La tabla siguiente resume el grado de cobertura de cada uno de los ocho requisit
 | RU-7 Inspección de los resultados intermedios | Total | Cuatro artefactos del *pipeline* + traza del agente en directorios `--out-dir` aislados. |
 | RU-8 Prototipo | Total | Validación cualitativa sobre los tres modos de entrada y desde ambas interfaces. |
 
-La evaluación de los requisitos del sistema (RFs y RNFs del capítulo 5) sigue el mismo patrón: cada RF se traza a una decisión arquitectónica del capítulo 6 (§6.1.5) y a su materialización en un módulo del capítulo 7 (§7.1.1); cada RNF se acredita con la inspección del código y, cuando aplica, con las mediciones de §7.2.2.
+La evaluación de los requisitos del sistema (RFs y RNFs del capítulo 5) sigue el mismo patrón: cada RF se traza a una decisión arquitectónica del capítulo 6 (§6.1.5) y a su materialización en un módulo del capítulo 7 (§7.1.1); cada RNF se acredita con la inspección del código y, cuando aplica, con las mediciones de §11.3.3.
 
 ### 9.1.2 Resultados cuantitativos
 
@@ -52,7 +52,7 @@ Más allá del cumplimiento de los requisitos, el trabajo ha aportado tres eleme
 
 ## 9.2 Ampliaciones
 
-Esta sección recoge seis líneas de ampliación que el propio proyecto deja abiertas: mejoras y extensiones identificadas durante el desarrollo.
+Esta sección recoge cuatro líneas de ampliación que el propio proyecto deja abiertas: mejoras y extensiones identificadas durante el desarrollo.
 
 ### Ampliación A. Selección independiente de proveedores para *pipeline* y agente
 
@@ -64,19 +64,11 @@ Z.ai constituye el candidato más prometedor para un tercer proveedor de LLM. Lo
 
 La implementación consistiría en un módulo nuevo `normalizer/providers/zai.py` aproximadamente equivalente a `groq.py` con `base_url` y modelos por defecto distintos, y el registro en `_REGISTRY`, `DEFAULT_MODELS` y `DEFAULT_AGENT_MODELS`. La validación seguiría el mismo patrón que para Groq: Spruce-URL primero (caso pequeño) y luego Habitica para comparar con la ejecución Google de referencia.
 
-### Ampliación C. Suite de pruebas automatizadas
-
-El plan de pruebas descrito en §5.3 y §6.3 contempla los niveles unitario, integración y sistema. Su materialización es la principal ampliación en el plano de la ingeniería del *software*: introducir `pytest` como armazón, `MockProvider` como doble de prueba para los niveles aislados del LLM, *fixtures* JSON con respuestas reales del SDK capturadas para los adaptadores, y `sqlparse` para la verificación sintáctica del DDL en el nivel de aceptación. Esta ampliación preverá un directorio `tests/baseline/<dataset>.yaml` para los *checklists* de los casos de aceptación cualitativa.
-
-### Ampliación D. Integración continua
-
-Como continuación natural de la Ampliación C, la activación de GitHub Actions permitiría ejecutar la suite en cada *commit* y añadir análisis automáticos de seguridad —dependencias vulnerables (SCA) y errores de seguridad en el código (SAST)— sobre el repositorio público del proyecto. El esfuerzo es bajo: un único fichero YAML en `.github/workflows/`.
-
-### Ampliación E. Portabilidad del DDL a Oracle anterior a 23ai
+### Ampliación C. Portabilidad del DDL a Oracle anterior a 23ai
 
 El DDL generado utiliza el tipo `BOOLEAN`, soportado de forma nativa por Oracle 23ai pero ausente de las versiones anteriores. Un mapeo posterior trivial —`BOOLEAN` → `NUMBER(1) CHECK (X IN (0,1))` o `CHAR(1) CHECK (X IN ('Y','N'))`— ampliaría la portabilidad del DDL al universo Oracle <23, mayoritario en los entornos *legacy* objetivo. La ampliación puede materializarse como una opción adicional del *pipeline* (`--oracle-version 12c|19c|23ai`) o como un *postprocesador* externo aplicable al artefacto `04_ddl.sql`.
 
-### Ampliación F. Reducción de la varianza del agente
+### Ampliación D. Reducción de la varianza del agente
 
 La varianza observada del agente (5–22 archivos sobre Habitica) tiene tres palancas de reducción:
 

@@ -198,6 +198,43 @@ class ConfigScreen(ctk.CTkFrame):
             wraplength=900,
         ).pack(fill="x", pady=(6, 0))
 
+        # Bloque agente (solo modo URL) ---------------------------------
+        block_agent = self._make_block("4. Agente de descubrimiento (modo URL)")
+        ctk.CTkLabel(
+            block_agent,
+            text=(
+                "Presupuesto del agente que explora el repositorio. Solo aplica "
+                "cuando la entrada es una URL; se ignora en archivo/directorio. "
+                "Bajar las entradas del árbol ayuda con los límites de cuota "
+                "(TPM) sobre repositorios grandes."
+            ),
+            text_color="gray", anchor="w", wraplength=900,
+        ).pack(fill="x", pady=(0, 8))
+
+        self._max_iters_var = ctk.StringVar()
+        self._max_files_var = ctk.StringVar()
+        self._max_tree_var = ctk.StringVar()
+        for _var in (self._max_iters_var, self._max_files_var, self._max_tree_var):
+            _var.trace_add("write", lambda *_: self._refresh_run_button())
+
+        self._agent_budget_entries: list[ctk.CTkEntry] = []
+        for label_text, var in (
+            ("Máx. iteraciones", self._max_iters_var),
+            ("Máx. archivos", self._max_files_var),
+            ("Máx. entradas del árbol", self._max_tree_var),
+        ):
+            row = ctk.CTkFrame(block_agent, fg_color="transparent")
+            row.pack(fill="x", pady=(0, 8))
+            ctk.CTkLabel(row, text=label_text, width=200, anchor="w").pack(
+                side="left"
+            )
+            entry = ctk.CTkEntry(
+                row, textvariable=var, width=120,
+                fg_color=_INPUT_FG, border_color=_INPUT_BORDER,
+            )
+            entry.pack(side="left")
+            self._agent_budget_entries.append(entry)
+
         # Botón ejecutar -------------------------------------------------
         bottom = ctk.CTkFrame(self, fg_color="transparent")
         bottom.pack(fill="x", pady=(20, 0))
@@ -250,6 +287,10 @@ class ConfigScreen(ctk.CTkFrame):
             self.model_cb.set(s.model)
         if s.agent_model:
             self.agent_model_cb.set(s.agent_model)
+        # Presupuesto del agente
+        self._max_iters_var.set(str(s.max_iters))
+        self._max_files_var.set(str(s.max_files))
+        self._max_tree_var.set(str(s.max_tree_entries))
         self._refresh_agent_model_enabled()
 
     def _on_provider_change(self, value: str, refresh: bool = True) -> None:
@@ -341,10 +382,11 @@ class ConfigScreen(ctk.CTkFrame):
         self._refresh_run_button()
 
     def _refresh_agent_model_enabled(self) -> None:
-        if self.gui_state.input_mode == "url":
-            self.agent_model_cb.configure(state="normal")
-        else:
-            self.agent_model_cb.configure(state="disabled")
+        # El modelo del agente y su presupuesto solo aplican en modo URL.
+        new_state = "normal" if self.gui_state.input_mode == "url" else "disabled"
+        self.agent_model_cb.configure(state=new_state)
+        for entry in getattr(self, "_agent_budget_entries", []):
+            entry.configure(state=new_state)
 
     def _sync_key_field(self) -> None:
         provider = self.provider_sel.get()
@@ -427,6 +469,22 @@ class ConfigScreen(ctk.CTkFrame):
 
         if not self._out_dir_var.get().strip():
             return False, "Falta el directorio de salida."
+
+        if self.gui_state.input_mode == "url":
+            ok, reason = self._validate_budget()
+            if not ok:
+                return False, reason
+        return True, ""
+
+    def _validate_budget(self) -> tuple[bool, str]:
+        for label, var in (
+            ("máx. iteraciones", self._max_iters_var),
+            ("máx. archivos", self._max_files_var),
+            ("máx. entradas del árbol", self._max_tree_var),
+        ):
+            raw = var.get().strip()
+            if not raw.isdigit() or int(raw) < 1:
+                return False, f"El campo «{label}» del agente debe ser un entero positivo."
         return True, ""
 
     def _on_run(self) -> None:
@@ -437,6 +495,18 @@ class ConfigScreen(ctk.CTkFrame):
         s.agent_model = self.agent_model_cb.get().strip()
         s.input_value = self._input_value_var.get().strip()
         s.out_dir = Path(self._out_dir_var.get().strip())
+
+        # Presupuesto del agente: parseo defensivo. En modo no-URL los campos
+        # están deshabilitados y se ignoran; si el valor no es un entero válido
+        # conservamos el del estado (su default).
+        for var, attr in (
+            (self._max_iters_var, "max_iters"),
+            (self._max_files_var, "max_files"),
+            (self._max_tree_var, "max_tree_entries"),
+        ):
+            raw = var.get().strip()
+            if raw.isdigit() and int(raw) >= 1:
+                setattr(s, attr, int(raw))
 
         # Persistir API key si el usuario la ha tecleado.
         env_key = ENV_KEY_BY_PROVIDER.get(s.provider, "")

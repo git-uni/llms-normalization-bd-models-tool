@@ -2,33 +2,33 @@ sequenceDiagram
     autonumber
     actor U as Usuario
     participant CLI as CLI / GUI
-    participant DISC as Agente descubrimiento
+    participant DISC as Agente de descubrimiento
     participant PROV as LLMProvider
     participant LLM as API de LLM
-    participant FS as Repo clonado
+    participant FS as Repositorio clonado
     participant PIPE as Pipeline
 
     U->>CLI: URL del repositorio
-    CLI->>DISC: discover_from_url(url)
-    DISC->>FS: git clone (caché)
-    DISC->>FS: construye árbol filtrado
+    CLI->>DISC: inicia el descubrimiento de evidencia
+    DISC->>FS: clona el repositorio (caché local)
+    DISC->>FS: construye el árbol de archivos filtrado
 
-    loop hasta done o agotar presupuesto
-        DISC->>PROV: chat(messages, tools)
-        PROV->>LLM: HTTPS
-        LLM-->>PROV: tool_calls
-        PROV-->>DISC: respuesta
-        DISC->>FS: dispatch(call): list_dir / read_file / grep / select_evidence
+    loop hasta cerrar el descubrimiento o agotar el presupuesto
+        DISC->>PROV: turno de conversación (historial + herramientas)
+        PROV->>LLM: solicitud (HTTPS)
+        LLM-->>PROV: respuesta con invocaciones de herramienta
+        PROV-->>DISC: invocaciones de herramienta (formato neutro)
+        DISC->>FS: ejecuta la herramienta (listar · leer · buscar · seleccionar evidencia)
         FS-->>DISC: resultado
     end
 
-    DISC-->>CLI: evidencia (evidence/)
-    CLI->>PIPE: run_pipeline(evidence)
-
-    PIPE->>PROV: generate (análisis)
-    PROV-->>PIPE: 02_analysis.md
-    PIPE->>PROV: generate (diseño)
-    PROV-->>PIPE: 03_design.md
-    PIPE->>PROV: generate (DDL)
-    PROV-->>PIPE: 04_ddl.sql
+    DISC-->>CLI: evidencia seleccionada
+    CLI->>PIPE: ejecuta el pipeline sobre la evidencia
+    PIPE->>PIPE: lee y concatena la evidencia (01_input.txt)
+    PIPE->>PROV: genera el análisis del modelo documental
+    PROV-->>PIPE: análisis (02_analysis.md)
+    PIPE->>PROV: genera el diseño relacional
+    PROV-->>PIPE: diseño (03_design.md)
+    PIPE->>PROV: genera el DDL Oracle
+    PROV-->>PIPE: DDL (04_ddl.sql)
     PIPE-->>CLI: DDL final

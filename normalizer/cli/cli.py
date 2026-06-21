@@ -4,7 +4,12 @@ import click
 from dotenv import load_dotenv
 
 from normalizer._log import log
-from normalizer.discovery import discover_from_url
+from normalizer.discovery import (
+    MAX_FILES,
+    MAX_ITERS,
+    MAX_TREE_ENTRIES,
+    discover_from_url,
+)
 from normalizer.pipeline import run_pipeline
 from normalizer.providers import available_providers, build_provider
 
@@ -39,12 +44,43 @@ from normalizer.providers import available_providers, build_provider
     show_default=True,
     help="Directorio donde se guardan los artefactos del pipeline.",
 )
+@click.option(
+    "--max-tree-entries",
+    type=int,
+    default=MAX_TREE_ENTRIES,
+    show_default=True,
+    help=(
+        "Máximo de entradas del árbol del repositorio que se entrega al agente "
+        "(solo aplica si INPUT_PATH es una URL). Reducirlo ayuda con los "
+        "límites de cuota (TPM) sobre repositorios grandes."
+    ),
+)
+@click.option(
+    "--max-iters",
+    type=int,
+    default=MAX_ITERS,
+    show_default=True,
+    help="Máximo de iteraciones del agente (solo aplica si INPUT_PATH es una URL).",
+)
+@click.option(
+    "--max-files",
+    type=int,
+    default=MAX_FILES,
+    show_default=True,
+    help=(
+        "Máximo de archivos que el agente puede seleccionar como evidencia "
+        "(solo aplica si INPUT_PATH es una URL)."
+    ),
+)
 def main(
     input_path: str,
     provider_name: str,
     model: str | None,
     agent_model: str | None,
     out_dir: Path,
+    max_tree_entries: int,
+    max_iters: int,
+    max_files: int,
 ) -> None:
     """Normaliza un modelo documental MongoDB a DDL Oracle vía LLM.
 
@@ -85,7 +121,12 @@ def main(
     if is_url:
         log(f"Descubriendo evidencia desde {input_path}...")
         evidence_dir = discover_from_url(
-            url=input_path, agent_provider=agent_provider, out_dir=out_dir
+            url=input_path,
+            agent_provider=agent_provider,
+            out_dir=out_dir,
+            max_iters=max_iters,
+            max_files=max_files,
+            max_tree_entries=max_tree_entries,
         )
         log(
             f"Evidencia en {evidence_dir} "

@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from normalizer.discovery import MAX_FILES, MAX_ITERS, MAX_TREE_ENTRIES
+
 InputMode = Literal["file", "dir", "url"]
 PhaseStatus = Literal["pending", "active", "done", "error", "cancelling"]
 
@@ -43,6 +45,11 @@ class GuiState:
     model: str = ""  # cadena vacía → usar default del proveedor
     agent_model: str = ""
     out_dir: Path | None = None  # None → autogenerar `out-gui-<ts>/`
+    # Presupuesto del agente (solo aplica en modo URL). Defaults = constantes
+    # del núcleo, así una única fuente de verdad gobierna CLI y GUI.
+    max_iters: int = MAX_ITERS
+    max_files: int = MAX_FILES
+    max_tree_entries: int = MAX_TREE_ENTRIES
 
     # Bloque rellenado durante la ejecución.
     error_message: str = ""

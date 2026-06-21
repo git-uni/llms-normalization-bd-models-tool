@@ -120,7 +120,7 @@ A continuación se incluyen las doce hojas individuales correspondientes a los r
 | Categoría | Calidad. |
 | Probabilidad / Impacto / Exposición | 4 / 2 / 8 (alto). |
 | Estrategia | Aceptar. |
-| Plan de mitigación | Validación cualitativa sobre los dos proveedores; documentación honesta del *trade-off* en §7.2.2 y en §9.1.3. |
+| Plan de mitigación | Validación cualitativa sobre los dos proveedores; documentación honesta del *trade-off* en §11.3.3 y en §9.1.3. |
 | Indicadores | Cobertura del UML manual significativamente distinta entre proveedores sobre el mismo *input*. |
 | Contingencia | Recomendación por defecto del proveedor con mejor cobertura (Google para *datasets* difusos). |
 | Estado final | Materializado y aceptado; documentado el *trade-off* velocidad (Groq sobre el *pipeline* texto-a-texto) ↔ calidad (Google sobre el agente en Habitica). |
@@ -238,9 +238,6 @@ Las referencias siguientes corresponden a las fuentes citadas a lo largo de la m
 [18] Automattic Inc., *Mongoose — Elegant MongoDB Object Modeling for Node.js*, 2025. [En línea]. Disponible: <https://mongoosejs.com>.
 
 [19] Oracle Corporation, *Oracle Database 23ai — Release Notes*, 2024. [En línea]. Disponible: <https://docs.oracle.com/en/database/oracle/oracle-database/23/>.
-
-[20] A. Andoni *et al.*, *sqlparse — A non-validating SQL parser module for Python*, 2025. [En línea]. Disponible: <https://github.com/andialbrecht/sqlparse>.
-
 ## 10.3 Contenido entregado en los anexos
 
 ### 10.3.1 Descripción del contenido
@@ -282,4 +279,4 @@ anexo/
     └── defensa.pdf                     # Diapositivas de la defensa
 ```
 
-El fichero `README.TXT` en la raíz del anexo describe el contenido, indica las dependencias mínimas y resume el procedimiento de instalación referenciando los `README.md` de cada subdirectorio. El directorio `codigo/` contiene una copia limpia del repositorio en el momento de la entrega (sin `.cache/`, sin `out-*/` superfluos, sin `.env`). El directorio `documentacion/` incluye el PDF navegable de la memoria con los marcadores activos. El directorio `explotacion/` reproduce los *datasets* utilizados y los artefactos de las ejecuciones de validación que sustentan las afirmaciones cuantitativas de §7.2.2 y §9.1.2.
+El fichero `README.TXT` en la raíz del anexo describe el contenido, indica las dependencias mínimas y resume el procedimiento de instalación referenciando los `README.md` de cada subdirectorio. El directorio `codigo/` contiene una copia limpia del repositorio en el momento de la entrega (sin `.cache/`, sin `out-*/` superfluos, sin `.env`). El directorio `documentacion/` incluye el PDF navegable de la memoria con los marcadores activos. El directorio `explotacion/` reproduce los *datasets* utilizados y los artefactos de las ejecuciones de validación que sustentan las afirmaciones cuantitativas de §11.3.3 y §9.1.2.
