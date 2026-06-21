@@ -46,25 +46,15 @@ El sistema solo se comunica con dos servicios externos, ambos por HTTPS y sin mo
 
 ### 6.1.4 Decisiones arquitectónicas
 
-Las decisiones de diseño principales se resumen a continuación; para cada una se indica la alternativa que se consideró y el motivo de la elección. Su traza a los requisitos se recoge en la matriz de §6.1.5.
+Las decisiones de diseño principales se resumen en la tabla siguiente; para cada una se indica la alternativa que se consideró y el motivo de la elección. Su traza a los requisitos se recoge en la matriz de §6.1.5.
 
-- **Aplicación mono-proceso y local**, no un servicio multiusuario. *Alternativa considerada:* un servicio web con *backend* compartido; se descartó porque multiplicaría la complejidad (autenticación, sesiones, concurrencia) sin aportar valor a una herramienta de apoyo individual y obligaría a sacar los datos del usuario de su máquina.
-
-- **Estilo *pipes & filters* en el *pipeline*, con un artefacto persistente por fase.** Cada fase consume el fichero que produjo la anterior y escribe el suyo. *Alternativa considerada:* encadenar las fases en memoria en una sola llamada; se descartó porque persistir cada artefacto es lo que permite inspeccionar los resultados intermedios y reanudar tras un fallo.
-
-- **Agente con *function calling* nativo del SDK.** *Alternativa considerada:* un bucle propio que parsee JSON emitido por el modelo, o un *framework* de agentes externo; se descartó el primero por frágil ante desviaciones de formato y el segundo por introducir una dependencia pesada para una funcionalidad acotada.
-
-- **Abstracción de proveedor mediante una interfaz por tipado estructural**, no una jerarquía de herencia. *Alternativa considerada:* una clase base abstracta común; se descartó porque acoplaría cada proveedor a esa jerarquía, mientras que la interfaz permite añadirlos sin tocar el núcleo.
-
-- **Dos modelos por proveedor**, uno para el *pipeline* y otro para el agente. *Alternativa considerada:* un único modelo para todo; se descartó porque el *pipeline* solo necesita generación de texto mientras que el agente exige *function calling*, y separarlos permite combinar un modelo barato para uno y otro más capaz para el otro.
-
-- ***Prompts* externalizados** como ficheros Markdown. *Alternativa considerada:* incrustarlos en el código; se descartó porque iterar sobre los *prompts* es frecuente y así no obliga a modificar Python.
-
-- **Confinamiento del agente** al repositorio clonado y al directorio de salida. *Alternativa considerada:* acceso libre al sistema de archivos; se descartó porque un fallo del modelo podría acceder a información ajena a la tarea.
-
-- **Credenciales fuera del código**, vía variables de entorno o `.env`. *Alternativa considerada:* un fichero de configuración versionado; se descartó por el riesgo de filtrar secretos al repositorio.
-
-- **Aislamiento por directorio de salida** distinto en cada ejecución. *Alternativa considerada:* un directorio fijo reutilizado; se descartó porque haría que ejecuciones distintas interfirieran entre sí.
+| Decisión | Alternativa considerada | Por qué se eligió |
+|---|---|---|
+| Aplicación mono-proceso y local, no un servicio multiusuario | Un servicio web con *backend* compartido | Multiplicaría la complejidad (autenticación, sesiones, concurrencia) sin aportar valor a una herramienta de apoyo individual, y obligaría a sacar los datos del usuario de su máquina |
+| Agente con *function calling* nativo del SDK de cada proveedor | Un bucle propio que parsee el JSON emitido por el modelo, o un *framework* de agentes externo | El bucle propio es frágil ante desviaciones de formato del modelo; el *framework* introduce una dependencia pesada para una funcionalidad acotada |
+| *Prompts* externalizados como ficheros Markdown | Incrustarlos en el código | Iterar sobre los *prompts* es frecuente; externalizarlos evita modificar el código del núcleo en cada ajuste |
+| Presupuesto del agente parametrizable (`max_iters`, `max_files`, `max_tree_entries`) desde la CLI y la GUI | Límites fijos por defecto, no configurables | El tamaño de los repositorios y las cuotas de cada proveedor varían; poder ajustar el presupuesto controla el coste por ejecución y evita agotar la cuota |
+| Reintentos sobre errores transitorios del proveedor (429 y 5xx), respetando el `retryDelay` | Abortar a la primera ante cualquier error del proveedor | Las APIs en su nivel gratuito devuelven 429/5xx transitorios con frecuencia; reintentar de forma acotada hace robusta la ejecución sin intervención del usuario |
 
 ### 6.1.5 Trazabilidad arquitectura ↔ requisitos
 
@@ -75,6 +65,7 @@ La tabla siguiente resume cómo cada componente o decisión arquitectónica resp
 | Interfaces CLI y GUI | RU-6, RF-6 |
 | *Pipeline* lineal con artefactos persistentes | RU-2, RU-3, RU-7, RF-2 |
 | Agente de descubrimiento | RU-1.3, RU-5, RF-3 |
+| Presupuesto del agente parametrizable | RF-3.5, RNF-1.2, RNF-1.3 |
 | Herramientas confinadas del agente | RF-4, RNF-4.2 |
 | Abstracción `LLMProvider` | RU-4, RF-5 |
 | Subsistema de *prompts* externalizado | RF-2.7 |
@@ -126,25 +117,29 @@ Cada implementación concreta (`GoogleProvider`, `GroqProvider`) traduce entre e
 
 ### 6.2.3 Flujo de ejecución según el modo de entrada
 
-Los tres modos de entrada comparten el *pipeline* pero difieren en la fase previa. La **Figura 6.5** muestra el flujo de datos completo: las tres entradas y el artefacto que produce cada fase.
+Los tres modos de entrada comparten el *pipeline* pero difieren en la fase previa. El flujo se presenta en dos figuras complementarias. La **Figura 6.5** muestra el *pipeline*, común a los tres modos, con las tres entradas y el artefacto que produce cada fase. La **Figura 6.6** detalla la fase previa del modo URL, en la que el agente de descubrimiento construye la evidencia.
 
-![Figura 6.5. Flujo de datos del proceso completo](assets/diagramas/proceso-general.png)
+![Figura 6.5. Flujo de datos del pipeline](assets/diagramas/proceso-pipeline.png)
 
-- **Fichero único / directorio:** la evidencia ya está preparada; el sistema la concatena en `01_input.txt` (anteponiendo a cada fichero una marca con su ruta) y arranca el *pipeline*.
+- **Fichero único / directorio:** la evidencia ya está preparada. El sistema la concatena en `01_input.txt` (anteponiendo a cada fichero una marca con su ruta) y arranca el *pipeline*.
 - **URL de repositorio:** el agente de descubrimiento (§6.2.4) selecciona la evidencia y la entrega como un directorio, que el *pipeline* trata igual que en el modo directorio.
 
-Las **Figuras 6.6 y 6.7** detallan ambos casos como diagramas de secuencia, en orden de complejidad creciente. La **Figura 6.6** corresponde a los modos fichero y directorio, que comparten exactamente el mismo flujo: la única diferencia es que el modo fichero lee un solo archivo mientras que el modo directorio concatena todos los del primer nivel. En ninguno de los dos interviene el agente; la entrada pasa directamente al *pipeline*.
+La **Figura 6.6** aísla esa fase previa del modo URL: el clonado del repositorio, el árbol filtrado que le sirve de mapa y el bucle del agente que selecciona la evidencia, que después alimenta al *pipeline*.
 
-![Figura 6.6. Secuencia de una ejecución en modo fichero / directorio](assets/diagramas/secuencia-archivo.png)
+![Figura 6.6. Flujo de datos del agente de descubrimiento (modo URL)](assets/diagramas/proceso-agente.png)
+
+Las **Figuras 6.7 y 6.8** detallan ambos casos como diagramas de secuencia, en orden de complejidad creciente. La **Figura 6.7** corresponde a los modos fichero y directorio, que comparten exactamente el mismo flujo: la única diferencia es que el modo fichero lee un solo archivo mientras que el modo directorio concatena todos los del primer nivel. En ninguno de los dos interviene el agente. La entrada pasa directamente al *pipeline*.
+
+![Figura 6.7. Secuencia de una ejecución en modo fichero / directorio](assets/diagramas/secuencia-archivo.png)
 
 El recorrido numerado de la figura se resume en dos tramos:
 
 - **Pasos 1–3 (lectura).** El usuario indica la ruta y el sistema arranca el *pipeline*, cuya primera fase lee la entrada y la concatena en el artefacto `01_input.txt` —un único fichero o todos los del primer nivel del directorio, según el modo.
 - **Pasos 4–10 (transformación).** El *pipeline* encadena las tres generaciones —análisis del modelo documental, diseño relacional y DDL— persistiendo tras cada una su artefacto (`02_analysis.md`, `03_design.md` y `04_ddl.sql`), y devuelve a la interfaz el DDL final.
 
-La **Figura 6.7** detalla el modo URL —el más completo por incluir el descubrimiento.
+La **Figura 6.8** detalla el modo URL, el más completo por incluir el descubrimiento.
 
-![Figura 6.7. Secuencia de una ejecución en modo URL](assets/diagramas/secuencia-url.png)
+![Figura 6.8. Secuencia de una ejecución en modo URL](assets/diagramas/secuencia-url.png)
 
 El recorrido numerado de la figura puede leerse en cuatro tramos:
 
@@ -153,13 +148,13 @@ El recorrido numerado de la figura puede leerse en cuatro tramos:
 - **Pasos 11–13 (transición al *pipeline*).** El agente entrega la evidencia seleccionada y el sistema arranca el *pipeline* sobre ella; su primera fase lee y concatena esa evidencia en el artefacto `01_input.txt`, igual que en los modos fichero y directorio.
 - **Pasos 14–20 (transformación).** El *pipeline* encadena las tres generaciones —análisis del modelo documental, diseño relacional y DDL—, persiste tras cada una su artefacto (`02_analysis.md`, `03_design.md` y `04_ddl.sql`) y devuelve a la interfaz el DDL final.
 
-A partir del paso 11, el flujo es idéntico al de la Figura 6.6: el modo URL solo añade, por delante, la fase de descubrimiento (pasos 1–10).
+A partir del paso 11, el flujo es idéntico al de la Figura 6.7: el modo URL solo añade, por delante, la fase de descubrimiento (pasos 1–10).
 
 ### 6.2.4 El bucle del agente
 
-El agente de descubrimiento se organiza como un **bucle de turnos** sobre un historial de mensajes: en cada turno envía al proveedor de LLM ese historial junto con las herramientas disponibles; si el modelo responde con invocaciones de herramienta, el sistema las ejecuta y le reinyecta sus resultados; el bucle continúa hasta que el modelo da por terminado el descubrimiento (herramienta `done`) o se agota un presupuesto de iteraciones. La **Figura 6.8** recoge esta lógica y sus salidas.
+El agente de descubrimiento se organiza como un **bucle de turnos** sobre un historial de mensajes: en cada turno envía al proveedor de LLM ese historial junto con las herramientas disponibles; si el modelo responde con invocaciones de herramienta, el sistema las ejecuta y le reinyecta sus resultados; el bucle continúa hasta que el modelo da por terminado el descubrimiento (herramienta `done`) o se agota un presupuesto de iteraciones. La **Figura 6.9** recoge esta lógica y sus salidas.
 
-![Figura 6.8. Bucle del agente de descubrimiento](assets/diagramas/agente-bucle.png)
+![Figura 6.9. Bucle del agente de descubrimiento](assets/diagramas/agente-bucle.png)
 
 Dos rasgos de diseño merecen destacarse:
 
@@ -204,7 +199,7 @@ Organiza la transformación principal —de la evidencia agregada al DDL Oracle�
 - **Data Source** — la lectura de la entrada (en `normalizer.cli` o `normalizer.gui`), que crea el primer artefacto a partir del fichero único, del directorio curado o de la evidencia que entrega el agente.
 - **Data Sink** — el artefacto final `04_ddl.sql`, que la interfaz lee para presentárselo al usuario.
 
-Que el canal sea persistente, y no un *buffer* en memoria, es una decisión deliberada (§6.1.4): permite al usuario inspeccionar cada resultado intermedio y reanudar una ejecución interrumpida desde la última fase completada. Y como cada filtro solo conoce el formato de su entrada y su salida, el *prompt* de una fase puede cambiarse sin alterar las demás y cada filtro puede probarse en aislamiento con un doble del proveedor de LLM.
+Que el canal sea persistente, y no un *buffer* en memoria, es una decisión deliberada: permite al usuario inspeccionar cada resultado intermedio y reanudar una ejecución interrumpida desde la última fase completada. Y como cada filtro solo conoce el formato de su entrada y su salida, el *prompt* de una fase puede cambiarse sin alterar las demás y cada filtro puede probarse en aislamiento con un doble del proveedor de LLM.
 
 #### Strategy
 

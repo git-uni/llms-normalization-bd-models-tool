@@ -1,0 +1,59 @@
+// Flujo del agente de descubrimiento (solo modo URL): del repositorio a la evidencia.
+// Termina en evidence/, que entra al pipeline (ver proceso-pipeline.dot).
+// Render: dot -Tpng proceso-agente.dot -o proceso-agente.png
+digraph agente {
+    rankdir=TB; compound=true; bgcolor="white"; pad=0.5;
+    nodesep=0.45; ranksep=0.55; fontname="Helvetica";
+    labelloc="t"; fontsize=20;
+    label="Agente de descubrimiento: del repositorio a la evidencia seleccionada";
+    node [fontname="Helvetica", fontsize=11, shape=box, style="filled,rounded", color="#333333"];
+    edge [fontname="Helvetica", fontsize=9, color="#555555"];
+
+    IN_URL [label="URL de repositorio", fillcolor="#cfe8d6"];
+    GIT [label="Repositorio Git", shape=cylinder, fillcolor="#e9ecef", color="#888888"];
+
+    // ---- Prompt de sistema del agente: carril izquierdo ----
+    subgraph cluster_prompts {
+        label="Prompts (.md)"; style="filled,rounded";
+        fillcolor="#f3eef9"; color="#b69fd0";
+        P_SYS [label="discovery_system", fillcolor="#e6dcf3"];
+    }
+
+    // ---- Agente: cadena central recta ----
+    subgraph cluster_disc {
+        label="Agente de descubrimiento (solo modo URL)"; style="filled,rounded";
+        fillcolor="#fdf3e7"; color="#e0b277"; penwidth=2.2;
+        CLONE [label="Clonado del repo\n(caché local)", fillcolor="#f8e0c0", group=spine];
+        TREE  [label="Árbol filtrado\n(BFS, máx. 2000)", fillcolor="#f8e0c0", group=spine];
+        LOOP  [label="Bucle del agente\n(chat + tools)", shape=hexagon, fillcolor="#f8e0c0", group=spine];
+        TOOLS [label="list_dir · read_file · grep\nselect_evidence · done", shape=component, fillcolor="#f8e8d4"];
+        CLONE -> TREE [weight=20]; TREE -> LOOP [weight=20];
+        LOOP -> TOOLS [label="tool_calls"];
+        TOOLS -> LOOP [label="resultados", constraint=false];
+    }
+
+    ART_TREE   [label="tree.txt", shape=note, fillcolor="#fff4cc"];
+    ART_DTRACE [label="discovery.md", shape=note, fillcolor="#fff4cc"];
+    EVID       [label="evidence/", shape=folder, fillcolor="#ffe0b3", color="#cc7a00", penwidth=2, group=spine];
+    PIPEREF    [label="Pipeline\n(diagrama aparte)", shape=box, style="dashed,rounded", fillcolor="#eef2f7", color="#8fa9d6", group=spine];
+
+    // ---- LLMProvider (solo chat, lo que usa el agente): carril derecho ----
+    subgraph cluster_prov {
+        label="LLMProvider"; style="filled,rounded";
+        fillcolor="#fdeef0"; color="#dba0a8";
+        CHT  [label="chat()\nmodelo agente", fillcolor="#f7d7dc"];
+        IMPL [label="Google · Groq", fillcolor="#f3c6cd"];
+        CHT -> IMPL [arrowhead=none];
+    }
+    LLM [label="API de LLM", shape=cylinder, fillcolor="#e9ecef", color="#888888"];
+
+    IN_URL -> CLONE [weight=20];
+    CLONE -> GIT [dir=both, label="HTTPS"];
+    TREE -> ART_TREE [style=dashed];
+    LOOP -> ART_DTRACE [style=dashed];
+    P_SYS -> LOOP [style=dotted, constraint=false];
+    LOOP -> CHT [label="chat", lhead=cluster_prov];
+    CHT -> LLM [label="HTTPS"];
+    LOOP -> EVID [label="selección", weight=20];
+    EVID -> PIPEREF [label="entrada", style=dashed, weight=20];
+}
