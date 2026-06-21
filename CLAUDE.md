@@ -7,7 +7,8 @@ está terminado y validado; el trabajo vivo es revisar los comentarios que los t
 la memoria. Este documento es la **referencia del código** contra la que se contrasta lo que la
 memoria afirma: si un capítulo describe una capacidad, debe corresponder con lo que hace el código
 descrito aquí. Las convenciones de **redacción** de la memoria (qué se menciona, qué tono, qué no
-inventar) viven en la memoria persistente del asistente, no aquí.
+inventar) viven en la memoria persistente del asistente, no aquí. Las mecánicas de
+puntuación y tipografía sí están aquí (§6).
 
 ---
 
@@ -257,3 +258,26 @@ dataset.
   `gui-explicada.md`): explicación conceptual para defender el TFG.
 
 Ninguno es el estado actual (eso vive aquí) ni reemplaza al historial git.
+
+---
+
+## 6. Mecánicas de redacción
+
+Al redactar texto para el proyecto (memoria, *prompts*, respuestas en chat), el objetivo es prosa
+natural. Hay que evitar el registro tan reconocible de un texto generado por IA. Reglas concretas:
+
+- **Sin guiones largos (rayas).** No usar el carácter `—` (ni `–`). No está en el teclado español y
+  delata el texto al instante. Para un inciso, usar paréntesis o comas. Para una pausa fuerte,
+  partir en dos frases. El guion corto `-` solo para palabras compuestas o rangos.
+- **Sin incisos con raya** (el patrón "texto `—`algo`—` más texto"). Es el *tell* más visible.
+  Reescribir con paréntesis o con comas.
+- **Punto y coma con moderación.** La mayoría de los `;` se leen mejor como dos frases, o con una
+  coma o un paréntesis. Reservar el `;` para separar elementos de una lista que ya llevan comas
+  dentro.
+- **Solo caracteres del teclado.** Comillas rectas en vez de tipográficas, tres puntos en vez del
+  carácter único de puntos suspensivos, sin símbolos especiales.
+- **Frases más cortas.** Si una frase encadena varias subordinadas con comas y rayas, conviene
+  partirla.
+
+Aplica a lo que escribo en los `.md` de la memoria y en las respuestas. Los `.md` ya existentes se
+limpian a medida que se tocan.
