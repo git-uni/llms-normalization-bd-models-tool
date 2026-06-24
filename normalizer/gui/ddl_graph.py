@@ -15,10 +15,16 @@ import os
 import platform
 import re
 import shutil
+import subprocess
 from collections import Counter
 from pathlib import Path
 
 import graphviz
+
+# Tiempo máximo del render de Graphviz. Un layout patológico (grafos grandes
+# tipo Habitica) podía colgar el proceso indefinidamente; al expirar, la GUI
+# muestra el mensaje accionable (mismo camino que cuando falta el binario).
+_RENDER_TIMEOUT_S = 30
 
 _CREATE_RE = re.compile(
     r"CREATE\s+TABLE\s+(\w+)\s*\((.*?)\)\s*;",
@@ -123,6 +129,10 @@ def _pick_layout(
     max_incoming = max(
         Counter(to_t for _, _, to_t, _ in fks).values(), default=0
     )
+    # `size`+`dpi` acotan el PNG resultante (Graphviz solo *reduce* el dibujo si
+    # excede `size`): 40x40 a 100 dpi => ~4000 px máx por lado. Sin esta cota,
+    # un esquema grande generaba un PNG enorme que desbordaba la memoria del
+    # PhotoImage y podía chocar con el límite anti-bomba de PIL.
     if max_incoming > 10 or n_tables > 20:
         return "sfdp", {
             "overlap": "prism",
@@ -131,6 +141,8 @@ def _pick_layout(
             "splines": "spline",
             "bgcolor": "transparent",
             "pad": "0.4",
+            "size": "40,40",
+            "dpi": "100",
         }
     return "dot", {
         "rankdir": "LR",
@@ -140,6 +152,8 @@ def _pick_layout(
         "ranksep": "0.7",
         "bgcolor": "transparent",
         "pad": "0.4",
+        "size": "40,40",
+        "dpi": "100",
     }
 
 
@@ -230,18 +244,33 @@ def _ensure_graphviz_in_path() -> bool:
 
 
 def render_to_png(ddl: str, out_path_no_ext: Path) -> Path | None:
-    """Renderiza el ER a PNG. Devuelve la ruta o None si Graphviz no está.
+    """Renderiza el ER a PNG. Devuelve la ruta o None.
 
-    `out_path_no_ext` se pasa sin la extensión `.png` — `graphviz` la añade.
+    Devuelve None si Graphviz no está, si el render excede el timeout o si
+    falla por cualquier motivo; la GUI ya trata None mostrando el mensaje
+    accionable. `out_path_no_ext` se pasa sin la extensión `.png`; aquí se añade.
+
+    Se invoca el binario del engine con `subprocess.run(..., timeout=...)` en
+    vez de `graphviz.Source(...).render()` porque la lib no expone timeout y un
+    layout patológico podía colgar el proceso. El DOT se pasa por stdin, así que
+    no se escribe ningún fichero `.gv` intermedio.
     """
     dot, engine = build_dot(ddl)
     _ensure_graphviz_in_path()
+    engine_bin = shutil.which(engine)
+    if engine_bin is None:
+        return None
+    png_path = out_path_no_ext.with_suffix(".png")
     try:
-        result = graphviz.Source(dot, engine=engine).render(
-            filename=str(out_path_no_ext), format="png", cleanup=True
+        png_path.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            [engine_bin, "-Tpng", "-o", str(png_path)],
+            input=dot.encode("utf-8"),
+            capture_output=True,
+            timeout=_RENDER_TIMEOUT_S,
+            check=True,
         )
-        return Path(result)
-    except graphviz.ExecutableNotFound:
-        return None
     except Exception:
+        # TimeoutExpired, CalledProcessError, OSError, etc.: degradar a None.
         return None
+    return png_path if png_path.exists() else None

@@ -13,6 +13,7 @@ import os
 import platform
 import shutil
 import subprocess
+import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, ttk
@@ -45,6 +46,13 @@ class ResultScreen(ctk.CTkFrame):
         # caros — sobre el ER de Habitica (2896x2578 px) el resize LANCZOS
         # tardaba 2s+ por iteración, ahora usamos BILINEAR + debounce.
         self._er_redraw_job: str | None = None
+        # Estado del render del ER en segundo plano (ver _render_er_into):
+        # render_to_png invoca a Graphviz, que sobre esquemas grandes tarda y
+        # congelaría la UI si corriera en el hilo de la interfaz.
+        self._er_placeholder: ctk.CTkLabel | None = None
+        self._er_render_token = 0       # generación: solo pinta el último render
+        self._er_render_png: Path | None = None
+        self._er_render_busy = False
 
         self._build()
 
@@ -163,10 +171,64 @@ class ResultScreen(ctk.CTkFrame):
             ).pack(expand=True)
             return
 
+        # Placeholder inmediato: la pantalla de resultado aparece al instante y
+        # el diagrama se genera en segundo plano. Así un esquema grande no
+        # congela la transición a la pantalla mientras Graphviz hace el layout.
+        self._er_placeholder = ctk.CTkLabel(
+            parent,
+            text=(
+                "Generando diagrama ER...\n"
+                "(los esquemas grandes pueden tardar)"
+            ),
+            text_color="gray",
+            justify="center",
+        )
+        self._er_placeholder.pack(expand=True)
+
         ddl = ddl_path.read_text(encoding="utf-8")
         assert self.out_dir is not None
         out_base = self.out_dir / "_er_diagram"
-        png = render_to_png(ddl, out_base)
+
+        # Token de generación: si se relanza el render (p. ej. "Reintentar"),
+        # solo el pintado del último es válido.
+        self._er_render_token += 1
+        token = self._er_render_token
+        self._er_render_png = None
+        self._er_render_busy = True
+
+        def _work() -> None:
+            png = render_to_png(ddl, out_base)
+            # El hilo no toca widgets (Tkinter no es thread-safe): solo deja el
+            # resultado. El pintado lo hace _poll_er_render en el hilo de UI.
+            if token == self._er_render_token:
+                self._er_render_png = png
+                self._er_render_busy = False
+
+        threading.Thread(target=_work, daemon=True).start()
+        self.after(100, lambda: self._poll_er_render(parent, token))
+
+    def _poll_er_render(self, parent: ctk.CTkFrame, token: int) -> None:
+        # Espera (en el hilo de UI) a que termine el render en segundo plano y
+        # entonces pinta el visor o el mensaje de fallo.
+        if token != self._er_render_token:
+            return  # un render posterior tomó el relevo
+        try:
+            if not parent.winfo_exists():
+                return  # el usuario cambió de pantalla antes de terminar
+        except Exception:
+            return
+        if self._er_render_busy:
+            self.after(100, lambda: self._poll_er_render(parent, token))
+            return
+
+        if self._er_placeholder is not None:
+            try:
+                self._er_placeholder.destroy()
+            except Exception:
+                pass
+            self._er_placeholder = None
+
+        png = self._er_render_png
         if png is None or not png.exists():
             self._build_graphviz_missing(parent)
             return
@@ -382,9 +444,17 @@ class ResultScreen(ctk.CTkFrame):
         ctk.CTkButton(
             bar,
             text="↻ Nueva ejecución",
-            command=self.app.show_config,
+            command=self._new_run,
             width=160,
         ).pack(side="right")
+
+    def _new_run(self) -> None:
+        # Resetea out_dir para que la próxima corrida use un out-gui-<ts>/ fresco
+        # en vez de reusar (y sobrescribir) el de esta. Evita además que, si esta
+        # corrida se canceló y su hilo abandonado sigue escribiendo, la nueva
+        # escriba sobre los mismos artefactos.
+        self.gui_state.out_dir = None
+        self.app.show_config()
 
     # ------------------------------------------------------------------
 

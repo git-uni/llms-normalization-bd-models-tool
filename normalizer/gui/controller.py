@@ -24,7 +24,7 @@ from queue import Empty, Queue
 
 from dotenv import set_key
 
-from normalizer._log import register_callback, reset_clock, unregister_callback
+from normalizer._log import log, register_callback, reset_clock, unregister_callback
 from normalizer.discovery import discover_from_url
 from normalizer.gui.state import GuiState
 from normalizer.pipeline import PipelineCancelled, run_pipeline
@@ -93,6 +93,10 @@ class GuiController:
         self._thread: threading.Thread | None = None
         self._last_phase = ""
         self._abandoned = False
+        # Identidad del hilo trabajador de esta corrida. `_on_log_line` la usa
+        # para descartar líneas que emita un hilo abandonado de otra corrida
+        # (tras Cancelar, ese hilo sigue vivo y sigue llamando a `log()`).
+        self._worker_ident: int | None = None
 
     def start(self, state: GuiState) -> None:
         """Lanza el núcleo en un hilo trabajador. No bloquea."""
@@ -149,6 +153,12 @@ class GuiController:
         # ningún widget se toca aquí (Tkinter no es thread-safe).
         if self._abandoned:
             return
+        # `log()` difunde a todos los callbacks registrados. Una corrida nueva
+        # registra su callback mientras el hilo abandonado de la anterior sigue
+        # vivo emitiendo líneas; las descartamos comparando identidades de hilo
+        # para que no se cuelen en el log de la corrida nueva.
+        if threading.get_ident() != self._worker_ident:
+            return
         self._update_phase_from_line(line)
         self._queue.put(LogLineEvent(line))
 
@@ -167,6 +177,9 @@ class GuiController:
             self._last_phase = "DDL"
 
     def _run(self, state: GuiState) -> None:
+        # Se fija aquí, en el propio hilo trabajador y antes de cualquier
+        # `log()`, para que `_on_log_line` reconozca nuestras líneas.
+        self._worker_ident = threading.get_ident()
         assert state.out_dir is not None, "out_dir debe estar resuelto"
         out_dir = state.out_dir
         try:
@@ -181,6 +194,13 @@ class GuiController:
                     model=state.agent_model or None,
                     for_agent=True,
                 )
+                # Paridad con la CLI (cli.py): estas dos marcas hacen que
+                # RunScreen marque la fase Descubrimiento como activa (fija
+                # started_at) al empezar y como completada (fija ended_at) al
+                # terminar. Sin ellas la fase nunca arranca su reloj y su
+                # duración sale 00:00. La de "Evidencia en" tras el retorno
+                # cubre también el caso de presupuesto agotado (sin "Agente done").
+                log(f"Descubriendo evidencia desde {state.input_value}...")
                 pipeline_input = discover_from_url(
                     url=state.input_value,
                     agent_provider=agent_provider,
@@ -189,6 +209,10 @@ class GuiController:
                     max_files=state.max_files,
                     max_tree_entries=state.max_tree_entries,
                     cancel_event=self._cancel,
+                )
+                log(
+                    f"Evidencia en {pipeline_input} "
+                    f"(traza en {out_dir}/00_discovery/discovery.md)"
                 )
             else:
                 pipeline_input = Path(state.input_value)

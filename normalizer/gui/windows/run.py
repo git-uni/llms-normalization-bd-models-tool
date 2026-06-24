@@ -102,6 +102,10 @@ class RunScreen(ctk.CTkFrame):
         # frame contenedor (para cambiar fg_color cuando se activa).
         self._phase_widgets: dict[str, dict] = {}
         self._cancelling = False  # flag para evitar updates concurrentes raros
+        # Evita una doble transición a la pantalla de resultado: _on_cancel
+        # llama a _finish_transition directo y _poll programa otra con after();
+        # los jobs after de Tk sobreviven a la destrucción del widget.
+        self._finished = False
 
         self._build()
         self.controller = GuiController()
@@ -523,4 +527,7 @@ class RunScreen(ctk.CTkFrame):
         self._finish_transition()
 
     def _finish_transition(self) -> None:
+        if self._finished:
+            return
+        self._finished = True
         self.app.show_result()
