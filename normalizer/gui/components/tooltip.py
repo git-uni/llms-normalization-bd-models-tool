@@ -45,11 +45,11 @@ class _Tooltip:
     def _show(self) -> None:
         if self._tip is not None or not self.text:
             return
-        x = self.widget.winfo_rootx() + 12
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 6
         self._tip = tk.Toplevel(self.widget)
         self._tip.wm_overrideredirect(True)
-        self._tip.wm_geometry(f"+{x}+{y}")
+        # Se posiciona tras medir el tamaño, así que se oculta hasta entonces
+        # para evitar un parpadeo en la esquina por defecto (0,0).
+        self._tip.withdraw()
         try:
             self._tip.attributes("-topmost", True)
         except Exception:
@@ -67,6 +67,26 @@ class _Tooltip:
             pady=6,
             font=("Segoe UI", 10),
         ).pack()
+        self._tip.update_idletasks()
+        tw = self._tip.winfo_reqwidth()
+        th = self._tip.winfo_reqheight()
+        wx = self.widget.winfo_rootx()
+        wy = self.widget.winfo_rooty()
+        wh = self.widget.winfo_height()
+        sw = self.widget.winfo_screenwidth()
+        sh = self.widget.winfo_screenheight()
+        # Vertical: debajo por defecto; si no cabe (widget pegado al borde
+        # inferior, p. ej. un botón de la barra inferior), encima, donde sí se ve.
+        y = wy + wh + 6
+        if y + th > sh:
+            y = wy - th - 6
+        # Horizontal: alineado a la izquierda del widget, sin salirse por la derecha.
+        x = wx + 12
+        if x + tw > sw:
+            x = sw - tw - 8
+        x = max(8, x)
+        self._tip.wm_geometry(f"+{x}+{y}")
+        self._tip.deiconify()
 
     def _hide(self, _event: object = None) -> None:
         self._cancel()
