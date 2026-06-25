@@ -38,7 +38,9 @@ _MAX_ER_PIXELS = 20_000_000
 
 class ResultScreen(ctk.CTkFrame):
     def __init__(self, app: ctk.CTk) -> None:
-        super().__init__(app)
+        # transparent para heredar el azul del root y no mostrar el gris neutro
+        # por defecto de CTk en los huecos entre tarjetas (ver ConfigScreen).
+        super().__init__(app, fg_color="transparent")
         self.app = app
         self.gui_state: GuiState = app.gui_state
         self.out_dir: Path | None = self.gui_state.out_dir
@@ -69,8 +71,10 @@ class ResultScreen(ctk.CTkFrame):
         # Banner de estado
         self._build_banner()
 
-        # Tabview con artefactos
-        self.tabs = ctk.CTkTabview(self)
+        # Tabview con artefactos. fg_color al azul del root: por defecto el
+        # CTkTabview usa el gris neutro de CTk, que desentona de la paleta y se
+        # ve en la banda de pestañas/zoom y en los estados sin diagrama.
+        self.tabs = ctk.CTkTabview(self, fg_color=("#eaf0f8", "#101418"))
         self.tabs.pack(fill="both", expand=True, pady=(12, 12))
 
         if self.out_dir is None or not self.out_dir.exists():

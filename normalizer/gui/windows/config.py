@@ -43,7 +43,10 @@ def _is_url(s: str) -> bool:
 
 class ConfigScreen(ctk.CTkFrame):
     def __init__(self, app: ctk.CTk) -> None:
-        super().__init__(app)
+        # transparent para heredar el azul del root: sin esto, el marco usa el
+        # gris neutro por defecto de CTk (#dbdbdb), el único elemento sin azul,
+        # que desentona con la paleta tonal de la herramienta.
+        super().__init__(app, fg_color="transparent")
         self.app = app
         self.gui_state: GuiState = app.gui_state
 

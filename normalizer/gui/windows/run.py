@@ -84,7 +84,9 @@ def _format_mmss(seconds: float) -> str:
 
 class RunScreen(ctk.CTkFrame):
     def __init__(self, app: ctk.CTk) -> None:
-        super().__init__(app)
+        # transparent para heredar el azul del root y no mostrar el gris neutro
+        # por defecto de CTk en los huecos entre tarjetas (ver ConfigScreen).
+        super().__init__(app, fg_color="transparent")
         self.app = app
         self.gui_state: GuiState = app.gui_state
         self.gui_state.reset_run()
@@ -242,7 +244,10 @@ class RunScreen(ctk.CTkFrame):
                 font=ctk.CTkFont(size=16, weight="bold"), anchor="w",
             ).pack(side="left")
 
-            self.agent_scroll = ctk.CTkScrollableFrame(agent_inner, height=170)
+            self.agent_scroll = ctk.CTkScrollableFrame(
+                agent_inner, height=170,
+                fg_color=("#e7eef8", "#181c20"),  # surface-container-low (no gris CTk)
+            )
             self.agent_scroll.pack(fill="x")
             head = ctk.CTkFrame(self.agent_scroll, fg_color="transparent")
             head.pack(fill="x", pady=(0, 4))
