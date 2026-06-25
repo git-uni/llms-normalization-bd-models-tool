@@ -8,10 +8,31 @@ empacando el siguiente; el estado compartido vive en `app.gui_state` (un
 método `state()` para iconificar la ventana.
 """
 
+import platform
+import tkinter.font as tkfont
+
 import customtkinter as ctk
 from dotenv import load_dotenv
 
 from normalizer.gui.state import GuiState
+
+# Fuentes de UI preferidas por sistema operativo. El default de CustomTkinter es
+# "Roboto", que no suele estar instalada: Tk cae entonces a una fuente genérica
+# que da aspecto anticuado. Elegimos la primera nativa disponible.
+_UI_FONT_PREFS = {
+    "Windows": ["Segoe UI Variable Text", "Segoe UI", "Calibri"],
+    "Darwin": ["SF Pro Text", ".AppleSystemUIFont", "Helvetica Neue", "Helvetica"],
+}
+_UI_FONT_FALLBACK = ["Inter", "Ubuntu", "Cantarell", "Noto Sans", "DejaVu Sans"]
+
+
+def _pick_ui_font(root: ctk.CTk) -> str | None:
+    """Primera familia de UI nativa disponible para el SO, o None."""
+    available = set(tkfont.families(root))
+    for fam in _UI_FONT_PREFS.get(platform.system(), []) + _UI_FONT_FALLBACK:
+        if fam in available:
+            return fam
+    return None
 
 
 class NormalizerApp(ctk.CTk):
@@ -23,6 +44,12 @@ class NormalizerApp(ctk.CTk):
         ctk.set_appearance_mode("system")
         ctk.set_default_color_theme("blue")
         super().__init__(fg_color=("#eaf0f8", "#101418"))
+        # Fija la fuente de UI a la nativa del SO (Segoe UI en Windows). Debe ir
+        # tras crear la ventana (para consultar las familias) y antes de construir
+        # las pantallas: los CTkFont sin family heredan esta del tema.
+        ui_font = _pick_ui_font(self)
+        if ui_font:
+            ctk.ThemeManager.theme["CTkFont"]["family"] = ui_font
         self.title("NormalizerApp")
         self.geometry("1100x780")
         self.minsize(900, 640)
