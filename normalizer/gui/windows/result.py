@@ -26,6 +26,13 @@ from normalizer.gui.components.sql_view import SqlView
 from normalizer.gui.ddl_graph import render_to_png
 from normalizer.gui.state import GuiState
 
+# Tope de píxeles del bitmap mostrado del ER. El zoom escala la imagen y crea
+# un ImageTk.PhotoImage; sobre un ER grande (Habitica), un zoom alto generaba
+# un bitmap enorme (p. ej. 5x sobre 3505x2961 => ~259 MP) que agota memoria y
+# crashea Tcl. Limitamos el área a este presupuesto; para ver el diagrama a
+# tamaño completo está el botón "Abrir en visor externo".
+_MAX_ER_PIXELS = 32_000_000
+
 
 class ResultScreen(ctk.CTkFrame):
     def __init__(self, app: ctk.CTk) -> None:
@@ -320,6 +327,12 @@ class ResultScreen(ctk.CTkFrame):
             return
         w, h = self._er_pil_image.size
         zw, zh = max(1, int(w * self._er_zoom)), max(1, int(h * self._er_zoom))
+        # Salvaguarda dura del tamaño del bitmap: aunque _set_er_zoom ya acota
+        # el zoom, nunca construimos un PhotoImage que supere _MAX_ER_PIXELS
+        # (evita el OOM/crash de Tcl con diagramas grandes).
+        if zw * zh > _MAX_ER_PIXELS:
+            sc = (_MAX_ER_PIXELS / (zw * zh)) ** 0.5
+            zw, zh = max(1, int(zw * sc)), max(1, int(zh * sc))
         # BILINEAR es ~10x más rápido que LANCZOS y la diferencia es
         # imperceptible para un diagrama ER con líneas y texto. LANCZOS
         # sobre 2896×2578 (Habitica) tardaba 2-3 s por resize.
@@ -336,7 +349,15 @@ class ResultScreen(ctk.CTkFrame):
         self._set_er_zoom(self._er_zoom * factor)
 
     def _set_er_zoom(self, zoom: float) -> None:
-        self._er_zoom = max(0.1, min(5.0, zoom))
+        # Tope de zoom según el tamaño de la imagen: limitamos el factor para
+        # que el bitmap resultante no supere _MAX_ER_PIXELS. Para diagramas
+        # pequeños hi se queda en 5.0; solo los grandes (Habitica) se acotan.
+        hi = 5.0
+        if self._er_pil_image is not None:
+            w, h = self._er_pil_image.size
+            if w and h:
+                hi = max(0.1, min(5.0, (_MAX_ER_PIXELS / (w * h)) ** 0.5))
+        self._er_zoom = max(0.1, min(hi, zoom))
         # La etiqueta de zoom se actualiza inmediatamente para que el
         # usuario reciba feedback aunque el redraw esté debounced.
         if self._er_zoom_label is not None:
