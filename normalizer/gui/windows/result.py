@@ -29,9 +29,11 @@ from normalizer.gui.state import GuiState
 # Tope de píxeles del bitmap mostrado del ER. El zoom escala la imagen y crea
 # un ImageTk.PhotoImage; sobre un ER grande (Habitica), un zoom alto generaba
 # un bitmap enorme (p. ej. 5x sobre 3505x2961 => ~259 MP) que agota memoria y
-# crashea Tcl. Limitamos el área a este presupuesto; para ver el diagrama a
-# tamaño completo está el botón "Abrir en visor externo".
-_MAX_ER_PIXELS = 32_000_000
+# crashea Tcl. El coste de cada redraw (resize + PhotoImage) crece con el área,
+# así que este tope marca también la agilidad del zoom. 20 MP es el equilibrio:
+# redraw ~300 ms en el ER más grande, sin crash. Para ver el diagrama a tamaño
+# completo está el botón "Abrir en visor externo".
+_MAX_ER_PIXELS = 20_000_000
 
 
 class ResultScreen(ctk.CTkFrame):
@@ -241,7 +243,7 @@ class ResultScreen(ctk.CTkFrame):
             return
 
         try:
-            self._er_pil_image = Image.open(png)
+            self._er_pil_image = self._load_er_rgb(png)
             self._er_png_path = png
             self._er_zoom = 1.0
             self._build_er_viewer(parent)
@@ -251,6 +253,25 @@ class ResultScreen(ctk.CTkFrame):
                 text=f"No se pudo cargar la imagen ER:\n{e}",
                 text_color=("#ba1a1a", "#ffb4ab"),  # error M3
             ).pack(expand=True)
+
+    def _load_er_rgb(self, png: Path) -> Image.Image:
+        # ImageTk.PhotoImage es ~500x mas lento con imagenes RGBA que RGB (a
+        # 10 MP, ~24 s frente a ~30 ms). El PNG de Graphviz lleva fondo
+        # transparente (RGBA), lo que congelaba la UI y, al hacer zoom,
+        # disparaba el consumo de memoria hasta crashear. Lo componemos sobre el
+        # color del lienzo para trabajar en RGB en todo el visor. El PNG original
+        # (con transparencia) se conserva en disco para "Abrir en visor externo".
+        raw = Image.open(png)
+        raw.load()
+        bg_hex = "#101418" if ctk.get_appearance_mode().lower() == "dark" else "#eaf0f8"
+        if raw.mode in ("RGBA", "LA", "PA") or (
+            raw.mode == "P" and "transparency" in raw.info
+        ):
+            raw = raw.convert("RGBA")
+            flat = Image.new("RGB", raw.size, bg_hex)
+            flat.paste(raw, mask=raw.split()[-1])
+            return flat
+        return raw.convert("RGB")
 
     def _build_er_viewer(self, parent: ctk.CTkFrame) -> None:
         # Toolbar de zoom.
