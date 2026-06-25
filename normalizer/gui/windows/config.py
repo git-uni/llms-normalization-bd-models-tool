@@ -59,31 +59,19 @@ class ConfigScreen(ctk.CTkFrame):
     # ------------------------------------------------------------------
 
     def _build(self) -> None:
+        # Cabecera: título y subtítulo. La acción "abrir ejecución anterior" va
+        # en la barra inferior, emparejada con "Ejecutar" (primaria/secundaria).
         ctk.CTkLabel(
             self,
             text="Configuración",
-            font=ctk.CTkFont(size=24, weight="bold"),
-        ).pack(anchor="w", pady=(0, 4))
+            font=ctk.CTkFont(size=26, weight="bold"),
+        ).pack(anchor="w", pady=(0, 2))
         ctk.CTkLabel(
             self,
             text="Define la entrada, el proveedor de LLM y las credenciales.",
-            text_color="gray",
-        ).pack(anchor="w", pady=(0, 8))
-
-        # Acceso rápido a resultados de una ejecucion previa (sin re-ejecutar).
-        quick = ctk.CTkFrame(self, fg_color="transparent")
-        quick.pack(side="top")
-        ctk.CTkButton(
-            quick,
-            text="Abrir resultados existentes...",
-            command=self._open_existing,
-            fg_color="transparent",
-            border_width=1,
-            text_color=("gray20", "gray80"),
-            hover_color=("steelblue2"),
-            width=220,
-            height=26,
-        ).pack(side="left", padx=8, pady=(0, 12))
+            text_color=("#5a6680", "#9aa3b8"),  # on-surface-variant
+            font=ctk.CTkFont(size=13),
+        ).pack(anchor="w", pady=(0, 10))
 
         # --- Barra inferior fija: el botón "Ejecutar" siempre visible -----
         # Se crea y empaqueta ANTES del área scrollable para que ésta (con
@@ -97,10 +85,38 @@ class ConfigScreen(ctk.CTkFrame):
             anchor="w",
         )
         self.error_label.pack(side="left", fill="x", expand=True)
+        # Par de acciones a la derecha. Primaria (Ejecutar): azul pleno, más
+        # grande y en negrita, pegada al borde. Secundaria (abrir ejecución
+        # anterior): relleno tonal (primary-container), destacable pero sin
+        # competir con la primaria. Se empaqueta la primaria primero para que
+        # quede más a la derecha.
         self.run_btn = ctk.CTkButton(
-            bottom, text="Ejecutar →", command=self._on_run, width=140
+            bottom, text="Ejecutar →", command=self._on_run,
+            width=170, height=46, corner_radius=10,
+            font=ctk.CTkFont(size=15, weight="bold"),
         )
         self.run_btn.pack(side="right")
+        open_btn = ctk.CTkButton(
+            bottom,
+            text="↺   Abrir ejecución anterior",
+            command=self._open_existing,
+            fg_color=("#d6e4f3", "#1f3a52"),       # primary-container (tonal)
+            hover_color=("#c4d6ea", "#264a68"),
+            text_color=("#06223b", "#e3edf9"),     # on-primary-container (navy oscuro = más contraste)
+            corner_radius=10,
+            width=226,
+            height=44,
+            font=ctk.CTkFont(size=14, weight="bold"),
+        )
+        open_btn.pack(side="right", padx=(0, 12))
+        attach_tooltip(
+            open_btn,
+            "Abre el resultado de una ejecución anterior sin volver a ejecutar el "
+            "pipeline ni gastar cuota del proveedor. Selecciona su directorio de "
+            "salida 'out-...', que debe contener al menos el DDL (04_ddl.sql). Útil "
+            "para revisar el diagrama ER o el DDL y exportarlos a ZIP.",
+            wraplength=340,
+        )
 
         # --- Contenido scrollable: los bloques del formulario -------------
         # Scrollable para que el formulario completo (cuatro bloques en modo
