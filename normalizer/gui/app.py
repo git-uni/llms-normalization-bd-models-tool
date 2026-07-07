@@ -54,7 +54,7 @@ class NormalizerApp(ctk.CTk):
         self.geometry("1100x780")
         self.minsize(900, 640)
 
-        # No usar `state` — Tk hereda un método `state()` para iconificar.
+        # No usar `state`: Tk hereda un método `state()` para iconificar.
         self.gui_state = GuiState()
         self._current: ctk.CTkFrame | None = None
         self.show_config()

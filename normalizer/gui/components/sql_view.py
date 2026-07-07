@@ -2,7 +2,7 @@
 
 Usa `pygments` para tokenizar el código. Cada token se inserta con un *tag*
 de Tkinter configurado con color e itálica/bold. No depende de ningún tema
-de Pygments — solo del árbol de tipos de tokens.
+de Pygments, solo del árbol de tipos de tokens.
 """
 
 import customtkinter as ctk

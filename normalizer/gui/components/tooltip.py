@@ -3,7 +3,7 @@
 CustomTkinter no incluye un *tooltip* nativo, así que se implementa uno mínimo:
 `attach_tooltip(widget, text)` muestra un recuadro flotante con `text` cuando el
 cursor se posa sobre `widget` (tras un breve retardo) y lo oculta al salir o al
-pulsar. Se usa un `tk.Label` plano dentro de un `Toplevel` sin bordes — basta
+pulsar. Se usa un `tk.Label` plano dentro de un `Toplevel` sin bordes: basta
 para un texto de ayuda y evita complicaciones con las tuplas de color de CTk.
 """
 

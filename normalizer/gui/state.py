@@ -2,7 +2,7 @@
 
 Una instancia única vive en `NormalizerApp.gui_state` y se pasa entre
 pantallas. Solo contiene tipos elementales (cadenas, rutas, enumeraciones)
-y referencias a artefactos en disco — la capa de presentación no manipula
+y referencias a artefactos en disco, la capa de presentación no manipula
 objetos del subsistema de proveedor ni del agente (decisión arquitectónica
 §5.2.7 de la memoria).
 """

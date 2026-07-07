@@ -42,14 +42,14 @@ class Message:
       primer mensaje con URL + árbol del repo).
     - `role="assistant"`: turno del modelo. Puede traer `content` de texto,
       `tool_calls`, o ambos. Groq lo envía tal cual; Google lo emite como
-      `role="model"` en su API — la traducción la hace `_to_gemini_contents`.
+      `role="model"` en su API, la traducción la hace `_to_gemini_contents`.
     - `role="tool"`: resultado de ejecutar una tool, reinyectado para que el
       modelo lo vea en el siguiente turno. Groq tiene rol `tool` nativo y
       empareja con la llamada por `tool_call_id`. Gemini no tiene rol
       `tool`: el provider envuelve el resultado en un `role="user"` con un
       `Part.from_function_response`, y empareja por nombre de función
       (`tool_name`). Por eso conviene rellenar ambos campos al construir
-      el mensaje — uno u otro se ignora según el provider destino.
+      el mensaje, uno u otro se ignora según el provider destino.
 
     `raw` guarda el objeto original del SDK del proveedor para reinyectarlo
     en turnos siguientes sin reconstruirlo. Hoy solo lo usa Google con los

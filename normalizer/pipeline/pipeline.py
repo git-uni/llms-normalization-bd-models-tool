@@ -65,8 +65,8 @@ def run_pipeline(
     fase escribe su artefacto en `out_dir` antes de continuar, de modo que
     los resultados parciales son inspeccionables si la corrida se interrumpe.
 
-    `cancel_event` (opcional) permite a un caller externo —típicamente la
-    GUI— cancelar la corrida entre fases. Si está señalizado, se levanta
+    `cancel_event` (opcional) permite a un caller externo (típicamente la
+    GUI) cancelar la corrida entre fases. Si está señalizado, se levanta
     `PipelineCancelled` y los artefactos ya escritos se preservan.
     """
     _check_cancel(cancel_event)

@@ -1,4 +1,4 @@
-"""Pantalla 2 — Ejecución y progreso (v2).
+"""Pantalla 2: Ejecución y progreso (v2).
 
 Layout con el header fijo arriba y todo el contenido variable en un único
 plano de scroll debajo, para no mezclar varios niveles de scroll:
@@ -404,7 +404,7 @@ class RunScreen(ctk.CTkFrame):
 
     def _append_agent_row(self, iter_n: int, calls: str) -> None:
         if len(calls) > 200:
-            calls = calls[:197] + "…"
+            calls = calls[:197] + "..."
         self.gui_state.agent_turns.append((iter_n, calls))
         row = ctk.CTkFrame(self.agent_scroll, fg_color="transparent")
         row.pack(fill="x", padx=10, pady=1)
@@ -514,7 +514,7 @@ class RunScreen(ctk.CTkFrame):
 
     def _tick(self) -> None:
         # El reloj global vive en el footer del bloque pipeline (`X
-        # transcurridos`), no en el header — evita tener varios contadores
+        # transcurridos`), no en el header, evita tener varios contadores
         # idénticos compitiendo por la atención.
         try:
             if not self.winfo_exists():

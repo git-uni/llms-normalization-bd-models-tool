@@ -89,12 +89,12 @@ def discover_from_url(
         messages.append(response.assistant_message)
 
         if not response.tool_calls:
-            # El modelo respondió sin tools — sin `done` no hay forma de
+            # El modelo respondió sin tools, sin `done` no hay forma de
             # cerrar limpio. Lo forzamos como terminación con aviso.
             state.turns.append(
                 TurnTrace(iter=iters_used, calls=["(respuesta sin tool_calls)"])
             )
-            log(f"[iter {iters_used:02d}] -> (sin tool_calls — cerrando)")
+            log(f"[iter {iters_used:02d}] -> (sin tool_calls, cerrando)")
             state.summary = (
                 (state.summary or "")
                 + "\n\n[WARN: el agente respondió sin llamar a tools; "
@@ -117,7 +117,7 @@ def discover_from_url(
             # Chequeo dentro del bucle de tools: si el agente batchea N
             # `select_evidence`/`read_file`/etc. en una sola respuesta, sin
             # esto el cancel esperaría a despachar las N. Con esto, se
-            # atiende entre tool y tool — usualmente <1s.
+            # atiende entre tool y tool (usualmente <1s).
             if cancel_event is not None and cancel_event.is_set():
                 cancelled = True
                 log("Agente cancelado por el usuario (mid-batch).")
@@ -142,7 +142,7 @@ def discover_from_url(
 
         if state.is_done:
             log(
-                f"Agente done — {len(state.selected)} archivos seleccionados "
+                f"Agente done: {len(state.selected)} archivos seleccionados "
                 f"en {iters_used} iter."
             )
             break
@@ -173,7 +173,7 @@ def _format_call(call: ToolCall) -> str:
         path = args.get("path", "")
         reason = args.get("reason", "")
         if len(reason) > 40:
-            reason = reason[:37] + "…"
+            reason = reason[:37] + "..."
         return f"select_evidence({path}, reason={reason!r})"
     if call.name == "grep":
         pattern = args.get("pattern", "")
@@ -181,7 +181,7 @@ def _format_call(call: ToolCall) -> str:
         glob_part = f", glob={glob!r}" if glob else ""
         return f"grep({pattern!r}{glob_part})"
     if call.name == "done":
-        return "done(summary=…)"
+        return "done(summary=...)"
     if "path" in args:
         return f"{call.name}({args['path']})"
     return f"{call.name}({args})"
@@ -243,7 +243,7 @@ def _write_discovery_md(
         ]
     )
     if not state.turns:
-        lines.append("| — | (sin turnos registrados) |")
+        lines.append("| - | (sin turnos registrados) |")
     else:
         for turn in state.turns:
             calls_md = "<br>".join(f"`{c}`" for c in turn.calls)

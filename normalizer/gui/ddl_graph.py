@@ -1,14 +1,14 @@
 """Generador de diagrama ER a partir del DDL Oracle producido por el pipeline.
 
 Parsea `04_ddl.sql` con un parser por regex deliberadamente sencillo (el DDL
-que el pipeline emite tiene una estructura predecible: `CREATE TABLE name (…)`
-con columnas y `CONSTRAINT … FOREIGN KEY (col) REFERENCES other(col)`), monta
+que el pipeline emite tiene una estructura predecible: `CREATE TABLE name (...)`
+con columnas y `CONSTRAINT ... FOREIGN KEY (col) REFERENCES other(col)`), monta
 un grafo Graphviz con un nodo por tabla y una arista por FK, y delega el
 render al binario Graphviz vía `graphviz` lib.
 
 Si Graphviz no está en el PATH del sistema, `render_to_png` devuelve `None`
-y la GUI muestra un mensaje accionable con instrucciones de instalación —
-las demás pestañas del resultado siguen funcionando.
+y la GUI muestra un mensaje accionable con instrucciones de instalación.
+Las demás pestañas del resultado siguen funcionando.
 """
 
 import os
@@ -121,7 +121,7 @@ def _pick_layout(
     típicamente `Users` en aplicaciones reales) el engine jerárquico `dot`
     apila todas las aristas en paralelo y produce un caos ilegible. En esos
     casos `sfdp` (force-directed) coloca el hub en el centro y distribuye
-    los demás nodos alrededor — mucho más legible.
+    los demás nodos alrededor, mucho más legible.
 
     Para grafos modestos sin hub, `dot` con curvas suaves y `concentrate`
     es lo más limpio y predecible.
@@ -216,7 +216,7 @@ def _ensure_graphviz_in_path() -> bool:
     """Localiza el binario `dot` y lo añade al PATH del proceso si hace falta.
 
     En Windows, `winget install Graphviz.Graphviz` actualiza el PATH del
-    sistema pero el proceso ya corriendo conserva el PATH antiguo — el
+    sistema pero el proceso ya corriendo conserva el PATH antiguo, el
     usuario tiene que reabrir la terminal o sufrirá un `ExecutableNotFound`
     pese a tener Graphviz instalado. Aquí miramos rutas estándar y, si el
     binario aparece, lo enganchamos al PATH del proceso sin esperar a un

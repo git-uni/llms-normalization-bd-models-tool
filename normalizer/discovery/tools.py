@@ -32,7 +32,7 @@ class TurnTrace:
     """Registro compacto de las tool_calls que el modelo emitió en un turno.
 
     Sirve para inspeccionar a posteriori si el agente batchea varios calls en
-    una sola petición o va uno a uno — relevante para entender el consumo de
+    una sola petición o va uno a uno, relevante para entender el consumo de
     RPM en repos grandes.
     """
 
@@ -263,7 +263,7 @@ def _do_read_file(
     repo_root: Path, state: DiscoveryState, rel_path: str
 ) -> str:
     # Releer un archivo que ya marcaste como evidencia no aporta nada nuevo
-    # — su contenido ya entra al pipeline — y gasta cuota duplicando los
+    # (su contenido ya entra al pipeline) y gasta cuota duplicando los
     # tokens del archivo en el historial. Cortamos antes de leer del disco.
     if state.already_selected(rel_path):
         return (

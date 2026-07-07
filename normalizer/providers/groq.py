@@ -124,7 +124,7 @@ class GroqProvider:
                     raise
                 delay = _parse_retry_delay(exc) or _FALLBACK_RETRY_DELAY_S
                 log(
-                    f"  429 en groq.{op} — esperando {delay:.0f}s "
+                    f"  429 en groq.{op}, esperando {delay:.0f}s "
                     f"(intento {attempt + 1}/{_MAX_RETRIES})"
                 )
                 time.sleep(delay)

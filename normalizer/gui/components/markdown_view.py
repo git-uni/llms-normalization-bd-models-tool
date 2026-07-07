@@ -1,6 +1,6 @@
 """Visor de Markdown sobre `CTkTextbox` con un parser minimalista.
 
-No es un renderizador HTML — aplica *tags* directamente sobre el texto, lo
+No es un renderizador HTML, aplica *tags* directamente sobre el texto, lo
 que respeta la decisión arquitectónica de "composición sobre CTkTextbox"
 (§3.3.1 de la memoria). Soporta los elementos que el pipeline produce en la
 práctica: encabezados (#, ##, ###), listas (-, *), bloques de código con

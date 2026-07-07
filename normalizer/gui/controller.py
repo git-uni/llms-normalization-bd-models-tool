@@ -123,8 +123,8 @@ class GuiController:
 
         La llamada HTTP al LLM en curso no se puede abortar (los SDKs son
         síncronos y bloqueantes), pero la UI no tiene por qué esperarla:
-        marcamos el controlador como abandonado para que el hilo —cuando
-        termine— no contamine la pantalla siguiente ni futuras corridas,
+        marcamos el controlador como abandonado para que el hilo (cuando
+        termine) no contamine la pantalla siguiente ni futuras corridas,
         y desregistramos el *callback* del log inmediatamente. El hilo
         sigue vivo como `daemon` y muere con el proceso o cuando la
         llamada HTTP termine; los artefactos ya escritos a disco se

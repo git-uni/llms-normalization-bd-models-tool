@@ -1,4 +1,4 @@
-"""Pantalla 3 — Resultado.
+"""Pantalla 3: Resultado.
 
 Banner de estado (OK / cancelado / error), `CTkTabview` con los artefactos
 producidos (diagrama ER + markdown + DDL) y barra de acciones (abrir el
@@ -54,7 +54,7 @@ class ResultScreen(ctk.CTkFrame):
         self._er_zoom: float = 1.0
         self._er_zoom_label: ctk.CTkLabel | None = None
         # Debounce del redraw para que zooms rápidos no encolen N resizes
-        # caros — sobre el ER de Habitica (2896x2578 px) el resize LANCZOS
+        # caros. Sobre el ER de Habitica (2896x2578 px) el resize LANCZOS
         # tardaba 2s+ por iteración, ahora usamos BILINEAR + debounce.
         self._er_redraw_job: str | None = None
         # Estado del render del ER en segundo plano (ver _render_er_into):
@@ -158,7 +158,7 @@ class ResultScreen(ctk.CTkFrame):
                 except ValueError:
                     continue
         
-        # Diagrama ER — pestaña por defecto.
+        # Diagrama ER, pestaña por defecto.
         er_tab = self.tabs.add("Diagrama ER")
         self._build_er_tab(er_tab, ddl_path)
         self.tabs.set("Diagrama ER")
@@ -176,7 +176,7 @@ class ResultScreen(ctk.CTkFrame):
             ctk.CTkLabel(
                 parent,
                 text=(
-                    "Aún no hay DDL — no se puede generar el diagrama.\n"
+                    "Aún no hay DDL. No se puede generar el diagrama.\n"
                     "Revisa las demás pestañas para ver los artefactos disponibles."
                 ),
                 text_color="gray",
@@ -447,7 +447,7 @@ class ResultScreen(ctk.CTkFrame):
             "  • Windows:  winget install Graphviz.Graphviz\n"
             "  • macOS:    brew install graphviz\n"
             "  • Linux:    sudo apt install graphviz  (o equivalente)\n\n"
-            "Si acabas de instalarlo, pulsa Reintentar — la GUI buscará el\n"
+            "Si acabas de instalarlo, pulsa Reintentar y la GUI buscará el\n"
             "binario en las rutas estándar sin necesidad de reiniciar la\n"
             "terminal. Las demás pestañas funcionan ya."
         )

@@ -142,7 +142,7 @@ class GoogleProvider:
                     raise
                 delay = _parse_retry_delay(exc) or _FALLBACK_RETRY_DELAY_S
                 log(
-                    f"  {code} en google.{op} — esperando {delay:.0f}s "
+                    f"  {code} en google.{op}, esperando {delay:.0f}s "
                     f"(intento {attempt + 1}/{_MAX_RETRIES})"
                 )
                 time.sleep(delay)

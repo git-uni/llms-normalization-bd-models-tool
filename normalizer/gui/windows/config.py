@@ -1,4 +1,4 @@
-"""Pantalla 1 — Configuración.
+"""Pantalla 1: Configuración.
 
 Formulario único con tres bloques: entrada (archivo/directorio/URL),
 configuración de LLM (proveedor, modelos, directorio de salida) y
@@ -428,7 +428,7 @@ class ConfigScreen(ctk.CTkFrame):
         """Lista modelos del proveedor o devuelve fallback con mensaje.
 
         Crea un provider temporal (solo para listar; la corrida real construye
-        otro en el controller). Si falla — falta de API key o error de red —
+        otro en el controller). Si falla (falta de API key o error de red)
         devuelve listas vacías y un mensaje para mostrar al usuario.
         """
         env_key = ENV_KEY_BY_PROVIDER.get(provider_name, "")

@@ -9,11 +9,11 @@ pases**. Mejor sobre-incluir que perder una entidad.
 
 Cuenta como evidencia cualquier archivo con alguna de estas cinco
 señales (es **checklist, no menú**: en proyectos sin schemas declarados,
-la evidencia vive en las categorías 2-5 — encontrar la primera no
+la evidencia vive en las categorías 2-5, encontrar la primera no
 termina la búsqueda):
 
 - Schemas explícitos (Mongoose, JSON Schema, Pydantic, dataclasses).
-- Operaciones de BD (`find`, `aggregate`, `$lookup`, `insertOne`, `$set`…).
+- Operaciones de BD (`find`, `aggregate`, `$lookup`, `insertOne`, `$set`...).
 - Ejemplos de documentos (seeds, fixtures, tests).
 - Accesos estructurados a campos (`user.profile.email`, `posts.push({...})`).
 - Comentarios o docs que describan la estructura.
@@ -30,7 +30,7 @@ obligatorias antes de cerrar**:
    .NET driver (`\[BsonElement\]`), Mongoid Ruby (`Mongoid::Document`).
    Si no sabes el stack o quieres cubrir varios, una alternación amplia
    en una sola `grep` los caza todos. Si hay hits, los archivos donde
-   aparecen son evidencia directa — selecciónalos.
+   aparecen son evidencia directa: selecciónalos.
 2. **Implícita.** Incluso si (1) dio resultados ricos, vuelve al árbol
    y pregúntate explícitamente _"de los archivos que el grep no tocó,
    ¿cuáles podrían contener el modelo de forma implícita?"_. Sospechosos
@@ -59,7 +59,7 @@ Reglas duras:
    candidatos a evidencia (excepción: tests, fixtures, `index.*` y tipos
    puros `.d.ts`). Léelos con `read_file` antes de descartarlos. Un
    nombre que suena a sustantivo del dominio (`message.js`, `coupon.js`,
-   `subscription.js`, `tag.js`…) es casi siempre una entidad. El filtro
+   `subscription.js`, `tag.js`...) es casi siempre una entidad. El filtro
    de "principal vs secundario" o "central vs auxiliar" lo hace el
    pipeline posterior, **no tú**: si un hermano define un schema, tiene
    escrituras con forma de documento o accesos estructurados, entra con
