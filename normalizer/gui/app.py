@@ -81,7 +81,29 @@ class NormalizerApp(ctk.CTk):
         self._swap(ResultScreen(self))
 
 
+def _set_windows_app_id() -> None:
+    """Desagrupa la app de `python.exe` en la barra de tareas de Windows.
+
+    Sin un AppUserModelID propio, Windows agrupa la ventana bajo el icono de
+    `python.exe` en la barra de tareas, aunque el icono de la barra de título
+    (que fija CustomTkinter) sea el correcto. Fijando un id explícito antes de
+    crear la ventana, la barra de tareas adopta el icono de la ventana y así
+    coincide en los dos sitios. No-op fuera de Windows.
+    """
+    if platform.system() != "Windows":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "normalizer.gui"
+        )
+    except Exception:
+        pass
+
+
 def main() -> None:
+    _set_windows_app_id()
     load_dotenv()
     app = NormalizerApp()
     app.mainloop()

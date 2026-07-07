@@ -1,14 +1,15 @@
 """Pantalla 2 — Ejecución y progreso (v2).
 
-Reescritura del layout que da protagonismo al pipeline. De arriba a abajo:
+Layout con el header fijo arriba y todo el contenido variable en un único
+plano de scroll debajo, para no mezclar varios niveles de scroll:
 
-- **Header**: título, botón Cancelar, metadatos de la corrida (proveedor,
-  modelos, directorio de salida) y wall clock que avanza cada segundo.
-- **Bloque pipeline** (~45%): una fila por fase con icono de estado, nombre
-  y duración en curso/total. La fase activa se destaca y su contador
-  refresca en vivo.
-- **Bloque agente** (~25%, solo URL): tabla de iteraciones como en la v1.
-- **Bloque log** (~15%, altura fija): textbox pequeño con auto-scroll.
+- **Header (fijo arriba)**: título, botón Cancelar, metadatos de la corrida
+  (proveedor, modelos, directorio de salida) y wall clock que avanza cada
+  segundo. No scrollea: Cancelar debe estar siempre accesible.
+- **Zona scrollable (un solo scroll)**: fluyen en orden el progreso del
+  pipeline (una fila por fase con icono de estado, nombre y duración), la
+  tabla de iteraciones del agente (modo URL) y el log. Todo al mismo nivel.
+- **Log**: último bloque del flujo, un textbox pequeño con auto-scroll.
 
 Al pulsar Cancelar, la fase activa pasa al estado "cancelling" con icono
 `⏸` y color ámbar, y un texto auxiliar explica que la cancelación espera a
@@ -128,11 +129,12 @@ class RunScreen(ctk.CTkFrame):
         # - Border radius: 12 en todas las cards
         # - Type scale: Title Large 22 / Title Small 16 / Body Medium 13 / Body Small 11
 
-        # --- Header (surface container highest) ----------------------
+        # --- Header fijo arriba (surface container highest) ----------
+        # No scrollea: el botón Cancelar debe estar siempre accesible.
         header = ctk.CTkFrame(
             self, fg_color=("#cedaee", "#26292d"), corner_radius=12,
         )
-        header.pack(fill="x", pady=(0, 12))
+        header.pack(side="top", fill="x", pady=(0, 12))
         header_inner = ctk.CTkFrame(header, fg_color="transparent")
         header_inner.pack(fill="x", padx=20, pady=18)
 
@@ -184,12 +186,21 @@ class RunScreen(ctk.CTkFrame):
         if s.out_dir is not None:
             _meta("▸", f"{s.out_dir.name}/")
 
+        # --- Zona scrollable única: pipeline + agente + log ----------
+        # Un solo plano de scroll para todo el contenido variable. El header
+        # queda fijo arriba (Cancelar siempre accesible) y aquí dentro fluyen,
+        # en orden, el progreso del pipeline, la tabla del agente (modo URL) y
+        # el log, todo al mismo nivel. Así no se mezclan planos de scroll a
+        # distinta altura.
+        scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        scroll.pack(side="top", fill="both", expand=True)
+
         # --- Bloque pipeline (surface container, protagonista) ----------
         pipeline_block = ctk.CTkFrame(
-            self, corner_radius=12,
+            scroll, corner_radius=12,
             fg_color=("#dfe7f2", "#1c2024"),  # surface-container
         )
-        pipeline_block.pack(fill="both", expand=True, pady=(0, 12))
+        pipeline_block.pack(fill="x", pady=(0, 12))
         pipeline_inner = ctk.CTkFrame(pipeline_block, fg_color="transparent")
         pipeline_inner.pack(fill="both", expand=True, padx=20, pady=18)
 
@@ -225,7 +236,7 @@ class RunScreen(ctk.CTkFrame):
         self.agent_scroll = None
         if self.gui_state.is_url:
             agent_block = ctk.CTkFrame(
-                self, corner_radius=12,
+                scroll, corner_radius=12,
                 fg_color=("#eef0f4", "#1c2024"),
             )
             agent_block.pack(fill="x", pady=(0, 12))
@@ -244,13 +255,16 @@ class RunScreen(ctk.CTkFrame):
                 font=ctk.CTkFont(size=16, weight="bold"), anchor="w",
             ).pack(side="left")
 
-            self.agent_scroll = ctk.CTkScrollableFrame(
-                agent_inner, height=170,
+            # Tabla plana (sin scroll anidado): las filas fluyen en el scroll
+            # de página. Anidar un CTkScrollableFrame aquí metía un segundo
+            # plano de scroll que se peleaba por la rueda del ratón.
+            self.agent_scroll = ctk.CTkFrame(
+                agent_inner, corner_radius=8,
                 fg_color=("#e7eef8", "#181c20"),  # surface-container-low (no gris CTk)
             )
             self.agent_scroll.pack(fill="x")
             head = ctk.CTkFrame(self.agent_scroll, fg_color="transparent")
-            head.pack(fill="x", pady=(0, 4))
+            head.pack(fill="x", padx=10, pady=(8, 4))
             ctk.CTkLabel(
                 head, text="Iter", width=60, anchor="w",
                 font=ctk.CTkFont(size=11, weight="bold"),
@@ -262,9 +276,12 @@ class RunScreen(ctk.CTkFrame):
                 text_color="gray",
             ).pack(side="left", fill="x", expand=True)
 
-        # --- Bloque log (altura fija, sin protagonismo) ---------------
+        # --- Bloque log (último del flujo, mismo nivel que el resto) --
+        # Consola de la corrida. Fluye al final del scroll de página; mantiene
+        # su propio scroll interno (textbox) con auto-scroll al final, que es
+        # una consola estándar y no otro plano de scroll de la página.
         log_block = ctk.CTkFrame(
-            self, corner_radius=12,
+            scroll, corner_radius=12,
             fg_color=("#eef0f4", "#1c2024"),
         )
         log_block.pack(fill="x")
@@ -390,7 +407,7 @@ class RunScreen(ctk.CTkFrame):
             calls = calls[:197] + "…"
         self.gui_state.agent_turns.append((iter_n, calls))
         row = ctk.CTkFrame(self.agent_scroll, fg_color="transparent")
-        row.pack(fill="x", pady=1)
+        row.pack(fill="x", padx=10, pady=1)
         ctk.CTkLabel(row, text=str(iter_n), width=60, anchor="w").pack(side="left")
         ctk.CTkLabel(
             row, text=calls, anchor="w", wraplength=900, justify="left"

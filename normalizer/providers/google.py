@@ -67,10 +67,14 @@ class GoogleProvider:
             mid = raw[len("models/") :] if raw.startswith("models/") else raw
             if not mid:
                 continue
-            methods = getattr(m, "supported_generation_methods", None) or getattr(
-                m, "supportedGenerationMethods", []
-            )
-            if methods and "generateContent" not in methods:
+            # `supported_actions` es el campo real del SDK (p. ej.
+            # ["generateContent", "countTokens"] en Gemini/Gemma;
+            # ["embedContent"] en embeddings; ["predict"] en imagen). Nos
+            # quedamos solo con los de generación de texto (generateContent):
+            # son los válidos para el pipeline (texto a texto). El agente se
+            # acota además a _AGENT_CAPABLE (function-calling) más abajo.
+            actions = getattr(m, "supported_actions", None) or []
+            if actions and "generateContent" not in actions:
                 continue
             ids.append(mid)
         if for_agent:
@@ -225,7 +229,7 @@ def _to_gemini_contents(
         if msg.role == "tool":
             # En Gemini la respuesta de una tool se manda como rol "user" con un
             # Part.from_function_response. Gemini empareja por nombre de la
-            # función, no por id (eso lo usan OpenAI/Groq/Anthropic). Usamos
+            # función, no por id (eso lo usan OpenAI y Groq). Usamos
             # tool_name por eso; tool_call_id se ignora aquí.
             tool_name = msg.tool_name or msg.tool_call_id or ""
             contents.append(

@@ -229,6 +229,13 @@ class ConfigScreen(ctk.CTkFrame):
             key_row, text="Cambiar", width=110, command=self._unlock_key
         )
         self.change_key_btn.pack(side="left")
+        # Al introducir la clave (Enter o al salir del campo) la inyectamos y
+        # re-listamos el catálogo. En un equipo recién clonado no hay .env, así
+        # que al abrir la pantalla no hay API key y los combos arrancan solo con
+        # el modelo por defecto; sin esto no se repueblan hasta cambiar de
+        # proveedor.
+        self.key_entry.bind("<Return>", self._commit_api_key)
+        self.key_entry.bind("<FocusOut>", self._commit_api_key)
 
         ctk.CTkLabel(
             block_keys,
@@ -298,7 +305,7 @@ class ConfigScreen(ctk.CTkFrame):
                 "Número máximo de archivos y carpetas que se listan en el árbol "
                 "del repositorio que el agente recibe en su primer mensaje. "
                 "Bajarlo reduce el tamaño de ese mensaje (útil cuando el "
-                "proveedor tiene un límite de tokens estrecho, p. ej. Groq); "
+                "proveedor tiene un límite de tokens limitado) "
                 "subirlo da más contexto inicial. Por defecto: 2000.",
             ),
         ):
@@ -500,6 +507,22 @@ class ConfigScreen(ctk.CTkFrame):
         self.key_entry.configure(state="normal")
         self.change_key_btn.configure(state="disabled")
         self.key_entry.focus()
+
+    def _commit_api_key(self, _event=None) -> None:
+        # Persiste la clave recién tecleada (os.environ + .env) y re-lista el
+        # catálogo de modelos ya autenticado, para que los combos dejen de
+        # mostrar solo el modelo por defecto. Idempotente: si el proveedor no
+        # tiene variable de entorno, la clave ya está configurada, o el campo
+        # está vacío o enmascarado, no hace nada.
+        provider = self.provider_sel.get()
+        env_key = ENV_KEY_BY_PROVIDER.get(provider, "")
+        if not env_key or os.environ.get(env_key):
+            return
+        typed = self._api_key_var.get().strip()
+        if not typed or typed == "••••••••":
+            return
+        persist_api_key(env_key, typed)
+        self._on_provider_change(provider)
 
     # ------------------------------------------------------------------
     # Acciones

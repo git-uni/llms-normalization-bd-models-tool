@@ -17,15 +17,16 @@ from normalizer.providers.base import (
 _MAX_RETRIES = 4
 _FALLBACK_RETRY_DELAY_S = 5.0
 
-# Whitelist de modelos verificados con function-calling para el agente. Groq
-# documenta que "todos los modelos soportan tools", pero en la práctica solo
-# `qwen/qwen3-32b` y `meta-llama/llama-4-scout-17b-16e-instruct` emiten el
-# slot `tool_calls` correctamente — el resto (Llama 3.x, gpt-oss-*, compound)
-# emite markup raro o JSON truncado y la API rechaza con `tool_use_failed`.
+# Modelos de Groq verificados con function-calling para el agente.
 _AGENT_CAPABLE = {
-    "qwen/qwen3-32b",
-    "meta-llama/llama-4-scout-17b-16e-instruct",
+    "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
 }
+
+# Modelos que Groq lista pero NO son texto-a-texto (audio/voz). Groq no expone
+# la modalidad en el objeto Model, así que los filtramos por nombre para que el
+# combo del pipeline solo ofrezca modelos de generación de texto.
+_NON_TEXT_HINTS = ("whisper", "tts")
 
 
 class GroqProvider:
@@ -53,6 +54,10 @@ class GroqProvider:
             # `active=False` significa retirado / inaccesible; lo descartamos.
             active = getattr(m, "active", True)
             if active is False:
+                continue
+            # Descarta modelos no texto-a-texto (whisper/tts): no sirven para el
+            # pipeline y solo ensucian el combo.
+            if any(h in mid.lower() for h in _NON_TEXT_HINTS):
                 continue
             ids.append(mid)
         if for_agent:

@@ -17,9 +17,8 @@ DEFAULT_MODELS: dict[str, str] = {
     # gemma-3-27b-it fue retirado por Google (mayo 2026); gemma-4-31b-it es
     # su sucesor directo dentro del catálogo gratuito.
     "google": "gemma-4-31b-it",
-    # Llama 3.3 70B: calidad alta y plenamente capaz para los prompts del
-    # pipeline (texto→texto). En el tier gratis de Groq tiene cuota holgada.
-    "groq": "llama-3.3-70b-versatile",
+    # Pipeline texto→texto, barato y capaz.
+    "groq": "openai/gpt-oss-120b",
 }
 
 # Modelos por defecto para el agente de descubrimiento (requieren tool-use).
@@ -29,13 +28,9 @@ DEFAULT_AGENT_MODELS: dict[str, str] = {
     # Sucesor del 2.5-flash-lite (10 RPM / 20 RPD), que se quedó corto tras
     # el recorte de cuotas de Google de diciembre 2025.
     "google": "gemini-3.1-flash-lite",
-    # Los Llama de Groq (8B y 70B) emiten tool calls con sintaxis markup
-    # `<function=...>` en lugar del slot estructurado tool_calls que Groq
-    # espera (formato OpenAI), y la API los rechaza con tool_use_failed.
-    # openai/gpt-oss-20b va por el slot correcto pero a veces emite JSON
-    # truncado en los argumentos. Qwen3-32B respeta el formato y produce
-    # tool_calls válidos de forma consistente.
-    "groq": "qwen/qwen3-32b",
+    # Único modelo de Groq en producción con tool_calls fiables; en la práctica
+    # el agente se ejecuta con Google (frontera de tool-use y límites de TPM).
+    "groq": "openai/gpt-oss-120b",
 }
 
 
